@@ -227,6 +227,85 @@ export function getExercisesForWorkout(workoutId: number): ConfiguredExercise[] 
 }
 
 /**
+ * Récupère tous les exercices du catalogue pour une séance donnée (ou l'ensemble du catalogue).
+ */
+export function getAllCatalogExercises(workoutId?: number): ConfiguredExercise[] {
+  if (!db || Platform.OS === 'web') {
+    const list = workoutId ? memoryExercises.filter((e) => e.workoutId === workoutId) : memoryExercises;
+    return list.map((e) => ({
+      id: e.id,
+      workoutId: e.workoutId,
+      name: e.name,
+      category: e.category,
+      minIncrement: e.minIncrement,
+      baseWeight: e.baseWeight,
+      targetReps: e.defaultTargetReps,
+      numSets: e.numSets || 3,
+      plannedWeights: e.plannedWeights || [e.defaultStartingWeight, e.defaultStartingWeight, e.defaultStartingWeight],
+      consecutiveFailures: e.consecutiveFailures || 0,
+    }));
+  }
+
+  try {
+    const query = workoutId
+      ? `SELECT e.*, p.planned_weights, p.consecutive_failures
+         FROM exercises e
+         LEFT JOIN exercise_progression_state p ON e.id = p.exercise_id
+         WHERE e.workout_id = ?
+         ORDER BY e.name ASC;`
+      : `SELECT e.*, p.planned_weights, p.consecutive_failures
+         FROM exercises e
+         LEFT JOIN exercise_progression_state p ON e.id = p.exercise_id
+         ORDER BY e.workout_id ASC, e.order_index ASC;`;
+
+    const params = workoutId ? [workoutId] : [];
+    const rows = db.getAllSync<{
+      id: number;
+      workout_id: number;
+      name: string;
+      category: EquipmentCategory;
+      min_increment: number;
+      base_weight: number;
+      order_index: number;
+      default_target_reps: number;
+      default_starting_weight: number;
+      default_sets_count: number | null;
+      planned_weights: string | null;
+      consecutive_failures: number | null;
+    }>(query, params);
+
+    return rows.map((r) => {
+      const numSets = r.default_sets_count || 3;
+      let planned: number[] = Array(numSets).fill(r.default_starting_weight);
+      if (r.planned_weights) {
+        try {
+          const parsed = JSON.parse(r.planned_weights);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            planned = parsed;
+          }
+        } catch {}
+      }
+
+      return {
+        id: r.id,
+        workoutId: r.workout_id,
+        name: r.name,
+        category: r.category,
+        minIncrement: r.min_increment,
+        baseWeight: r.base_weight,
+        targetReps: r.default_target_reps,
+        numSets,
+        plannedWeights: planned,
+        consecutiveFailures: r.consecutive_failures || 0,
+      };
+    });
+  } catch (error) {
+    console.error('Erreur getAllCatalogExercises:', error);
+    return [];
+  }
+}
+
+/**
  * Met à jour les paramètres de base personnalisés par l'utilisateur (tableau de poids par série, reps, séries).
  */
 export function updateExerciseCustomSettings(
@@ -270,7 +349,7 @@ export function updateExerciseCustomSettings(
 }
 
 /**
- * Ajoute un nouvel exercice personnalisé à une séance.
+ * Ajoute un nouvel exercice personnalisé au catalogue permanent de l'utilisateur.
  */
 export function addCustomExercise(
   workoutId: number,
@@ -279,13 +358,25 @@ export function addCustomExercise(
   startingWeight: number,
   targetReps: number,
   setsCount: number = 3
-): void {
+): ConfiguredExercise {
   const baseWeight = category === 'FREE_WEIGHT' ? 20 : 0;
   const newPlanned = Array(setsCount).fill(startingWeight);
   const plannedJson = JSON.stringify(newPlanned);
 
   if (!db || Platform.OS === 'web') {
     const newId = Date.now();
+    const created: ConfiguredExercise = {
+      id: newId,
+      workoutId,
+      name,
+      category,
+      minIncrement: 2.5,
+      baseWeight,
+      targetReps,
+      numSets: setsCount,
+      plannedWeights: newPlanned,
+      consecutiveFailures: 0,
+    };
     memoryExercises.push({
       id: newId,
       workoutId,
@@ -297,11 +388,11 @@ export function addCustomExercise(
       defaultTargetReps: targetReps,
       defaultStartingWeight: startingWeight,
       defaultSetsCount: setsCount,
+      consecutiveFailures: 0,
       numSets: setsCount,
       plannedWeights: newPlanned,
-      consecutiveFailures: 0,
     });
-    return;
+    return created;
   }
 
   try {
@@ -324,8 +415,33 @@ export function addCustomExercise(
        VALUES (?, ?, 0);`,
       [newExerciseId, plannedJson]
     );
+
+    return {
+      id: newExerciseId,
+      workoutId,
+      name,
+      category,
+      minIncrement: 2.5,
+      baseWeight,
+      targetReps,
+      numSets: setsCount,
+      plannedWeights: newPlanned,
+      consecutiveFailures: 0,
+    };
   } catch (error) {
     console.error('Erreur addCustomExercise:', error);
+    return {
+      id: Date.now(),
+      workoutId,
+      name,
+      category,
+      minIncrement: 2.5,
+      baseWeight,
+      targetReps,
+      numSets: setsCount,
+      plannedWeights: newPlanned,
+      consecutiveFailures: 0,
+    };
   }
 }
 

@@ -10,7 +10,7 @@ import {
   View
 } from 'react-native';
 import { DraggableExerciseList } from '../components/DraggableExerciseList';
-import { addCustomExercise, getExercisesForWorkout, getWorkouts, updateExerciseCustomSettings } from '../database/db';
+import { addCustomExercise, getAllCatalogExercises, getExercisesForWorkout, getWorkouts, updateExerciseCustomSettings } from '../database/db';
 import { ConfiguredExercise, EquipmentCategory, SessionConfig } from '../types';
 import { triggerLightHaptic, triggerMediumHaptic } from '../utils/haptics';
 
@@ -35,8 +35,12 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
   const [editReps, setEditReps] = useState<number>(8);
   const [editSets, setEditSets] = useState<number>(3);
 
-  // Modal d'ajout d'exercice
-  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
+  // Modal 1 : Liste déroulante / Catalogue des exercices
+  const [isPickerModalOpen, setIsPickerModalOpen] = useState<boolean>(false);
+  const [catalogExercises, setCatalogExercises] = useState<ConfiguredExercise[]>([]);
+
+  // Modal 2 : Création d'un nouvel exercice personnalisé
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
   const [newExName, setNewExName] = useState<string>('');
   const [newExCategory, setNewExCategory] = useState<EquipmentCategory>('HAMMER_STRENGTH');
   const [newExWeight, setNewExWeight] = useState<string>('40');
@@ -59,7 +63,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
     setSelectedWorkoutId(wId);
   };
 
-  // Suppression d'un exercice
+  // Suppression d'un exercice de la séance
   const handleDeleteExercise = (index: number) => {
     const updated = exercises.filter((_, idx) => idx !== index);
     setExercises(updated);
@@ -68,6 +72,28 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
   // Réordonner les exercices via Drag & Drop
   const handleReorder = (reordered: ConfiguredExercise[]) => {
     setExercises(reordered);
+  };
+
+  // Ouvrir le sélecteur / liste déroulante du catalogue
+  const openCatalogPicker = () => {
+    triggerLightHaptic();
+    const catalog = getAllCatalogExercises(selectedWorkoutId);
+    setCatalogExercises(catalog);
+    setIsPickerModalOpen(true);
+  };
+
+  // Ajouter un exercice depuis la liste déroulante du catalogue
+  const handleSelectFromCatalog = (ex: ConfiguredExercise) => {
+    triggerMediumHaptic();
+    // Cloner pour éviter les collisions d'ID de séance
+    const alreadyExists = exercises.some((e) => e.id === ex.id);
+    if (alreadyExists) {
+      Alert.alert('Déjà présent', 'Cet exercice est déjà dans la séance.');
+      return;
+    }
+
+    setExercises([...exercises, ex]);
+    setIsPickerModalOpen(false);
   };
 
   // Ouvrir le modal d'édition
@@ -148,8 +174,8 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
     setEditingExercise(null);
   };
 
-  // Ajouter un exercice personnalisé
-  const handleAddExerciseSubmit = () => {
+  // Créer un nouvel exercice personnalisé dans le catalogue
+  const handleCreateCustomSubmit = () => {
     if (!newExName.trim()) {
       Alert.alert('Nom requis', 'Merci de renseigner un nom pour l’exercice.');
       return;
@@ -159,7 +185,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
     const repsNum = Math.max(1, newExReps);
     const setsNum = Math.max(1, newExSets);
 
-    addCustomExercise(
+    const created = addCustomExercise(
       selectedWorkoutId,
       newExName.trim(),
       newExCategory,
@@ -168,8 +194,9 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
       setsNum
     );
 
-    loadExercises(selectedWorkoutId);
-    setIsAddModalOpen(false);
+    setExercises([...exercises, created]);
+    setIsCreateModalOpen(false);
+    setIsPickerModalOpen(false);
     setNewExName('');
     setNewExWeight('40');
   };
@@ -270,16 +297,13 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
           </View>
         </View>
 
-        {/* 3. Exercices Prévus : En-tête + Bouton Ajouter */}
+        {/* 3. Exercices Prévus : En-tête + Bouton Ajouter via Catalogue */}
         <View style={styles.exerciseHeaderRow}>
           <Text style={styles.sectionHeading}>EXERCICES ({exercises.length})</Text>
 
           <TouchableOpacity
             style={styles.addBtn}
-            onPress={() => {
-              triggerLightHaptic();
-              setIsAddModalOpen(true);
-            }}
+            onPress={openCatalogPicker}
             activeOpacity={0.8}
           >
             <Text style={styles.addBtnText}>+ Ajouter</Text>
@@ -300,7 +324,75 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
         </TouchableOpacity>
       </ScrollView>
 
-      {/* MODAL 1 : ÉDITION DÉTAILLÉE PAR SÉRIE (CRAYON) */}
+      {/* MODAL 1 : LISTE DÉROULANTE / SÉLECTEUR DU CATALOGUE */}
+      <Modal visible={isPickerModalOpen} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.pickerModalCard}>
+            <Text style={styles.modalTitle}>Catalogue d'exercices</Text>
+            <Text style={styles.modalSubtitle}>Choisis un exercice pour ta séance {selectedWorkout.name}</Text>
+
+            <ScrollView style={styles.catalogList} showsVerticalScrollIndicator={false}>
+              {catalogExercises.map((catEx) => {
+                const isSelectedInSession = exercises.some((e) => e.id === catEx.id);
+                const isFinisher = catEx.category === 'FREE_WEIGHT';
+
+                return (
+                  <TouchableOpacity
+                    key={catEx.id}
+                    style={[
+                      styles.catalogItem,
+                      isSelectedInSession && styles.catalogItemDisabled,
+                    ]}
+                    disabled={isSelectedInSession}
+                    onPress={() => handleSelectFromCatalog(catEx)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.catalogItemInfo}>
+                      <Text
+                        style={[
+                          styles.catalogItemName,
+                          isSelectedInSession && styles.catalogItemNameDisabled,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {catEx.name}
+                      </Text>
+                      <Text style={styles.catalogItemSub}>
+                        {isFinisher ? '🔥 Finisher Barre (20kg)' : '⚙️ Machine Hammer Strength'} • {catEx.plannedWeights?.[0] || 40} kg
+                      </Text>
+                    </View>
+
+                    <Text style={styles.catalogItemAction}>
+                      {isSelectedInSession ? '✓ Déjà ajouté' : '+ Ajouter'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Bouton Créer un exercice personnalisé */}
+            <TouchableOpacity
+              style={styles.createCustomBtn}
+              onPress={() => {
+                triggerLightHaptic();
+                setIsCreateModalOpen(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.createCustomBtnText}>➕ Créer un nouvel exercice</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelBtn}
+              onPress={() => setIsPickerModalOpen(false)}
+            >
+              <Text style={styles.cancelBtnText}>Fermer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 2 : ÉDITION DÉTAILLÉE PAR SÉRIE (CRAYON) */}
       <Modal visible={editingExercise !== null} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
@@ -389,13 +481,14 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
         </View>
       </Modal>
 
-      {/* MODAL 2 : AJOUTER UN EXERCICE */}
-      <Modal visible={isAddModalOpen} transparent animationType="fade">
+      {/* MODAL 3 : CRÉER UN NOUVEL EXERCICE PERSONNALISÉ */}
+      <Modal visible={isCreateModalOpen} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Nouvel exercice</Text>
+            <Text style={styles.modalSubtitle}>Ajouter au catalogue permanent</Text>
 
-            <Text style={styles.modalSectionLabel}>NOM</Text>
+            <Text style={styles.modalSectionLabel}>NOM DE LA MACHINE / EXERCICE</Text>
             <TextInput
               style={styles.modalTextInput}
               value={newExName}
@@ -435,11 +528,11 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
             />
 
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setIsAddModalOpen(false)}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setIsCreateModalOpen(false)}>
                 <Text style={styles.cancelBtnText}>Annuler</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.saveBtn} onPress={handleAddExerciseSubmit}>
-                <Text style={styles.saveBtnText}>Ajouter</Text>
+              <TouchableOpacity style={styles.saveBtn} onPress={handleCreateCustomSubmit}>
+                <Text style={styles.saveBtnText}>Créer</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -631,6 +724,72 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#334155',
   },
+  pickerModalCard: {
+    width: '100%',
+    maxWidth: 360,
+    maxHeight: '80%',
+    backgroundColor: '#1E293B',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  catalogList: {
+    maxHeight: 260,
+    marginVertical: 10,
+  },
+  catalogItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginBottom: 6,
+  },
+  catalogItemDisabled: {
+    opacity: 0.4,
+    borderColor: '#1E293B',
+  },
+  catalogItemInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+  catalogItemName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  catalogItemNameDisabled: {
+    color: '#64748B',
+  },
+  catalogItemSub: {
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  catalogItemAction: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#38BDF8',
+  },
+  createCustomBtn: {
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    borderWidth: 1,
+    borderColor: '#0284C7',
+    paddingVertical: 11,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  createCustomBtnText: {
+    color: '#38BDF8',
+    fontSize: 12,
+    fontWeight: '800',
+  },
   modalTitle: {
     fontSize: 18,
     fontWeight: '900',
@@ -641,7 +800,7 @@ const styles = StyleSheet.create({
     color: '#38BDF8',
     fontWeight: '700',
     marginTop: 2,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   modalSectionLabel: {
     fontSize: 10,
