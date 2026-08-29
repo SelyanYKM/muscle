@@ -11,9 +11,9 @@ import {
 } from 'react-native';
 import { ExerciseCard } from '../components/ExerciseCard';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
-import { getExercisesForWorkout, saveWorkoutLogs, updateExerciseProgression } from '../database/db';
+import { saveWorkoutLogs, updateExerciseProgression } from '../database/db';
 import { calculateNextSession } from '../engine/progression';
-import { Exercise, Feeling, NextSessionPlan, SessionConfig, SetResult, WorkoutLogEntry } from '../types';
+import { ConfiguredExercise, Feeling, NextSessionPlan, SessionConfig, SetResult, WorkoutLogEntry } from '../types';
 import { triggerSuccessHaptic, triggerWarningHaptic } from '../utils/haptics';
 
 interface LiveWorkoutScreenProps {
@@ -39,15 +39,14 @@ export const LiveWorkoutScreen: React.FC<LiveWorkoutScreenProps> = ({
   // Empêcher l'écran du smartphone de se mettre en veille pendant l'entraînement
   useKeepAwake();
 
-  const exercises = getExercisesForWorkout(sessionConfig.workoutId);
+  const exercises: ConfiguredExercise[] = sessionConfig.configuredExercises;
   const [startTime] = useState<number>(Date.now());
 
   // Index de progression
   const [exerciseIndex, setExerciseIndex] = useState<number>(0);
-  const [setIndex, setSetIndex] = useState<number>(0); // 0, 1, 2
+  const [setIndex, setSetIndex] = useState<number>(0); // 0, 1, 2, ...
 
-  // Résultats enregistrés
-  // Structure: logsMap[exerciseId] = SetResult[]
+  // Résultats enregistrés par exercice
   const [sessionResults, setSessionResults] = useState<Record<number, SetResult[]>>({});
 
   // Historique global des étapes pour la fonction "Annuler"
@@ -57,17 +56,21 @@ export const LiveWorkoutScreen: React.FC<LiveWorkoutScreenProps> = ({
   const [isResting, setIsResting] = useState<boolean>(false);
   const [restDuration, setRestDuration] = useState<number>(sessionConfig.standardRestSeconds);
 
-  const currentExercise: Exercise & { plannedWeights: number[]; consecutiveFailures: number } = exercises[exerciseIndex];
-  const totalSets = 3;
+  const currentExercise = exercises[exerciseIndex];
+  const totalSets = currentExercise?.numSets || 3;
 
   // Calcul du poids prévu pour la série en cours
-  const currentWeight = currentExercise?.plannedWeights?.[setIndex] ?? currentExercise?.defaultStartingWeight ?? 40;
-  const targetReps = currentExercise?.defaultTargetReps ?? 8;
+  const currentWeight = currentExercise?.plannedWeights?.[setIndex] ?? currentExercise?.baseWeight ?? 40;
+  const targetReps = currentExercise?.targetReps ?? 8;
 
   // Calcul du progrès global
-  const totalSteps = exercises.length * totalSets;
-  const currentStep = exerciseIndex * totalSets + setIndex + 1;
-  const progressPercent = Math.min(100, (currentStep / totalSteps) * 100);
+  const totalSteps = exercises.reduce((acc, ex) => acc + (ex.numSets || 3), 0);
+  let stepsDone = 0;
+  for (let i = 0; i < exerciseIndex; i++) {
+    stepsDone += exercises[i].numSets || 3;
+  }
+  stepsDone += setIndex + 1;
+  const progressPercent = Math.min(100, (stepsDone / Math.max(1, totalSteps)) * 100);
 
   // Prochain exercice pour l'overlay de repos
   const isLastSetOfExercise = setIndex === totalSets - 1;
@@ -76,7 +79,7 @@ export const LiveWorkoutScreen: React.FC<LiveWorkoutScreenProps> = ({
 
   const nextExercise = isLastSetOfExercise ? exercises[exerciseIndex + 1] : currentExercise;
   const nextSetNum = isLastSetOfExercise ? 1 : setIndex + 2;
-  const nextWeight = nextExercise?.plannedWeights?.[nextSetNum - 1] ?? nextExercise?.defaultStartingWeight ?? 40;
+  const nextWeight = nextExercise?.plannedWeights?.[nextSetNum - 1] ?? 40;
 
   const handleCompleteSet = (repsDone: number, feeling: Feeling) => {
     const newResult: SetResult = {
@@ -182,7 +185,7 @@ export const LiveWorkoutScreen: React.FC<LiveWorkoutScreenProps> = ({
         // Calcul de la charge N+1
         const plan = calculateNextSession(
           results,
-          ex.defaultTargetReps,
+          ex.targetReps,
           ex.minIncrement,
           ex.consecutiveFailures || 0
         );
@@ -226,6 +229,19 @@ export const LiveWorkoutScreen: React.FC<LiveWorkoutScreenProps> = ({
 
   if (!currentExercise) return null;
 
+  // Convertir l'objet ConfiguredExercise pour le composant ExerciseCard
+  const exerciseForCard = {
+    id: currentExercise.id,
+    workoutId: currentExercise.workoutId,
+    name: currentExercise.name,
+    category: currentExercise.category,
+    minIncrement: currentExercise.minIncrement,
+    baseWeight: currentExercise.baseWeight,
+    orderIndex: exerciseIndex + 1,
+    defaultTargetReps: targetReps,
+    defaultStartingWeight: currentWeight,
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
@@ -250,7 +266,7 @@ export const LiveWorkoutScreen: React.FC<LiveWorkoutScreenProps> = ({
 
         {/* Carte Focus de l'exercice courant */}
         <ExerciseCard
-          exercise={currentExercise}
+          exercise={exerciseForCard}
           setIndex={setIndex}
           totalSets={totalSets}
           currentWeight={currentWeight}

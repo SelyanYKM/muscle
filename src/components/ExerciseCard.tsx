@@ -131,7 +131,7 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
             <Text style={styles.feelingEmoji}>🟢</Text>
             <View style={styles.feelingTextWrapper}>
               <Text style={styles.feelingTitle}>FACILE</Text>
-              <Text style={styles.feelingSubtitle}>$\ge$ 2 reps en réserve</Text>
+              <Text style={styles.feelingSubtitle}>2 reps ou + en réserve</Text>
             </View>
           </TouchableOpacity>
 

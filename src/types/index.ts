@@ -12,6 +12,20 @@ export interface Exercise {
   orderIndex: number;
   defaultTargetReps: number; // default 8
   defaultStartingWeight: number; // default e.g. 40kg
+  defaultSetsCount?: number; // default 3
+}
+
+export interface ConfiguredExercise {
+  id: number;
+  workoutId: number;
+  name: string;
+  category: EquipmentCategory;
+  minIncrement: number;
+  baseWeight: number;
+  targetReps: number;
+  numSets: number;
+  plannedWeights: number[];
+  consecutiveFailures?: number;
 }
 
 export interface Workout {
@@ -26,17 +40,6 @@ export interface SetResult {
   repsDone: number;
   weight: number;
   feeling: Feeling;
-}
-
-export interface ExerciseSession {
-  exerciseId: number;
-  exerciseName: string;
-  category: EquipmentCategory;
-  baseWeight: number;
-  minIncrement: number;
-  targetReps: number;
-  plannedWeights: number[]; // e.g. [60, 60, 60]
-  results: SetResult[];
 }
 
 export interface NextSessionPlan {
@@ -63,6 +66,7 @@ export interface SessionConfig {
   workoutName: string;
   standardRestSeconds: number; // e.g. 90
   finisherRestSeconds: number; // e.g. 180
+  configuredExercises: ConfiguredExercise[];
 }
 
 export interface PlateInfo {

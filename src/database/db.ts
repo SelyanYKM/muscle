@@ -1,13 +1,13 @@
 import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
-import { Exercise, Workout, WorkoutLogEntry } from '../types';
+import { ConfiguredExercise, EquipmentCategory, Exercise, Workout, WorkoutLogEntry } from '../types';
 import { SEED_EXERCISES, SEED_WORKOUTS } from './seed';
 
 let db: SQLite.SQLiteDatabase | null = null;
 
 // Mémoire de secours pour l'environnement Web ou mock
 let memoryLogs: WorkoutLogEntry[] = [];
-let memoryExercises: (Exercise & { plannedWeights: number[]; consecutiveFailures: number })[] = [];
+let memoryExercises: (Exercise & { plannedWeights: number[]; consecutiveFailures: number; numSets: number })[] = [];
 
 export async function initDatabase(): Promise<void> {
   if (Platform.OS === 'web') {
@@ -30,7 +30,7 @@ export async function initDatabase(): Promise<void> {
     // 2. Table du catalogue d'exercices
     db.execSync(`
       CREATE TABLE IF NOT EXISTS exercises (
-        id INTEGER PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         workout_id INTEGER NOT NULL,
         name TEXT NOT NULL,
         category TEXT NOT NULL,
@@ -39,6 +39,7 @@ export async function initDatabase(): Promise<void> {
         order_index INTEGER NOT NULL,
         default_target_reps INTEGER DEFAULT 8,
         default_starting_weight REAL DEFAULT 40,
+        default_sets_count INTEGER DEFAULT 3,
         FOREIGN KEY (workout_id) REFERENCES workouts (id)
       );
     `);
@@ -82,8 +83,8 @@ export async function initDatabase(): Promise<void> {
       for (const ex of SEED_EXERCISES) {
         db.runSync(
           `INSERT INTO exercises 
-          (id, workout_id, name, category, min_increment, base_weight, order_index, default_target_reps, default_starting_weight) 
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+          (id, workout_id, name, category, min_increment, base_weight, order_index, default_target_reps, default_starting_weight, default_sets_count) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
           [
             ex.id,
             ex.workoutId,
@@ -94,6 +95,7 @@ export async function initDatabase(): Promise<void> {
             ex.orderIndex,
             ex.defaultTargetReps,
             ex.defaultStartingWeight,
+            ex.defaultSetsCount || 3,
           ]
         );
 
@@ -116,11 +118,14 @@ export async function initDatabase(): Promise<void> {
 }
 
 function initMemoryFallback() {
-  memoryExercises = SEED_EXERCISES.map((ex) => ({
-    ...ex,
-    plannedWeights: [ex.defaultStartingWeight, ex.defaultStartingWeight, ex.defaultStartingWeight],
-    consecutiveFailures: 0,
-  }));
+  if (memoryExercises.length === 0) {
+    memoryExercises = SEED_EXERCISES.map((ex) => ({
+      ...ex,
+      plannedWeights: [ex.defaultStartingWeight, ex.defaultStartingWeight, ex.defaultStartingWeight],
+      consecutiveFailures: 0,
+      numSets: ex.defaultSetsCount || 3,
+    }));
+  }
 }
 
 export function getWorkouts(): Workout[] {
@@ -134,9 +139,22 @@ export function getWorkouts(): Workout[] {
   }
 }
 
-export function getExercisesForWorkout(workoutId: number): (Exercise & { plannedWeights: number[]; consecutiveFailures: number })[] {
+export function getExercisesForWorkout(workoutId: number): ConfiguredExercise[] {
   if (!db || Platform.OS === 'web') {
-    return memoryExercises.filter((e) => e.workoutId === workoutId);
+    return memoryExercises
+      .filter((e) => e.workoutId === workoutId)
+      .map((e) => ({
+        id: e.id,
+        workoutId: e.workoutId,
+        name: e.name,
+        category: e.category,
+        minIncrement: e.minIncrement,
+        baseWeight: e.baseWeight,
+        targetReps: e.defaultTargetReps,
+        numSets: e.numSets || 3,
+        plannedWeights: e.plannedWeights || [e.defaultStartingWeight, e.defaultStartingWeight, e.defaultStartingWeight],
+        consecutiveFailures: e.consecutiveFailures || 0,
+      }));
   }
 
   try {
@@ -144,12 +162,13 @@ export function getExercisesForWorkout(workoutId: number): (Exercise & { planned
       id: number;
       workout_id: number;
       name: string;
-      category: 'HAMMER_STRENGTH' | 'FREE_WEIGHT';
+      category: EquipmentCategory;
       min_increment: number;
       base_weight: number;
       order_index: number;
       default_target_reps: number;
       default_starting_weight: number;
+      default_sets_count: number | null;
       planned_weights: string | null;
       consecutive_failures: number | null;
     }>(
@@ -162,10 +181,14 @@ export function getExercisesForWorkout(workoutId: number): (Exercise & { planned
     );
 
     return rows.map((r) => {
-      let planned: number[] = [r.default_starting_weight, r.default_starting_weight, r.default_starting_weight];
+      const numSets = r.default_sets_count || 3;
+      let planned: number[] = Array(numSets).fill(r.default_starting_weight);
       if (r.planned_weights) {
         try {
-          planned = JSON.parse(r.planned_weights);
+          const parsed = JSON.parse(r.planned_weights);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            planned = parsed;
+          }
         } catch {
           // fallback
         }
@@ -178,16 +201,148 @@ export function getExercisesForWorkout(workoutId: number): (Exercise & { planned
         category: r.category,
         minIncrement: r.min_increment,
         baseWeight: r.base_weight,
-        orderIndex: r.order_index,
-        defaultTargetReps: r.default_target_reps,
-        defaultStartingWeight: r.default_starting_weight,
+        targetReps: r.default_target_reps,
+        numSets,
         plannedWeights: planned,
         consecutiveFailures: r.consecutive_failures || 0,
       };
     });
   } catch (error) {
     console.error('Erreur getExercisesForWorkout:', error);
-    return memoryExercises.filter((e) => e.workoutId === workoutId);
+    return memoryExercises
+      .filter((e) => e.workoutId === workoutId)
+      .map((e) => ({
+        id: e.id,
+        workoutId: e.workoutId,
+        name: e.name,
+        category: e.category,
+        minIncrement: e.minIncrement,
+        baseWeight: e.baseWeight,
+        targetReps: e.defaultTargetReps,
+        numSets: e.numSets || 3,
+        plannedWeights: e.plannedWeights,
+        consecutiveFailures: e.consecutiveFailures || 0,
+      }));
+  }
+}
+
+/**
+ * Met à jour les paramètres de base personnalisés par l'utilisateur (poids de départ, reps, séries).
+ */
+export function updateExerciseCustomSettings(
+  exerciseId: number,
+  startingWeight: number,
+  targetReps: number,
+  numSets: number
+): void {
+  const newPlanned = Array(numSets).fill(startingWeight);
+  const plannedJson = JSON.stringify(newPlanned);
+
+  if (!db || Platform.OS === 'web') {
+    const ex = memoryExercises.find((e) => e.id === exerciseId);
+    if (ex) {
+      ex.defaultStartingWeight = startingWeight;
+      ex.defaultTargetReps = targetReps;
+      ex.numSets = numSets;
+      ex.plannedWeights = newPlanned;
+    }
+    return;
+  }
+
+  try {
+    db.runSync(
+      `UPDATE exercises 
+       SET default_starting_weight = ?, default_target_reps = ?, default_sets_count = ?
+       WHERE id = ?;`,
+      [startingWeight, targetReps, numSets, exerciseId]
+    );
+
+    db.runSync(
+      `INSERT INTO exercise_progression_state (exercise_id, planned_weights, consecutive_failures)
+       VALUES (?, ?, 0)
+       ON CONFLICT(exercise_id) DO UPDATE SET
+         planned_weights = excluded.planned_weights;`,
+      [exerciseId, plannedJson]
+    );
+  } catch (error) {
+    console.error('Erreur updateExerciseCustomSettings:', error);
+  }
+}
+
+/**
+ * Ajoute un nouvel exercice personnalisé à une séance.
+ */
+export function addCustomExercise(
+  workoutId: number,
+  name: string,
+  category: EquipmentCategory,
+  startingWeight: number,
+  targetReps: number,
+  setsCount: number = 3
+): void {
+  const baseWeight = category === 'FREE_WEIGHT' ? 20 : 0;
+  const newPlanned = Array(setsCount).fill(startingWeight);
+  const plannedJson = JSON.stringify(newPlanned);
+
+  if (!db || Platform.OS === 'web') {
+    const newId = Date.now();
+    memoryExercises.push({
+      id: newId,
+      workoutId,
+      name,
+      category,
+      minIncrement: 2.5,
+      baseWeight,
+      orderIndex: memoryExercises.length + 1,
+      defaultTargetReps: targetReps,
+      defaultStartingWeight: startingWeight,
+      defaultSetsCount: setsCount,
+      numSets: setsCount,
+      plannedWeights: newPlanned,
+      consecutiveFailures: 0,
+    });
+    return;
+  }
+
+  try {
+    const maxOrder = db.getFirstSync<{ max_order: number | null }>(
+      'SELECT MAX(order_index) as max_order FROM exercises WHERE workout_id = ?;',
+      [workoutId]
+    );
+    const nextOrder = (maxOrder?.max_order || 0) + 1;
+
+    const result = db.runSync(
+      `INSERT INTO exercises 
+      (workout_id, name, category, min_increment, base_weight, order_index, default_target_reps, default_starting_weight, default_sets_count)
+      VALUES (?, ?, ?, 2.5, ?, ?, ?, ?, ?);`,
+      [workoutId, name, category, baseWeight, nextOrder, targetReps, startingWeight, setsCount]
+    );
+
+    const newExerciseId = result.lastInsertRowId;
+    db.runSync(
+      `INSERT INTO exercise_progression_state (exercise_id, planned_weights, consecutive_failures)
+       VALUES (?, ?, 0);`,
+      [newExerciseId, plannedJson]
+    );
+  } catch (error) {
+    console.error('Erreur addCustomExercise:', error);
+  }
+}
+
+/**
+ * Supprime un exercice du catalogue.
+ */
+export function deleteExercise(exerciseId: number): void {
+  if (!db || Platform.OS === 'web') {
+    memoryExercises = memoryExercises.filter((e) => e.id !== exerciseId);
+    return;
+  }
+
+  try {
+    db.runSync('DELETE FROM exercise_progression_state WHERE exercise_id = ?;', [exerciseId]);
+    db.runSync('DELETE FROM exercises WHERE id = ?;', [exerciseId]);
+  } catch (error) {
+    console.error('Erreur deleteExercise:', error);
   }
 }
 
@@ -252,7 +407,7 @@ export function updateExerciseProgression(
   }
 }
 
-export function getRecentLogs(limit: number = 50): WorkoutLogEntry[] {
+export function getRecentLogs(limit: number = 200): WorkoutLogEntry[] {
   if (!db || Platform.OS === 'web') {
     return [...memoryLogs].reverse().slice(0, limit);
   }
