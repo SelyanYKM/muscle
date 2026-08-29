@@ -31,7 +31,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
 
   // Modal d'édition de l'exercice (Crayon)
   const [editingExercise, setEditingExercise] = useState<ConfiguredExercise | null>(null);
-  const [editWeight, setEditWeight] = useState<string>('40');
+  const [editWeightsPerSet, setEditWeightsPerSet] = useState<number[]>([]);
   const [editReps, setEditReps] = useState<number>(8);
   const [editSets, setEditSets] = useState<number>(3);
 
@@ -65,27 +65,84 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
     setExercises(updated);
   };
 
+  // Déplacer vers le haut / bas
+  const moveExercise = (index: number, direction: 'UP' | 'DOWN') => {
+    const newIdx = direction === 'UP' ? index - 1 : index + 1;
+    if (newIdx < 0 || newIdx >= exercises.length) return;
+
+    const updated = [...exercises];
+    const temp = updated[index];
+    updated[index] = updated[newIdx];
+    updated[newIdx] = temp;
+    setExercises(updated);
+  };
+
   // Ouvrir le modal d'édition (Crayon)
   const openEditModal = (ex: ConfiguredExercise) => {
     triggerLightHaptic();
     setEditingExercise(ex);
-    setEditWeight(String(ex.plannedWeights?.[0] ?? ex.baseWeight ?? 40));
+    const sets = ex.numSets ?? 3;
+    setEditSets(sets);
     setEditReps(ex.targetReps ?? 8);
-    setEditSets(ex.numSets ?? 3);
+
+    // Initialiser les poids par série
+    const currentWeights = ex.plannedWeights && ex.plannedWeights.length > 0
+      ? [...ex.plannedWeights]
+      : Array(sets).fill(ex.baseWeight || 40);
+
+    // Ajuster la taille du tableau selon le nombre de séries
+    while (currentWeights.length < sets) {
+      currentWeights.push(currentWeights[currentWeights.length - 1] || 40);
+    }
+    setEditWeightsPerSet(currentWeights.slice(0, sets));
   };
 
-  const adjustModalWeight = (delta: number) => {
+  // Changer le nombre de séries dans le modal
+  const handleSetsCountChange = (newSetsCount: number) => {
     triggerLightHaptic();
-    const current = parseFloat(editWeight) || 0;
-    setEditWeight(String(Math.max(0, current + delta)));
+    setEditSets(newSetsCount);
+    const updatedWeights = [...editWeightsPerSet];
+    while (updatedWeights.length < newSetsCount) {
+      const lastWeight = updatedWeights[updatedWeights.length - 1] || 40;
+      updatedWeights.push(lastWeight);
+    }
+    setEditWeightsPerSet(updatedWeights.slice(0, newSetsCount));
+  };
+
+  // Ajuster le poids d'une série spécifique
+  const adjustSingleSetWeight = (setIdx: number, delta: number) => {
+    triggerLightHaptic();
+    setEditWeightsPerSet((prev) => {
+      const updated = [...prev];
+      updated[setIdx] = Math.max(0, Math.round(((updated[setIdx] || 0) + delta) * 100) / 100);
+      return updated;
+    });
+  };
+
+  // Incrémentation pyramidale automatique (+2.5kg ou +5kg par série)
+  const applyPyramidalIncrement = (step: number) => {
+    triggerLightHaptic();
+    setEditWeightsPerSet((prev) => {
+      const base = prev[0] || 40;
+      return prev.map((_, idx) => base + idx * step);
+    });
+  };
+
+  // Égaliser toutes les séries sur la série 1
+  const equalizeAllSets = () => {
+    triggerLightHaptic();
+    setEditWeightsPerSet((prev) => {
+      const base = prev[0] || 40;
+      return prev.map(() => base);
+    });
   };
 
   const saveEditModal = () => {
     if (!editingExercise) return;
     triggerMediumHaptic();
-    const weightNum = parseFloat(editWeight) || 0;
     const repsNum = Math.max(1, editReps);
     const setsNum = Math.max(1, editSets);
+    const finalWeights = editWeightsPerSet.slice(0, setsNum);
 
     const updated = exercises.map((e) => {
       if (e.id === editingExercise.id) {
@@ -93,14 +150,14 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
           ...e,
           targetReps: repsNum,
           numSets: setsNum,
-          plannedWeights: Array(setsNum).fill(weightNum),
+          plannedWeights: finalWeights,
         };
       }
       return e;
     });
 
     setExercises(updated);
-    updateExerciseCustomSettings(editingExercise.id, weightNum, repsNum, setsNum);
+    updateExerciseCustomSettings(editingExercise.id, finalWeights, repsNum, setsNum);
     setEditingExercise(null);
   };
 
@@ -250,7 +307,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
       </View>
 
       <Text style={styles.hintText}>
-        👈 Glisse un exercice vers la gauche pour le retirer • Clique sur ✏️ pour ajuster tes charges
+        👈 Glisse pour retirer • Utilise ▲/▼ pour l'ordre • Clique sur ✏️ pour définir tes charges par série
       </Text>
 
       <View style={styles.exercisesList}>
@@ -259,8 +316,11 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
             key={ex.id || index}
             exercise={ex}
             index={index}
+            totalCount={exercises.length}
             onEdit={openEditModal}
             onDelete={handleDeleteExercise}
+            onMoveUp={(idx) => moveExercise(idx, 'UP')}
+            onMoveDown={(idx) => moveExercise(idx, 'DOWN')}
           />
         ))}
       </View>
@@ -270,94 +330,115 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
         <Text style={styles.startButtonText}>🚀 DÉMARRER LA SÉANCE</Text>
       </TouchableOpacity>
 
-      {/* MODAL 1 : ÉDITION ÉPURÉE DE LA CHARGE / REPS / SÉRIES (CRAYON) */}
+      {/* MODAL 1 : ÉDITION DÉTAILLÉE PAR SÉRIE (CRAYON) */}
       <Modal visible={editingExercise !== null} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Modifier l'exercice</Text>
-            <Text style={styles.modalSub} numberOfLines={1}>
-              {editingExercise?.name}
-            </Text>
+          <ScrollView contentContainerStyle={styles.modalScrollContent}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Charges & Séries</Text>
+              <Text style={styles.modalSub} numberOfLines={1}>
+                {editingExercise?.name}
+              </Text>
 
-            {/* Charge de base avec stepper rapide +/- 2.5 kg */}
-            <Text style={styles.modalFieldLabel}>CHARGE DE BASE (KG) :</Text>
-            <View style={styles.weightStepperBox}>
-              <TouchableOpacity
-                style={styles.modalStepBtn}
-                onPress={() => adjustModalWeight(-2.5)}
-              >
-                <Text style={styles.modalStepBtnText}>-2.5</Text>
-              </TouchableOpacity>
+              {/* Nombre de séries */}
+              <Text style={styles.modalFieldLabel}>NOMBRE DE SÉRIES :</Text>
+              <View style={styles.modalPillsRow}>
+                {[2, 3, 4, 5].map((s) => (
+                  <TouchableOpacity
+                    key={s}
+                    style={[styles.modalPill, editSets === s && styles.modalPillActive]}
+                    onPress={() => handleSetsCountChange(s)}
+                  >
+                    <Text style={[styles.modalPillText, editSets === s && styles.modalPillTextActive]}>
+                      {s} séries
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
-              <TextInput
-                style={styles.modalWeightInput}
-                keyboardType="numeric"
-                value={editWeight}
-                onChangeText={setEditWeight}
-                placeholder="40"
-                placeholderTextColor="#64748B"
-              />
+              {/* Répétitions cibles */}
+              <Text style={styles.modalFieldLabel}>OBJECTIF DE RÉPÉTITIONS :</Text>
+              <View style={styles.modalPillsRow}>
+                {[5, 6, 8, 10, 12, 15].map((r) => (
+                  <TouchableOpacity
+                    key={r}
+                    style={[styles.modalPill, editReps === r && styles.modalPillActive]}
+                    onPress={() => {
+                      triggerLightHaptic();
+                      setEditReps(r);
+                    }}
+                  >
+                    <Text style={[styles.modalPillText, editReps === r && styles.modalPillTextActive]}>
+                      {r} reps
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
-              <TouchableOpacity
-                style={styles.modalStepBtn}
-                onPress={() => adjustModalWeight(2.5)}
-              >
-                <Text style={styles.modalStepBtnText}>+2.5</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Répétitions cibles */}
-            <Text style={styles.modalFieldLabel}>OBJECTIF DE RÉPÉTITIONS :</Text>
-            <View style={styles.modalPillsRow}>
-              {[5, 6, 8, 10, 12, 15].map((r) => (
+              {/* Raccourcis pyramidaux rapides */}
+              <View style={styles.quickShortcutsRow}>
                 <TouchableOpacity
-                  key={r}
-                  style={[styles.modalPill, editReps === r && styles.modalPillActive]}
-                  onPress={() => {
-                    triggerLightHaptic();
-                    setEditReps(r);
-                  }}
+                  style={styles.shortcutBtn}
+                  onPress={() => applyPyramidalIncrement(2.5)}
                 >
-                  <Text style={[styles.modalPillText, editReps === r && styles.modalPillTextActive]}>
-                    {r} reps
-                  </Text>
+                  <Text style={styles.shortcutBtnText}>⚡ +2.5kg / série</Text>
                 </TouchableOpacity>
-              ))}
-            </View>
 
-            {/* Nombre de séries */}
-            <Text style={styles.modalFieldLabel}>NOMBRE DE SÉRIES :</Text>
-            <View style={styles.modalPillsRow}>
-              {[2, 3, 4, 5].map((s) => (
                 <TouchableOpacity
-                  key={s}
-                  style={[styles.modalPill, editSets === s && styles.modalPillActive]}
-                  onPress={() => {
-                    triggerLightHaptic();
-                    setEditSets(s);
-                  }}
+                  style={styles.shortcutBtn}
+                  onPress={() => applyPyramidalIncrement(5)}
                 >
-                  <Text style={[styles.modalPillText, editSets === s && styles.modalPillTextActive]}>
-                    {s} séries
-                  </Text>
+                  <Text style={styles.shortcutBtnText}>⚡ +5kg / série</Text>
                 </TouchableOpacity>
-              ))}
-            </View>
 
-            {/* Actions modal */}
-            <View style={styles.modalButtonsRow}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setEditingExercise(null)}
-              >
-                <Text style={styles.modalCancelBtnText}>Annuler</Text>
-              </TouchableOpacity>
+                <TouchableOpacity style={styles.shortcutBtn} onPress={equalizeAllSets}>
+                  <Text style={styles.shortcutBtnText}>= Même charge</Text>
+                </TouchableOpacity>
+              </View>
 
-              <TouchableOpacity style={styles.modalSaveBtn} onPress={saveEditModal}>
-                <Text style={styles.modalSaveBtnText}>Enregistrer</Text>
-              </TouchableOpacity>
+              {/* Charges individuelles par série */}
+              <Text style={styles.modalFieldLabel}>CHARGES PAR SÉRIE (KG) :</Text>
+              <View style={styles.perSetList}>
+                {editWeightsPerSet.map((weight, setIdx) => (
+                  <View key={setIdx} style={styles.setWeightRow}>
+                    <Text style={styles.setRowLabel}>Série {setIdx + 1} :</Text>
+
+                    <View style={styles.setStepperBox}>
+                      <TouchableOpacity
+                        style={styles.setStepBtn}
+                        onPress={() => adjustSingleSetWeight(setIdx, -2.5)}
+                      >
+                        <Text style={styles.setStepBtnText}>-2.5</Text>
+                      </TouchableOpacity>
+
+                      <Text style={styles.setWeightNumber}>{weight} kg</Text>
+
+                      <TouchableOpacity
+                        style={styles.setStepBtn}
+                        onPress={() => adjustSingleSetWeight(setIdx, 2.5)}
+                      >
+                        <Text style={styles.setStepBtnText}>+2.5</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              {/* Actions modal */}
+              <View style={styles.modalButtonsRow}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setEditingExercise(null)}
+                >
+                  <Text style={styles.modalCancelBtnText}>Annuler</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.modalSaveBtn} onPress={saveEditModal}>
+                  <Text style={styles.modalSaveBtnText}>Enregistrer</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
 
@@ -630,14 +711,19 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    backgroundColor: 'rgba(15, 23, 42, 0.92)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 16,
+  },
+  modalScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    width: '100%',
   },
   modalContent: {
     width: '100%',
-    maxWidth: 380,
+    maxWidth: 400,
     backgroundColor: '#1E293B',
     borderRadius: 24,
     padding: 22,
@@ -654,7 +740,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#38BDF8',
     fontWeight: '700',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   modalFieldLabel: {
     fontSize: 11,
@@ -663,46 +749,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: 10,
     marginBottom: 6,
-  },
-  weightStepperBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  modalStepBtn: {
-    backgroundColor: '#0F172A',
-    borderWidth: 1,
-    borderColor: '#334155',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  modalStepBtnText: {
-    color: '#38BDF8',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  modalWeightInput: {
-    flex: 1,
-    backgroundColor: '#0F172A',
-    borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 12,
-    paddingVertical: 12,
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '900',
-    textAlign: 'center',
-  },
-  modalInput: {
-    backgroundColor: '#0F172A',
-    borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 12,
-    padding: 12,
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
   },
   modalPillsRow: {
     flexDirection: 'row',
@@ -714,7 +760,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#334155',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 10,
   },
   modalPillActive: {
@@ -728,6 +774,80 @@ const styles = StyleSheet.create({
   },
   modalPillTextActive: {
     color: '#0F172A',
+  },
+  quickShortcutsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 12,
+  },
+  shortcutBtn: {
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#0284C7',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  shortcutBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#38BDF8',
+  },
+  perSetList: {
+    gap: 8,
+    marginTop: 4,
+  },
+  setWeightRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  setRowLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#F8FAFC',
+  },
+  setStepperBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  setStepBtn: {
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  setStepBtnText: {
+    color: '#38BDF8',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  setWeightNumber: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '900',
+    minWidth: 56,
+    textAlign: 'center',
+  },
+  modalInput: {
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 12,
+    padding: 12,
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
   modalButtonsRow: {
     flexDirection: 'row',

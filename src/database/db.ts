@@ -227,24 +227,24 @@ export function getExercisesForWorkout(workoutId: number): ConfiguredExercise[] 
 }
 
 /**
- * Met à jour les paramètres de base personnalisés par l'utilisateur (poids de départ, reps, séries).
+ * Met à jour les paramètres de base personnalisés par l'utilisateur (tableau de poids par série, reps, séries).
  */
 export function updateExerciseCustomSettings(
   exerciseId: number,
-  startingWeight: number,
+  plannedWeights: number[],
   targetReps: number,
   numSets: number
 ): void {
-  const newPlanned = Array(numSets).fill(startingWeight);
-  const plannedJson = JSON.stringify(newPlanned);
+  const defaultWeight = plannedWeights[0] || 40;
+  const plannedJson = JSON.stringify(plannedWeights);
 
   if (!db || Platform.OS === 'web') {
     const ex = memoryExercises.find((e) => e.id === exerciseId);
     if (ex) {
-      ex.defaultStartingWeight = startingWeight;
+      ex.defaultStartingWeight = defaultWeight;
       ex.defaultTargetReps = targetReps;
       ex.numSets = numSets;
-      ex.plannedWeights = newPlanned;
+      ex.plannedWeights = plannedWeights;
     }
     return;
   }
@@ -254,7 +254,7 @@ export function updateExerciseCustomSettings(
       `UPDATE exercises 
        SET default_starting_weight = ?, default_target_reps = ?, default_sets_count = ?
        WHERE id = ?;`,
-      [startingWeight, targetReps, numSets, exerciseId]
+      [defaultWeight, targetReps, numSets, exerciseId]
     );
 
     db.runSync(

@@ -13,28 +13,36 @@ import { triggerLightHaptic, triggerWarningHaptic } from '../utils/haptics';
 interface SwipeableExerciseRowProps {
   exercise: ConfiguredExercise;
   index: number;
+  totalCount: number;
   onEdit: (exercise: ConfiguredExercise) => void;
   onDelete: (index: number) => void;
+  onMoveUp: (index: number) => void;
+  onMoveDown: (index: number) => void;
 }
 
 export const SwipeableExerciseRow: React.FC<SwipeableExerciseRowProps> = ({
   exercise,
   index,
+  totalCount,
   onEdit,
   onDelete,
+  onMoveUp,
+  onMoveDown,
 }) => {
   const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const isFinisher = exercise.category === 'FREE_WEIGHT';
-  const currentWeight = exercise.plannedWeights?.[0] ?? exercise.baseWeight ?? 40;
+
+  // Formater les charges : "50 / 55 / 60 kg" ou "40 kg" si toutes identiques
+  const weights = exercise.plannedWeights || [40];
+  const allIdentical = weights.every((w) => w === weights[0]);
+  const formattedWeights = allIdentical ? `${weights[0]} kg` : `${weights.join(' / ')} kg`;
 
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Détecter un glissement horizontal uniquement
         return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dy) < 10;
       },
       onPanResponderMove: (_, gestureState) => {
-        // Bloquer le glissement vers la droite, autoriser uniquement vers la gauche jusqu'à -100px
         if (gestureState.dx < 0) {
           pan.x.setValue(Math.max(-90, gestureState.dx));
         }
@@ -89,9 +97,31 @@ export const SwipeableExerciseRow: React.FC<SwipeableExerciseRowProps> = ({
         ]}
         {...panResponder.panHandlers}
       >
-        {/* Numéro d'ordre */}
-        <View style={styles.indexBadge}>
-          <Text style={styles.indexText}>{index + 1}</Text>
+        {/* Poignée de réorganisation (Drag handle & position) */}
+        <View style={styles.reorderCol}>
+          <TouchableOpacity
+            style={[styles.reorderArrow, index === 0 && styles.reorderArrowDisabled]}
+            disabled={index === 0}
+            onPress={() => {
+              triggerLightHaptic();
+              onMoveUp(index);
+            }}
+          >
+            <Text style={styles.reorderArrowText}>▲</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.indexNumber}>{index + 1}</Text>
+
+          <TouchableOpacity
+            style={[styles.reorderArrow, index === totalCount - 1 && styles.reorderArrowDisabled]}
+            disabled={index === totalCount - 1}
+            onPress={() => {
+              triggerLightHaptic();
+              onMoveDown(index);
+            }}
+          >
+            <Text style={styles.reorderArrowText}>▼</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Détails de l'exercice */}
@@ -111,7 +141,7 @@ export const SwipeableExerciseRow: React.FC<SwipeableExerciseRowProps> = ({
 
             <Text style={styles.summaryText}>
               {exercise.numSets} séries • {exercise.targetReps} reps •{' '}
-              <Text style={styles.weightHighlight}>{currentWeight} kg</Text>
+              <Text style={styles.weightHighlight}>{formattedWeights}</Text>
             </Text>
           </View>
         </View>
@@ -170,8 +200,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#1E293B',
     borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: '#334155',
   },
@@ -179,25 +209,38 @@ const styles = StyleSheet.create({
     borderColor: '#7F1D1D',
     backgroundColor: '#1B1924',
   },
-  indexBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
-    backgroundColor: '#0F172A',
-    justifyContent: 'center',
+  reorderCol: {
     alignItems: 'center',
-    marginRight: 12,
+    justifyContent: 'center',
+    marginRight: 10,
+    backgroundColor: '#0F172A',
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
     borderWidth: 1,
     borderColor: '#334155',
   },
-  indexText: {
-    fontSize: 12,
-    fontWeight: '800',
+  reorderArrow: {
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  reorderArrowDisabled: {
+    opacity: 0.15,
+  },
+  reorderArrowText: {
     color: '#38BDF8',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  indexNumber: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#F8FAFC',
+    marginVertical: 1,
   },
   infoCol: {
     flex: 1,
-    marginRight: 10,
+    marginRight: 8,
   },
   titleRow: {
     flexDirection: 'row',
@@ -244,7 +287,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   weightHighlight: {
-    color: '#F8FAFC',
+    color: '#38BDF8',
     fontWeight: '800',
   },
   pencilButton: {
