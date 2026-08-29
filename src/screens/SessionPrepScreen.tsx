@@ -9,9 +9,10 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { addCustomExercise, deleteExercise, getExercisesForWorkout, getWorkouts, updateExerciseCustomSettings } from '../database/db';
+import { SwipeableExerciseRow } from '../components/SwipeableExerciseRow';
+import { addCustomExercise, getExercisesForWorkout, getWorkouts, updateExerciseCustomSettings } from '../database/db';
 import { ConfiguredExercise, EquipmentCategory, SessionConfig } from '../types';
-import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
+import { triggerLightHaptic, triggerMediumHaptic } from '../utils/haptics';
 
 interface SessionPrepScreenProps {
   onStartSession: (config: SessionConfig) => void;
@@ -24,11 +25,11 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
 }) => {
   const workouts = getWorkouts();
   const [selectedWorkoutId, setSelectedWorkoutId] = useState<number>(1);
-  const [standardRest, setStandardRest] = useState<number>(90); // 90s par défaut
-  const [finisherRest, setFinisherRest] = useState<number>(180); // 180s (3min) par défaut
+  const [standardRest, setStandardRest] = useState<number>(90);
+  const [finisherRest, setFinisherRest] = useState<number>(180);
   const [exercises, setExercises] = useState<ConfiguredExercise[]>([]);
 
-  // Modal d'édition détaillée de charge/reps/séries
+  // Modal d'édition de l'exercice (Crayon)
   const [editingExercise, setEditingExercise] = useState<ConfiguredExercise | null>(null);
   const [editWeight, setEditWeight] = useState<string>('40');
   const [editReps, setEditReps] = useState<number>(8);
@@ -58,59 +59,25 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
     setSelectedWorkoutId(wId);
   };
 
-  // Réordonner les exercices (Monter / Descendre)
-  const moveExercise = (index: number, direction: 'UP' | 'DOWN') => {
-    triggerLightHaptic();
-    const newIdx = direction === 'UP' ? index - 1 : index + 1;
-    if (newIdx < 0 || newIdx >= exercises.length) return;
-
-    const updated = [...exercises];
-    const temp = updated[index];
-    updated[index] = updated[newIdx];
-    updated[newIdx] = temp;
+  // Suppression via glissement vers la gauche
+  const handleDeleteExercise = (index: number) => {
+    const updated = exercises.filter((_, idx) => idx !== index);
     setExercises(updated);
   };
 
-  // Retirer un exercice de la séance
-  const handleRemoveExercise = (index: number) => {
-    triggerWarningHaptic();
-    const ex = exercises[index];
-    Alert.alert(
-      'Retirer cet exercice ?',
-      `Retirer "${ex.name}" de cette séance ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Retirer de la séance',
-          style: 'destructive',
-          onPress: () => {
-            const updated = exercises.filter((_, idx) => idx !== index);
-            setExercises(updated);
-          },
-        },
-      ]
-    );
-  };
-
-  // Ajustement rapide du poids (+/- 2.5 kg) directement sur la carte
-  const handleQuickWeightAdjust = (index: number, delta: number) => {
-    triggerLightHaptic();
-    const updated = [...exercises];
-    const current = updated[index];
-    const currentWeight = current.plannedWeights?.[0] ?? current.baseWeight ?? 40;
-    const newWeight = Math.max(0, currentWeight + delta);
-    current.plannedWeights = Array(current.numSets).fill(newWeight);
-    setExercises(updated);
-    updateExerciseCustomSettings(current.id, newWeight, current.targetReps, current.numSets);
-  };
-
-  // Ouvrir l'éditeur complet
+  // Ouvrir le modal d'édition (Crayon)
   const openEditModal = (ex: ConfiguredExercise) => {
     triggerLightHaptic();
     setEditingExercise(ex);
-    setEditWeight(String(ex.plannedWeights?.[0] ?? 40));
+    setEditWeight(String(ex.plannedWeights?.[0] ?? ex.baseWeight ?? 40));
     setEditReps(ex.targetReps ?? 8);
     setEditSets(ex.numSets ?? 3);
+  };
+
+  const adjustModalWeight = (delta: number) => {
+    triggerLightHaptic();
+    const current = parseFloat(editWeight) || 0;
+    setEditWeight(String(Math.max(0, current + delta)));
   };
 
   const saveEditModal = () => {
@@ -268,7 +235,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
         </View>
       </View>
 
-      {/* 3. Exercices Prévus avec Modularité Complète */}
+      {/* 3. Exercices Prévus : Liste épurée avec Swipe-to-delete et Crayon */}
       <View style={styles.exerciseSectionHeader}>
         <Text style={styles.sectionHeading}>3. EXERCICES PRÉVUS ({exercises.length})</Text>
         <TouchableOpacity
@@ -278,98 +245,24 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
             setIsAddModalOpen(true);
           }}
         >
-          <Text style={styles.addExerciseSmallBtnText}>➕ Ajouter un exo</Text>
+          <Text style={styles.addExerciseSmallBtnText}>➕ Ajouter</Text>
         </TouchableOpacity>
       </View>
 
       <Text style={styles.hintText}>
-        💡 Ajuste tes charges de base, l'ordre et le nombre d'exercices avant de lancer ta séance.
+        👈 Glisse un exercice vers la gauche pour le retirer • Clique sur ✏️ pour ajuster tes charges
       </Text>
 
       <View style={styles.exercisesList}>
-        {exercises.map((ex, index) => {
-          const isFinisher = ex.category === 'FREE_WEIGHT';
-          const currentWeight = ex.plannedWeights?.[0] ?? 40;
-
-          return (
-            <View key={ex.id || index} style={[styles.exerciseCard, isFinisher && styles.exerciseCardFinisher]}>
-              {/* Ligne du haut : Ordre, Titre, Catégorie, Bouton Supprimer */}
-              <View style={styles.cardTopRow}>
-                <View style={styles.orderControls}>
-                  <TouchableOpacity
-                    style={[styles.orderBtn, index === 0 && styles.orderBtnDisabled]}
-                    disabled={index === 0}
-                    onPress={() => moveExercise(index, 'UP')}
-                  >
-                    <Text style={styles.orderBtnText}>▲</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.orderIndexText}>{index + 1}</Text>
-                  <TouchableOpacity
-                    style={[styles.orderBtn, index === exercises.length - 1 && styles.orderBtnDisabled]}
-                    disabled={index === exercises.length - 1}
-                    onPress={() => moveExercise(index, 'DOWN')}
-                  >
-                    <Text style={styles.orderBtnText}>▼</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.titleCol}>
-                  <Text style={styles.exerciseCardName} numberOfLines={1}>
-                    {ex.name}
-                  </Text>
-                  <View style={styles.metaBadgeRow}>
-                    <View style={[styles.categoryPill, isFinisher ? styles.finisherPill : styles.machinePill]}>
-                      <Text style={[styles.categoryPillText, isFinisher ? styles.finisherPillText : styles.machinePillText]}>
-                        {isFinisher ? '🔥 FINISHER' : '⚙️ HAMMER'}
-                      </Text>
-                    </View>
-                    <Text style={styles.cardSubDetails}>
-                      {ex.numSets} séries • {ex.targetReps} reps
-                    </Text>
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.deleteBtn}
-                  onPress={() => handleRemoveExercise(index)}
-                >
-                  <Text style={styles.deleteBtnText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Ligne du bas : Réglage rapide de la charge & bouton éditer */}
-              <View style={styles.cardBottomRow}>
-                <View style={styles.weightAdjustContainer}>
-                  <Text style={styles.adjustLabel}>CHARGE DE DÉPART :</Text>
-                  <View style={styles.stepperRow}>
-                    <TouchableOpacity
-                      style={styles.stepperBtn}
-                      onPress={() => handleQuickWeightAdjust(index, -2.5)}
-                    >
-                      <Text style={styles.stepperBtnText}>-2.5</Text>
-                    </TouchableOpacity>
-
-                    <Text style={styles.weightValueText}>{currentWeight} kg</Text>
-
-                    <TouchableOpacity
-                      style={styles.stepperBtn}
-                      onPress={() => handleQuickWeightAdjust(index, 2.5)}
-                    >
-                      <Text style={styles.stepperBtnText}>+2.5</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.editConfigBtn}
-                  onPress={() => openEditModal(ex)}
-                >
-                  <Text style={styles.editConfigBtnText}>✏️ Modifier</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          );
-        })}
+        {exercises.map((ex, index) => (
+          <SwipeableExerciseRow
+            key={ex.id || index}
+            exercise={ex}
+            index={index}
+            onEdit={openEditModal}
+            onDelete={handleDeleteExercise}
+          />
+        ))}
       </View>
 
       {/* Gros Bouton de Démarrage */}
@@ -377,23 +270,41 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
         <Text style={styles.startButtonText}>🚀 DÉMARRER LA SÉANCE</Text>
       </TouchableOpacity>
 
-      {/* MODAL 1 : ÉDITION DÉTAILLÉE D'UN EXERCICE */}
+      {/* MODAL 1 : ÉDITION ÉPURÉE DE LA CHARGE / REPS / SÉRIES (CRAYON) */}
       <Modal visible={editingExercise !== null} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Modifier l'exercice</Text>
-            <Text style={styles.modalSub}>{editingExercise?.name}</Text>
+            <Text style={styles.modalSub} numberOfLines={1}>
+              {editingExercise?.name}
+            </Text>
 
-            {/* Poids de départ */}
+            {/* Charge de base avec stepper rapide +/- 2.5 kg */}
             <Text style={styles.modalFieldLabel}>CHARGE DE BASE (KG) :</Text>
-            <TextInput
-              style={styles.modalInput}
-              keyboardType="numeric"
-              value={editWeight}
-              onChangeText={setEditWeight}
-              placeholder="ex: 40"
-              placeholderTextColor="#64748B"
-            />
+            <View style={styles.weightStepperBox}>
+              <TouchableOpacity
+                style={styles.modalStepBtn}
+                onPress={() => adjustModalWeight(-2.5)}
+              >
+                <Text style={styles.modalStepBtnText}>-2.5</Text>
+              </TouchableOpacity>
+
+              <TextInput
+                style={styles.modalWeightInput}
+                keyboardType="numeric"
+                value={editWeight}
+                onChangeText={setEditWeight}
+                placeholder="40"
+                placeholderTextColor="#64748B"
+              />
+
+              <TouchableOpacity
+                style={styles.modalStepBtn}
+                onPress={() => adjustModalWeight(2.5)}
+              >
+                <Text style={styles.modalStepBtnText}>+2.5</Text>
+              </TouchableOpacity>
+            </View>
 
             {/* Répétitions cibles */}
             <Text style={styles.modalFieldLabel}>OBJECTIF DE RÉPÉTITIONS :</Text>
@@ -477,7 +388,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
                 onPress={() => setNewExCategory('HAMMER_STRENGTH')}
               >
                 <Text style={[styles.modalPillText, newExCategory === 'HAMMER_STRENGTH' && styles.modalPillTextActive]}>
-                  ⚙️ Machine Hammer
+                  ⚙️ Machine
                 </Text>
               </TouchableOpacity>
 
@@ -698,166 +609,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   exercisesList: {
-    gap: 10,
     marginBottom: 26,
-  },
-  exerciseCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  exerciseCardFinisher: {
-    borderColor: '#7F1D1D',
-    backgroundColor: '#1C1924',
-  },
-  cardTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  orderControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginRight: 10,
-    backgroundColor: '#0F172A',
-    borderRadius: 8,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-  },
-  orderBtn: {
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-  },
-  orderBtnDisabled: {
-    opacity: 0.2,
-  },
-  orderBtnText: {
-    color: '#38BDF8',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  orderIndexText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '800',
-    minWidth: 14,
-    textAlign: 'center',
-  },
-  titleCol: {
-    flex: 1,
-    marginRight: 8,
-  },
-  exerciseCardName: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  metaBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 4,
-  },
-  categoryPill: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  machinePill: {
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
-  },
-  machinePillText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#38BDF8',
-  },
-  finisherPill: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-  },
-  finisherPillText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#F87171',
-  },
-  categoryPillText: {
-    letterSpacing: 0.5,
-  },
-  cardSubDetails: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#94A3B8',
-  },
-  deleteBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#334155',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  deleteBtnText: {
-    color: '#94A3B8',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  cardBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#2A374A',
-    paddingTop: 10,
-  },
-  weightAdjustContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  adjustLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#64748B',
-    letterSpacing: 0.5,
-  },
-  stepperRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0F172A',
-    borderRadius: 10,
-    padding: 2,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  stepperBtn: {
-    backgroundColor: '#1E293B',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 6,
-  },
-  stepperBtnText: {
-    color: '#38BDF8',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  weightValueText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-    paddingHorizontal: 8,
-  },
-  editConfigBtn: {
-    backgroundColor: '#334155',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  editConfigBtnText: {
-    color: '#F8FAFC',
-    fontSize: 12,
-    fontWeight: '700',
   },
   startButton: {
     backgroundColor: '#38BDF8',
@@ -911,6 +663,36 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: 10,
     marginBottom: 6,
+  },
+  weightStepperBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalStepBtn: {
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  modalStepBtnText: {
+    color: '#38BDF8',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  modalWeightInput: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 12,
+    paddingVertical: 12,
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '900',
+    textAlign: 'center',
   },
   modalInput: {
     backgroundColor: '#0F172A',
