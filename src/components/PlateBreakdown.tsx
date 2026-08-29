@@ -72,6 +72,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
     marginBottom: 10,
   },
   title: {
@@ -84,6 +86,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#38BDF8',
+    flexShrink: 1,
   },
   platesRow: {
     flexDirection: 'row',

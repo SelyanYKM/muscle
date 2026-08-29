@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { SwipeableExerciseRow } from '../components/SwipeableExerciseRow';
+import { DraggableExerciseList } from '../components/DraggableExerciseList';
 import { addCustomExercise, getExercisesForWorkout, getWorkouts, updateExerciseCustomSettings } from '../database/db';
 import { ConfiguredExercise, EquipmentCategory, SessionConfig } from '../types';
 import { triggerLightHaptic, triggerMediumHaptic } from '../utils/haptics';
@@ -59,25 +59,18 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
     setSelectedWorkoutId(wId);
   };
 
-  // Suppression via glissement vers la gauche
+  // Suppression d'un exercice
   const handleDeleteExercise = (index: number) => {
     const updated = exercises.filter((_, idx) => idx !== index);
     setExercises(updated);
   };
 
-  // Déplacer vers le haut / bas
-  const moveExercise = (index: number, direction: 'UP' | 'DOWN') => {
-    const newIdx = direction === 'UP' ? index - 1 : index + 1;
-    if (newIdx < 0 || newIdx >= exercises.length) return;
-
-    const updated = [...exercises];
-    const temp = updated[index];
-    updated[index] = updated[newIdx];
-    updated[newIdx] = temp;
-    setExercises(updated);
+  // Réordonner les exercices via Drag & Drop
+  const handleReorder = (reordered: ConfiguredExercise[]) => {
+    setExercises(reordered);
   };
 
-  // Ouvrir le modal d'édition (Crayon)
+  // Ouvrir le modal d'édition
   const openEditModal = (ex: ConfiguredExercise) => {
     triggerLightHaptic();
     setEditingExercise(ex);
@@ -85,19 +78,16 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
     setEditSets(sets);
     setEditReps(ex.targetReps ?? 8);
 
-    // Initialiser les poids par série
     const currentWeights = ex.plannedWeights && ex.plannedWeights.length > 0
       ? [...ex.plannedWeights]
       : Array(sets).fill(ex.baseWeight || 40);
 
-    // Ajuster la taille du tableau selon le nombre de séries
     while (currentWeights.length < sets) {
       currentWeights.push(currentWeights[currentWeights.length - 1] || 40);
     }
     setEditWeightsPerSet(currentWeights.slice(0, sets));
   };
 
-  // Changer le nombre de séries dans le modal
   const handleSetsCountChange = (newSetsCount: number) => {
     triggerLightHaptic();
     setEditSets(newSetsCount);
@@ -109,7 +99,6 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
     setEditWeightsPerSet(updatedWeights.slice(0, newSetsCount));
   };
 
-  // Ajuster le poids d'une série spécifique
   const adjustSingleSetWeight = (setIdx: number, delta: number) => {
     triggerLightHaptic();
     setEditWeightsPerSet((prev) => {
@@ -119,7 +108,6 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
     });
   };
 
-  // Incrémentation pyramidale automatique (+2.5kg ou +5kg par série)
   const applyPyramidalIncrement = (step: number) => {
     triggerLightHaptic();
     setEditWeightsPerSet((prev) => {
@@ -128,7 +116,6 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
     });
   };
 
-  // Égaliser toutes les séries sur la série 1
   const equalizeAllSets = () => {
     triggerLightHaptic();
     setEditWeightsPerSet((prev) => {
@@ -161,7 +148,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
     setEditingExercise(null);
   };
 
-  // Ajouter un nouvel exercice
+  // Ajouter un exercice personnalisé
   const handleAddExerciseSubmit = () => {
     if (!newExName.trim()) {
       Alert.alert('Nom requis', 'Merci de renseigner un nom pour l’exercice.');
@@ -203,396 +190,326 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* En-tête de l'application */}
-      <View style={styles.headerRow}>
-        <View>
-          <Text style={styles.appSubtitle}>SURCHARGE PROGRESSIVE PPL</Text>
-          <Text style={styles.appTitle}>Préparer la séance</Text>
-        </View>
-
-        <TouchableOpacity style={styles.historyButton} onPress={onOpenHistory}>
-          <Text style={styles.historyButtonText}>📜 Historique</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* 1. Sélecteur de Séance PPL */}
-      <Text style={styles.sectionHeading}>1. CHOISIR LE PROGRAMME</Text>
-      <View style={styles.workoutTabs}>
-        {workouts.map((w) => {
-          const isSelected = w.id === selectedWorkoutId;
-          return (
-            <TouchableOpacity
-              key={w.id}
-              style={[styles.workoutTab, isSelected && styles.workoutTabActive]}
-              onPress={() => handleWorkoutSelect(w.id)}
-            >
-              <Text style={[styles.workoutTabText, isSelected && styles.workoutTabTextActive]}>
-                {w.name}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      <Text style={styles.workoutDescription}>{selectedWorkout?.description}</Text>
-
-      {/* 2. Configuration des Temps de Repos */}
-      <Text style={styles.sectionHeading}>2. TEMPS DE REPOS AUTOMATIQUE</Text>
-      
-      <View style={styles.restConfigBox}>
-        {/* Repos Machines */}
-        <View style={styles.restRow}>
-          <View style={styles.restLabelCol}>
-            <Text style={styles.restLabelTitle}>⚙️ Machines Hammer Strength</Text>
-            <Text style={styles.restLabelSub}>Iso-lateral & guidé</Text>
+    <View style={styles.screenWrapper}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* En-tête épuré */}
+        <View style={styles.headerRow}>
+          <View style={styles.titleCol}>
+            <Text style={styles.appSubtitle}>SURCHARGE PROGRESSIVE</Text>
+            <Text style={styles.appTitle}>Séance du jour</Text>
           </View>
 
-          <View style={styles.timePills}>
-            {[60, 90, 120].map((secs) => (
+          <TouchableOpacity style={styles.historyButton} onPress={onOpenHistory} activeOpacity={0.8}>
+            <Text style={styles.historyButtonText}>📜 Historique</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* 1. Sélecteur de Séance PPL */}
+        <View style={styles.workoutTabs}>
+          {workouts.map((w) => {
+            const isSelected = w.id === selectedWorkoutId;
+            return (
               <TouchableOpacity
-                key={secs}
-                style={[styles.timePill, standardRest === secs && styles.timePillActive]}
-                onPress={() => {
-                  triggerLightHaptic();
-                  setStandardRest(secs);
-                }}
+                key={w.id}
+                style={[styles.workoutTab, isSelected && styles.workoutTabActive]}
+                onPress={() => handleWorkoutSelect(w.id)}
+                activeOpacity={0.8}
               >
-                <Text style={[styles.timePillText, standardRest === secs && styles.timePillTextActive]}>
-                  {secs}s
+                <Text style={[styles.workoutTabText, isSelected && styles.workoutTabTextActive]}>
+                  {w.name}
                 </Text>
               </TouchableOpacity>
-            ))}
+            );
+          })}
+        </View>
+
+        {/* 2. Configuration des Temps de Repos (Compact & Net) */}
+        <View style={styles.restCard}>
+          <View style={styles.restRow}>
+            <Text style={styles.restTitle}>⚙️ Repos Machines</Text>
+            <View style={styles.timePills}>
+              {[60, 90, 120].map((secs) => (
+                <TouchableOpacity
+                  key={secs}
+                  style={[styles.timePill, standardRest === secs && styles.timePillActive]}
+                  onPress={() => {
+                    triggerLightHaptic();
+                    setStandardRest(secs);
+                  }}
+                >
+                  <Text style={[styles.timePillText, standardRest === secs && styles.timePillTextActive]}>
+                    {secs}s
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={[styles.restRow, styles.restDivider]}>
+            <Text style={styles.restTitle}>🔥 Repos Finisher</Text>
+            <View style={styles.timePills}>
+              {[120, 180, 240].map((secs) => (
+                <TouchableOpacity
+                  key={secs}
+                  style={[styles.timePill, finisherRest === secs && styles.timePillActive]}
+                  onPress={() => {
+                    triggerLightHaptic();
+                    setFinisherRest(secs);
+                  }}
+                >
+                  <Text style={[styles.timePillText, finisherRest === secs && styles.timePillTextActive]}>
+                    {secs / 60} min
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         </View>
 
-        {/* Repos Finisher Barre */}
-        <View style={[styles.restRow, { borderTopWidth: 1, borderTopColor: '#334155', paddingTop: 14 }]}>
-          <View style={styles.restLabelCol}>
-            <Text style={styles.restLabelTitle}>🔥 Finisher Poly-articulaire</Text>
-            <Text style={styles.restLabelSub}>Barre libre lourde</Text>
-          </View>
+        {/* 3. Exercices Prévus : En-tête + Bouton Ajouter */}
+        <View style={styles.exerciseHeaderRow}>
+          <Text style={styles.sectionHeading}>EXERCICES ({exercises.length})</Text>
 
-          <View style={styles.timePills}>
-            {[120, 180, 240].map((secs) => (
-              <TouchableOpacity
-                key={secs}
-                style={[styles.timePill, finisherRest === secs && styles.timePillActive]}
-                onPress={() => {
-                  triggerLightHaptic();
-                  setFinisherRest(secs);
-                }}
-              >
-                <Text style={[styles.timePillText, finisherRest === secs && styles.timePillTextActive]}>
-                  {secs / 60} min
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => {
+              triggerLightHaptic();
+              setIsAddModalOpen(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.addBtnText}>+ Ajouter</Text>
+          </TouchableOpacity>
         </View>
-      </View>
 
-      {/* 3. Exercices Prévus : Liste épurée avec Swipe-to-delete et Crayon */}
-      <View style={styles.exerciseSectionHeader}>
-        <Text style={styles.sectionHeading}>3. EXERCICES PRÉVUS ({exercises.length})</Text>
-        <TouchableOpacity
-          style={styles.addExerciseSmallBtn}
-          onPress={() => {
-            triggerLightHaptic();
-            setIsAddModalOpen(true);
-          }}
-        >
-          <Text style={styles.addExerciseSmallBtnText}>➕ Ajouter</Text>
+        {/* Liste Drag & Drop sans débordement */}
+        <DraggableExerciseList
+          exercises={exercises}
+          onReorder={handleReorder}
+          onEdit={openEditModal}
+          onDelete={handleDeleteExercise}
+        />
+
+        {/* Bouton Démarrer la Séance */}
+        <TouchableOpacity style={styles.startButton} onPress={handleStart} activeOpacity={0.85}>
+          <Text style={styles.startButtonText}>🚀 DÉMARRER LA SÉANCE</Text>
         </TouchableOpacity>
-      </View>
-
-      <Text style={styles.hintText}>
-        👈 Glisse pour retirer • Utilise ▲/▼ pour l'ordre • Clique sur ✏️ pour définir tes charges par série
-      </Text>
-
-      <View style={styles.exercisesList}>
-        {exercises.map((ex, index) => (
-          <SwipeableExerciseRow
-            key={ex.id || index}
-            exercise={ex}
-            index={index}
-            totalCount={exercises.length}
-            onEdit={openEditModal}
-            onDelete={handleDeleteExercise}
-            onMoveUp={(idx) => moveExercise(idx, 'UP')}
-            onMoveDown={(idx) => moveExercise(idx, 'DOWN')}
-          />
-        ))}
-      </View>
-
-      {/* Gros Bouton de Démarrage */}
-      <TouchableOpacity style={styles.startButton} onPress={handleStart}>
-        <Text style={styles.startButtonText}>🚀 DÉMARRER LA SÉANCE</Text>
-      </TouchableOpacity>
+      </ScrollView>
 
       {/* MODAL 1 : ÉDITION DÉTAILLÉE PAR SÉRIE (CRAYON) */}
       <Modal visible={editingExercise !== null} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
-          <ScrollView contentContainerStyle={styles.modalScrollContent}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Charges & Séries</Text>
-              <Text style={styles.modalSub} numberOfLines={1}>
-                {editingExercise?.name}
-              </Text>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Modifier les charges</Text>
+            <Text style={styles.modalSubtitle} numberOfLines={1}>
+              {editingExercise?.name}
+            </Text>
 
-              {/* Nombre de séries */}
-              <Text style={styles.modalFieldLabel}>NOMBRE DE SÉRIES :</Text>
-              <View style={styles.modalPillsRow}>
-                {[2, 3, 4, 5].map((s) => (
-                  <TouchableOpacity
-                    key={s}
-                    style={[styles.modalPill, editSets === s && styles.modalPillActive]}
-                    onPress={() => handleSetsCountChange(s)}
-                  >
-                    <Text style={[styles.modalPillText, editSets === s && styles.modalPillTextActive]}>
-                      {s} séries
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Répétitions cibles */}
-              <Text style={styles.modalFieldLabel}>OBJECTIF DE RÉPÉTITIONS :</Text>
-              <View style={styles.modalPillsRow}>
-                {[5, 6, 8, 10, 12, 15].map((r) => (
-                  <TouchableOpacity
-                    key={r}
-                    style={[styles.modalPill, editReps === r && styles.modalPillActive]}
-                    onPress={() => {
-                      triggerLightHaptic();
-                      setEditReps(r);
-                    }}
-                  >
-                    <Text style={[styles.modalPillText, editReps === r && styles.modalPillTextActive]}>
-                      {r} reps
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Raccourcis pyramidaux rapides */}
-              <View style={styles.quickShortcutsRow}>
+            {/* Nombre de séries */}
+            <Text style={styles.modalSectionLabel}>SÉRIES</Text>
+            <View style={styles.pillsGrid}>
+              {[2, 3, 4, 5].map((s) => (
                 <TouchableOpacity
-                  style={styles.shortcutBtn}
-                  onPress={() => applyPyramidalIncrement(2.5)}
+                  key={s}
+                  style={[styles.pillBtn, editSets === s && styles.pillBtnActive]}
+                  onPress={() => handleSetsCountChange(s)}
                 >
-                  <Text style={styles.shortcutBtnText}>⚡ +2.5kg / série</Text>
+                  <Text style={[styles.pillBtnText, editSets === s && styles.pillBtnTextActive]}>
+                    {s} séries
+                  </Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.shortcutBtn}
-                  onPress={() => applyPyramidalIncrement(5)}
-                >
-                  <Text style={styles.shortcutBtnText}>⚡ +5kg / série</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.shortcutBtn} onPress={equalizeAllSets}>
-                  <Text style={styles.shortcutBtnText}>= Même charge</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Charges individuelles par série */}
-              <Text style={styles.modalFieldLabel}>CHARGES PAR SÉRIE (KG) :</Text>
-              <View style={styles.perSetList}>
-                {editWeightsPerSet.map((weight, setIdx) => (
-                  <View key={setIdx} style={styles.setWeightRow}>
-                    <Text style={styles.setRowLabel}>Série {setIdx + 1} :</Text>
-
-                    <View style={styles.setStepperBox}>
-                      <TouchableOpacity
-                        style={styles.setStepBtn}
-                        onPress={() => adjustSingleSetWeight(setIdx, -2.5)}
-                      >
-                        <Text style={styles.setStepBtnText}>-2.5</Text>
-                      </TouchableOpacity>
-
-                      <Text style={styles.setWeightNumber}>{weight} kg</Text>
-
-                      <TouchableOpacity
-                        style={styles.setStepBtn}
-                        onPress={() => adjustSingleSetWeight(setIdx, 2.5)}
-                      >
-                        <Text style={styles.setStepBtnText}>+2.5</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-              </View>
-
-              {/* Actions modal */}
-              <View style={styles.modalButtonsRow}>
-                <TouchableOpacity
-                  style={styles.modalCancelBtn}
-                  onPress={() => setEditingExercise(null)}
-                >
-                  <Text style={styles.modalCancelBtnText}>Annuler</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.modalSaveBtn} onPress={saveEditModal}>
-                  <Text style={styles.modalSaveBtnText}>Enregistrer</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </ScrollView>
-        </View>
-      </Modal>
-
-      {/* MODAL 2 : AJOUTER UN EXERCICE */}
-      <Modal visible={isAddModalOpen} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Ajouter un exercice</Text>
-
-            {/* Nom */}
-            <Text style={styles.modalFieldLabel}>NOM DE L'EXERCICE :</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={newExName}
-              onChangeText={setNewExName}
-              placeholder="ex: HS Lateral Raise"
-              placeholderTextColor="#64748B"
-            />
-
-            {/* Type */}
-            <Text style={styles.modalFieldLabel}>TYPE D'ÉQUIPEMENT :</Text>
-            <View style={styles.modalPillsRow}>
-              <TouchableOpacity
-                style={[
-                  styles.modalPill,
-                  newExCategory === 'HAMMER_STRENGTH' && styles.modalPillActive,
-                ]}
-                onPress={() => setNewExCategory('HAMMER_STRENGTH')}
-              >
-                <Text style={[styles.modalPillText, newExCategory === 'HAMMER_STRENGTH' && styles.modalPillTextActive]}>
-                  ⚙️ Machine
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.modalPill,
-                  newExCategory === 'FREE_WEIGHT' && styles.modalPillActive,
-                ]}
-                onPress={() => setNewExCategory('FREE_WEIGHT')}
-              >
-                <Text style={[styles.modalPillText, newExCategory === 'FREE_WEIGHT' && styles.modalPillTextActive]}>
-                  🔥 Barre Libre (20kg)
-                </Text>
-              </TouchableOpacity>
+              ))}
             </View>
 
-            {/* Poids */}
-            <Text style={styles.modalFieldLabel}>CHARGE DE DÉPART (KG) :</Text>
-            <TextInput
-              style={styles.modalInput}
-              keyboardType="numeric"
-              value={newExWeight}
-              onChangeText={setNewExWeight}
-              placeholder="ex: 40"
-              placeholderTextColor="#64748B"
-            />
-
-            {/* Reps */}
-            <Text style={styles.modalFieldLabel}>OBJECTIF DE RÉPÉTITIONS :</Text>
-            <View style={styles.modalPillsRow}>
-              {[6, 8, 10, 12].map((r) => (
+            {/* Répétitions */}
+            <Text style={styles.modalSectionLabel}>OBJECTIF REPS</Text>
+            <View style={styles.pillsGrid}>
+              {[5, 6, 8, 10, 12, 15].map((r) => (
                 <TouchableOpacity
                   key={r}
-                  style={[styles.modalPill, newExReps === r && styles.modalPillActive]}
-                  onPress={() => setNewExReps(r)}
+                  style={[styles.pillBtn, editReps === r && styles.pillBtnActive]}
+                  onPress={() => {
+                    triggerLightHaptic();
+                    setEditReps(r);
+                  }}
                 >
-                  <Text style={[styles.modalPillText, newExReps === r && styles.modalPillTextActive]}>
+                  <Text style={[styles.pillBtnText, editReps === r && styles.pillBtnTextActive]}>
                     {r} reps
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            {/* Actions */}
-            <View style={styles.modalButtonsRow}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setIsAddModalOpen(false)}
-              >
-                <Text style={styles.modalCancelBtnText}>Annuler</Text>
+            {/* Raccourcis rapides */}
+            <View style={styles.shortcutsRow}>
+              <TouchableOpacity style={styles.shortcutItem} onPress={() => applyPyramidalIncrement(2.5)}>
+                <Text style={styles.shortcutItemText}>+2.5kg / série</Text>
               </TouchableOpacity>
+              <TouchableOpacity style={styles.shortcutItem} onPress={() => applyPyramidalIncrement(5)}>
+                <Text style={styles.shortcutItemText}>+5kg / série</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.shortcutItem} onPress={equalizeAllSets}>
+                <Text style={styles.shortcutItemText}>= Égaliser</Text>
+              </TouchableOpacity>
+            </View>
 
-              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleAddExerciseSubmit}>
-                <Text style={styles.modalSaveBtnText}>Ajouter</Text>
+            {/* Lignes de charge par série */}
+            <Text style={styles.modalSectionLabel}>CHARGES PAR SÉRIE</Text>
+            <View style={styles.perSetContainer}>
+              {editWeightsPerSet.map((weight, idx) => (
+                <View key={idx} style={styles.setRowBox}>
+                  <Text style={styles.setRowTitle}>Série {idx + 1}</Text>
+                  <View style={styles.stepperWrap}>
+                    <TouchableOpacity style={styles.stepBtn} onPress={() => adjustSingleSetWeight(idx, -2.5)}>
+                      <Text style={styles.stepBtnText}>-2.5</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.stepValue}>{weight} kg</Text>
+                    <TouchableOpacity style={styles.stepBtn} onPress={() => adjustSingleSetWeight(idx, 2.5)}>
+                      <Text style={styles.stepBtnText}>+2.5</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            {/* Actions Modal */}
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditingExercise(null)}>
+                <Text style={styles.cancelBtnText}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveBtn} onPress={saveEditModal}>
+                <Text style={styles.saveBtnText}>Valider</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-    </ScrollView>
+
+      {/* MODAL 2 : AJOUTER UN EXERCICE */}
+      <Modal visible={isAddModalOpen} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Nouvel exercice</Text>
+
+            <Text style={styles.modalSectionLabel}>NOM</Text>
+            <TextInput
+              style={styles.modalTextInput}
+              value={newExName}
+              onChangeText={setNewExName}
+              placeholder="ex: HS Lateral Raise"
+              placeholderTextColor="#64748B"
+            />
+
+            <Text style={styles.modalSectionLabel}>TYPE</Text>
+            <View style={styles.pillsGrid}>
+              <TouchableOpacity
+                style={[styles.pillBtn, newExCategory === 'HAMMER_STRENGTH' && styles.pillBtnActive]}
+                onPress={() => setNewExCategory('HAMMER_STRENGTH')}
+              >
+                <Text style={[styles.pillBtnText, newExCategory === 'HAMMER_STRENGTH' && styles.pillBtnTextActive]}>
+                  ⚙️ Machine
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.pillBtn, newExCategory === 'FREE_WEIGHT' && styles.pillBtnActive]}
+                onPress={() => setNewExCategory('FREE_WEIGHT')}
+              >
+                <Text style={[styles.pillBtnText, newExCategory === 'FREE_WEIGHT' && styles.pillBtnTextActive]}>
+                  🔥 Barre (20kg)
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalSectionLabel}>CHARGE INITIALE (KG)</Text>
+            <TextInput
+              style={styles.modalTextInput}
+              keyboardType="numeric"
+              value={newExWeight}
+              onChangeText={setNewExWeight}
+              placeholder="40"
+              placeholderTextColor="#64748B"
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setIsAddModalOpen(false)}>
+                <Text style={styles.cancelBtnText}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveBtn} onPress={handleAddExerciseSubmit}>
+                <Text style={styles.saveBtnText}>Ajouter</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  screenWrapper: {
     flex: 1,
     backgroundColor: '#0B0F19',
   },
+  container: {
+    flex: 1,
+  },
   content: {
-    padding: 20,
+    paddingHorizontal: 16,
     paddingTop: 50,
-    paddingBottom: 40,
+    paddingBottom: 36,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
+  },
+  titleCol: {
+    flex: 1,
+    marginRight: 10,
   },
   appSubtitle: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     color: '#38BDF8',
     letterSpacing: 1.5,
   },
   appTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '900',
     color: '#FFFFFF',
+    marginTop: 2,
   },
   historyButton: {
     backgroundColor: '#1E293B',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#334155',
   },
   historyButtonText: {
     color: '#F8FAFC',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  sectionHeading: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#94A3B8',
-    letterSpacing: 1,
-    marginBottom: 10,
-    marginTop: 10,
+    fontWeight: '700',
   },
   workoutTabs: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 10,
+    gap: 8,
+    marginBottom: 14,
+    width: '100%',
   },
   workoutTab: {
     flex: 1,
     backgroundColor: '#1E293B',
-    paddingVertical: 14,
-    borderRadius: 14,
+    paddingVertical: 12,
+    borderRadius: 12,
     alignItems: 'center',
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#334155',
   },
   workoutTabActive: {
@@ -600,46 +517,36 @@ const styles = StyleSheet.create({
     borderColor: '#38BDF8',
   },
   workoutTabText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '800',
     color: '#94A3B8',
   },
   workoutTabTextActive: {
     color: '#FFFFFF',
   },
-  workoutDescription: {
-    fontSize: 13,
-    color: '#64748B',
-    marginBottom: 18,
-    lineHeight: 18,
-  },
-  restConfigBox: {
+  restCard: {
     backgroundColor: '#1E293B',
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: 14,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#334155',
-    marginBottom: 20,
-    gap: 14,
+    marginBottom: 16,
+    gap: 10,
   },
   restRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  restLabelCol: {
-    flex: 1,
-    marginRight: 10,
+  restDivider: {
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+    paddingTop: 10,
   },
-  restLabelTitle: {
-    fontSize: 14,
+  restTitle: {
+    fontSize: 12,
     fontWeight: '700',
     color: '#F8FAFC',
-  },
-  restLabelSub: {
-    fontSize: 11,
-    color: '#94A3B8',
-    marginTop: 2,
   },
   timePills: {
     flexDirection: 'row',
@@ -647,9 +554,9 @@ const styles = StyleSheet.create({
   },
   timePill: {
     backgroundColor: '#0F172A',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#334155',
   },
@@ -658,53 +565,52 @@ const styles = StyleSheet.create({
     borderColor: '#38BDF8',
   },
   timePillText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#94A3B8',
   },
   timePillTextActive: {
     color: '#0F172A',
   },
-  exerciseSectionHeader: {
+  exerciseHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 10,
+    marginBottom: 10,
   },
-  addExerciseSmallBtn: {
+  sectionHeading: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 1,
+  },
+  addBtn: {
     backgroundColor: 'rgba(56, 189, 248, 0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#0284C7',
   },
-  addExerciseSmallBtnText: {
+  addBtnText: {
     color: '#38BDF8',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
-  },
-  hintText: {
-    fontSize: 12,
-    color: '#64748B',
-    marginBottom: 12,
-  },
-  exercisesList: {
-    marginBottom: 26,
   },
   startButton: {
     backgroundColor: '#38BDF8',
-    paddingVertical: 18,
-    borderRadius: 18,
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: 'center',
+    marginTop: 12,
     shadowColor: '#38BDF8',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   startButtonText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '900',
     color: '#0F172A',
     letterSpacing: 0.5,
@@ -716,165 +622,160 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
   },
-  modalScrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
+  modalCard: {
     width: '100%',
-  },
-  modalContent: {
-    width: '100%',
-    maxWidth: 400,
+    maxWidth: 360,
     backgroundColor: '#1E293B',
-    borderRadius: 24,
-    padding: 22,
+    borderRadius: 20,
+    padding: 18,
     borderWidth: 1,
     borderColor: '#334155',
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '900',
     color: '#FFFFFF',
-    marginBottom: 4,
   },
-  modalSub: {
-    fontSize: 13,
+  modalSubtitle: {
+    fontSize: 12,
     color: '#38BDF8',
     fontWeight: '700',
-    marginBottom: 14,
+    marginTop: 2,
+    marginBottom: 12,
   },
-  modalFieldLabel: {
-    fontSize: 11,
+  modalSectionLabel: {
+    fontSize: 10,
     fontWeight: '800',
     color: '#94A3B8',
     letterSpacing: 0.5,
-    marginTop: 10,
+    marginTop: 8,
     marginBottom: 6,
   },
-  modalPillsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  modalPill: {
-    backgroundColor: '#0F172A',
-    borderWidth: 1,
-    borderColor: '#334155',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
-  },
-  modalPillActive: {
-    backgroundColor: '#38BDF8',
-    borderColor: '#38BDF8',
-  },
-  modalPillText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#94A3B8',
-  },
-  modalPillTextActive: {
-    color: '#0F172A',
-  },
-  quickShortcutsRow: {
+  pillsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginTop: 12,
   },
-  shortcutBtn: {
+  pillBtn: {
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  pillBtnActive: {
+    backgroundColor: '#38BDF8',
+    borderColor: '#38BDF8',
+  },
+  pillBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+  },
+  pillBtnTextActive: {
+    color: '#0F172A',
+  },
+  shortcutsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 10,
+  },
+  shortcutItem: {
+    flex: 1,
     backgroundColor: '#0F172A',
     borderWidth: 1,
     borderColor: '#0284C7',
-    paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: 6,
+    alignItems: 'center',
   },
-  shortcutBtnText: {
-    fontSize: 11,
+  shortcutItemText: {
+    fontSize: 10,
     fontWeight: '700',
     color: '#38BDF8',
   },
-  perSetList: {
-    gap: 8,
+  perSetContainer: {
+    gap: 6,
     marginTop: 4,
   },
-  setWeightRow: {
+  setRowBox: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#0F172A',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#334155',
   },
-  setRowLabel: {
-    fontSize: 13,
+  setRowTitle: {
+    fontSize: 12,
     fontWeight: '800',
     color: '#F8FAFC',
   },
-  setStepperBox: {
+  stepperWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  setStepBtn: {
+  stepBtn: {
     backgroundColor: '#1E293B',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: '#334155',
   },
-  setStepBtnText: {
+  stepBtnText: {
     color: '#38BDF8',
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '800',
   },
-  setWeightNumber: {
+  stepValue: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
-    minWidth: 56,
+    minWidth: 48,
     textAlign: 'center',
   },
-  modalInput: {
+  modalTextInput: {
     backgroundColor: '#0F172A',
     borderWidth: 1,
     borderColor: '#334155',
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 10,
+    padding: 10,
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
   },
-  modalButtonsRow: {
+  modalActions: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 22,
+    gap: 8,
+    marginTop: 18,
   },
-  modalCancelBtn: {
+  cancelBtn: {
     flex: 1,
     backgroundColor: '#334155',
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: 'center',
   },
-  modalCancelBtnText: {
-    fontSize: 14,
+  cancelBtnText: {
+    fontSize: 13,
     fontWeight: '700',
     color: '#F8FAFC',
   },
-  modalSaveBtn: {
+  saveBtn: {
     flex: 1,
     backgroundColor: '#38BDF8',
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: 'center',
   },
-  modalSaveBtnText: {
-    fontSize: 14,
+  saveBtnText: {
+    fontSize: 13,
     fontWeight: '900',
     color: '#0F172A',
   },

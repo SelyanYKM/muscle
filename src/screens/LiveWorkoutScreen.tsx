@@ -296,9 +296,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#0B0F19',
   },
   container: {
-    padding: 20,
-    paddingTop: 40,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingTop: 45,
+    paddingBottom: 36,
   },
   header: {
     flexDirection: 'row',
@@ -307,16 +307,17 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   headerSubtitle: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     color: '#38BDF8',
     letterSpacing: 1.5,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '900',
     color: '#FFFFFF',
     marginTop: 2,
+    flexShrink: 1,
   },
   quitButton: {
     paddingHorizontal: 12,
