@@ -18,7 +18,7 @@ interface DraggableExerciseListProps {
   onDelete: (index: number) => void;
 }
 
-const ITEM_HEIGHT = 74;
+const ITEM_HEIGHT = 72;
 
 export const DraggableExerciseList: React.FC<DraggableExerciseListProps> = ({
   exercises,
@@ -154,7 +154,7 @@ const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
             transform: [
               { translateX: swipeX },
               { translateY: isDragging ? dragY : 0 },
-              { scale: isDragging ? 1.03 : 1 },
+              { scale: isDragging ? 1.02 : 1 },
             ],
             zIndex: isDragging ? 999 : 1,
           },
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
     height: ITEM_HEIGHT,
     marginBottom: 8,
     position: 'relative',
-    borderRadius: 14,
+    borderRadius: 12,
     overflow: 'hidden',
   },
   deleteBackground: {
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#DC2626',
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 14,
+    borderRadius: 12,
   },
   deleteBtn: {
     width: '100%',
@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: THEME.colors.cardBg,
-    borderRadius: 14,
+    borderRadius: 12,
     paddingHorizontal: 10,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
@@ -247,16 +247,16 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.colors.cardFinisherBg,
   },
   cardDragging: {
-    borderColor: THEME.colors.limeCream,
+    borderColor: THEME.colors.accent,
     backgroundColor: THEME.colors.cardInner,
-    shadowColor: THEME.colors.limeCream,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.5,
     shadowRadius: 10,
     elevation: 12,
   },
   dragHandle: {
-    width: 32,
+    width: 28,
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
   },
   dragHandleIcon: {
     color: THEME.colors.textMuted,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '900',
   },
   infoSection: {
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   indexPrefix: {
-    color: THEME.colors.limeCream,
+    color: THEME.colors.accent,
     fontWeight: '900',
   },
   subInfoRow: {
@@ -295,18 +295,18 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   machineBadge: {
-    backgroundColor: 'rgba(82, 182, 154, 0.15)',
+    backgroundColor: THEME.colors.badgeBg,
   },
   machineBadgeText: {
-    color: THEME.colors.oceanMist,
+    color: THEME.colors.badgeText,
     fontSize: 9,
     fontWeight: '800',
   },
   finisherBadge: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    backgroundColor: THEME.colors.finisherBadgeBg,
   },
   finisherBadgeText: {
-    color: '#F87171',
+    color: THEME.colors.finisherBadgeText,
     fontSize: 9,
     fontWeight: '800',
   },
@@ -320,13 +320,13 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   weightText: {
-    color: THEME.colors.limeCream,
+    color: THEME.colors.textPrimary,
     fontWeight: '800',
   },
   pencilBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 6,
     backgroundColor: THEME.colors.cardInner,
     justifyContent: 'center',
     alignItems: 'center',
@@ -334,6 +334,6 @@ const styles = StyleSheet.create({
     borderColor: THEME.colors.cardBorder,
   },
   pencilIcon: {
-    fontSize: 13,
+    fontSize: 12,
   },
 });

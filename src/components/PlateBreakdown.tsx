@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { getPlateBreakdownPerSide } from '../engine/plateCalculator';
+import { THEME } from '../theme';
 
 interface PlateBreakdownProps {
   totalWeight: number;
@@ -22,7 +23,7 @@ export const PlateBreakdown: React.FC<PlateBreakdownProps> = ({
       <View style={styles.headerRow}>
         <Text style={styles.title}>CHARGEMENT PAR CÔTÉ</Text>
         <Text style={styles.subtext}>
-          {category === 'FREE_WEIGHT' ? `(Barre 20 kg + ${weightPerSide} kg/côté)` : `(${weightPerSide} kg/côté)`}
+          {category === 'FREE_WEIGHT' ? `Barre 20kg + ${weightPerSide}kg/côté` : `${weightPerSide}kg/côté`}
         </Text>
       </View>
 
@@ -61,12 +62,12 @@ export const PlateBreakdown: React.FC<PlateBreakdownProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
-    padding: 14,
-    marginVertical: 10,
+    backgroundColor: THEME.colors.cardInner,
+    borderRadius: 12,
+    padding: 12,
+    marginVertical: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
   },
   headerRow: {
     flexDirection: 'row',
@@ -74,70 +75,65 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   title: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
-    color: '#94A3B8',
-    letterSpacing: 1,
+    color: THEME.colors.textSecondary,
+    letterSpacing: 0.8,
   },
   subtext: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    color: '#38BDF8',
+    color: THEME.colors.textPrimary,
     flexShrink: 1,
   },
   platesRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
     alignItems: 'center',
   },
   plateBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 64,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-    elevation: 3,
+    minWidth: 56,
   },
   lightPlateBorder: {
     borderWidth: 1,
     borderColor: '#CBD5E1',
   },
   multiplierBadge: {
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    borderRadius: 6,
-    paddingHorizontal: 5,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 4,
+    paddingHorizontal: 4,
     paddingVertical: 1,
-    marginRight: 6,
+    marginRight: 4,
   },
   multiplierText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     color: '#FFFFFF',
   },
   plateWeightText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
   },
   unitText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
   },
   emptyContainer: {
-    paddingVertical: 6,
+    paddingVertical: 4,
   },
   emptyText: {
-    fontSize: 13,
-    color: '#64748B',
+    fontSize: 12,
+    color: THEME.colors.textMuted,
     fontStyle: 'italic',
   },
 });

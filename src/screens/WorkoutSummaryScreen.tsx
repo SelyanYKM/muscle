@@ -31,10 +31,10 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
 }) => {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Badge et Titre Victoire */}
+      {/* Badge et Titre */}
       <View style={styles.victoryHeader}>
         <Text style={styles.trophyIcon}>⚡</Text>
-        <Text style={styles.victoryTitle}>SÉANCE TERMINÉE !</Text>
+        <Text style={styles.victoryTitle}>SÉANCE TERMINÉE</Text>
         <Text style={styles.workoutSubtitle}>{summary.workoutName}</Text>
       </View>
 
@@ -56,7 +56,7 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
       </View>
 
       {/* Section Calculateur de Surcharge Progressive */}
-      <Text style={styles.sectionHeading}>BILAN DE SURCHARGE PROGRESSIVE</Text>
+      <Text style={styles.sectionHeading}>BILAN DE SURCHARGE</Text>
 
       <View style={styles.exercisesList}>
         {summary.exerciseSummaries.map((item, index) => {
@@ -96,17 +96,17 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
                     ]}
                   >
                     {isFull
-                      ? '🔥 AUGMENTATION'
+                      ? 'AUGMENTATION'
                       : isPartial
-                      ? '⚡ INTERMÉDIAIRE'
+                      ? 'INTERMÉDIAIRE'
                       : isDeload
-                      ? '🔄 DELOAD'
-                      : '💪 MAINTIEN'}
+                      ? 'DELOAD'
+                      : 'MAINTIEN'}
                   </Text>
                 </View>
               </View>
 
-              {/* Résumé des séries réalisées */}
+              {/* Résumé des séries */}
               <View style={styles.setsSummaryRow}>
                 {item.results.map((res, rIdx) => (
                   <View key={rIdx} style={styles.setResultBadge}>
@@ -120,7 +120,7 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
 
               {/* Instruction et Prochaine charge */}
               <View style={styles.nextSessionBox}>
-                <Text style={styles.nextSessionLabel}>PROCHAINE SÉANCE :</Text>
+                <Text style={styles.nextSessionLabel}>PROCHAINE SÉANCE</Text>
                 <Text style={styles.nextWeightsText}>
                   {item.plan.weightsPerSet.join(' / ')} kg
                 </Text>
@@ -151,52 +151,52 @@ const styles = StyleSheet.create({
   },
   victoryHeader: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 18,
   },
   trophyIcon: {
-    fontSize: 44,
-    marginBottom: 8,
+    fontSize: 38,
+    marginBottom: 6,
   },
   victoryTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '900',
     color: THEME.colors.textPrimary,
     letterSpacing: 0.5,
   },
   workoutSubtitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: THEME.colors.oceanMist,
-    marginTop: 4,
+    fontSize: 13,
+    fontWeight: '600',
+    color: THEME.colors.textSecondary,
+    marginTop: 3,
   },
   statsRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 22,
+    gap: 8,
+    marginBottom: 20,
   },
   statBox: {
     flex: 1,
     backgroundColor: THEME.colors.cardBg,
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 12,
+    padding: 12,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
     color: THEME.colors.textSecondary,
-    letterSpacing: 1,
-    marginBottom: 4,
+    letterSpacing: 0.8,
+    marginBottom: 3,
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '900',
-    color: THEME.colors.limeCream,
+    color: THEME.colors.textPrimary,
   },
   statUnit: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: THEME.colors.textSecondary,
   },
@@ -204,128 +204,123 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: THEME.colors.textSecondary,
-    letterSpacing: 1,
-    marginBottom: 12,
+    letterSpacing: 0.8,
+    marginBottom: 10,
   },
   exercisesList: {
-    gap: 12,
-    marginBottom: 26,
+    gap: 10,
+    marginBottom: 22,
   },
   exerciseCard: {
     backgroundColor: THEME.colors.cardBg,
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 14,
+    padding: 12,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
   },
   exerciseCardFull: {
-    borderColor: THEME.colors.emerald,
+    borderColor: THEME.colors.feelingEasyBorder,
   },
   exerciseCardPartial: {
-    borderColor: THEME.colors.oceanMist,
+    borderColor: THEME.colors.cardBorder,
   },
   exerciseCardDeload: {
-    borderColor: '#EF4444',
+    borderColor: THEME.colors.feelingHardBorder,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   exerciseName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
     color: THEME.colors.textPrimary,
     flex: 1,
     marginRight: 8,
   },
   verdictBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
     backgroundColor: THEME.colors.cardInner,
   },
   verdictBadgeFull: {
-    backgroundColor: 'rgba(118, 200, 147, 0.2)',
+    backgroundColor: THEME.colors.feelingEasyBg,
   },
   verdictBadgePartial: {
-    backgroundColor: 'rgba(82, 182, 154, 0.2)',
+    backgroundColor: THEME.colors.cardInner,
   },
   verdictBadgeDeload: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: THEME.colors.feelingHardBg,
   },
   verdictBadgeText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
     color: THEME.colors.textSecondary,
   },
   verdictBadgeTextFull: {
-    color: THEME.colors.emerald,
+    color: THEME.colors.feelingEasyBorder,
   },
   verdictBadgeTextPartial: {
-    color: THEME.colors.limeCream,
+    color: THEME.colors.textPrimary,
   },
   verdictBadgeTextDeload: {
-    color: '#F87171',
+    color: THEME.colors.feelingHardBorder,
   },
   setsSummaryRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 10,
+    gap: 4,
+    marginBottom: 8,
   },
   setResultBadge: {
     backgroundColor: THEME.colors.cardInner,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 4,
   },
   setResultText: {
-    fontSize: 11,
+    fontSize: 10,
     color: THEME.colors.textPrimary,
     fontWeight: '700',
   },
   nextSessionBox: {
     backgroundColor: THEME.colors.cardInner,
-    borderRadius: 10,
-    padding: 10,
+    borderRadius: 8,
+    padding: 8,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
   },
   nextSessionLabel: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '800',
     color: THEME.colors.textSecondary,
-    letterSpacing: 1,
+    letterSpacing: 0.8,
     marginBottom: 2,
   },
   nextWeightsText: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: THEME.colors.limeCream,
-    marginBottom: 4,
-  },
-  planMessageText: {
-    fontSize: 12,
-    color: THEME.colors.textSecondary,
-    lineHeight: 16,
-  },
-  closeButton: {
-    backgroundColor: THEME.colors.limeCream,
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-    shadowColor: THEME.colors.limeCream,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  closeButtonText: {
     fontSize: 15,
     fontWeight: '900',
-    color: '#081119',
+    color: THEME.colors.accent,
+    marginBottom: 2,
+  },
+  planMessageText: {
+    fontSize: 11,
+    color: THEME.colors.textSecondary,
+    lineHeight: 15,
+  },
+  closeButton: {
+    backgroundColor: THEME.colors.accent,
+    paddingVertical: 15,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: THEME.colors.accentTextDark,
     letterSpacing: 0.5,
   },
 });

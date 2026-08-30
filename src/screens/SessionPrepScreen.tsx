@@ -36,11 +36,11 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
   const [editReps, setEditReps] = useState<number>(8);
   const [editSets, setEditSets] = useState<number>(3);
 
-  // Modal 1 : Liste déroulante / Catalogue des exercices
+  // Modal 1 : Catalogue d'exercices
   const [isPickerModalOpen, setIsPickerModalOpen] = useState<boolean>(false);
   const [catalogExercises, setCatalogExercises] = useState<ConfiguredExercise[]>([]);
 
-  // Modal 2 : Création d'un nouvel exercice personnalisé
+  // Modal 2 : Création d'un exercice personnalisé
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
   const [newExName, setNewExName] = useState<string>('');
   const [newExCategory, setNewExCategory] = useState<EquipmentCategory>('HAMMER_STRENGTH');
@@ -64,18 +64,15 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
     setSelectedWorkoutId(wId);
   };
 
-  // Suppression d'un exercice de la séance
   const handleDeleteExercise = (index: number) => {
     const updated = exercises.filter((_, idx) => idx !== index);
     setExercises(updated);
   };
 
-  // Réordonner les exercices via Drag & Drop
   const handleReorder = (reordered: ConfiguredExercise[]) => {
     setExercises(reordered);
   };
 
-  // Ouvrir le sélecteur / liste déroulante du catalogue
   const openCatalogPicker = () => {
     triggerLightHaptic();
     const catalog = getAllCatalogExercises(selectedWorkoutId);
@@ -83,7 +80,6 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
     setIsPickerModalOpen(true);
   };
 
-  // Ajouter un exercice depuis la liste déroulante du catalogue
   const handleSelectFromCatalog = (ex: ConfiguredExercise) => {
     triggerMediumHaptic();
     const alreadyExists = exercises.some((e) => e.id === ex.id);
@@ -96,7 +92,6 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
     setIsPickerModalOpen(false);
   };
 
-  // Ouvrir le modal d'édition
   const openEditModal = (ex: ConfiguredExercise) => {
     triggerLightHaptic();
     setEditingExercise(ex);
@@ -174,7 +169,6 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
     setEditingExercise(null);
   };
 
-  // Créer un nouvel exercice personnalisé dans le catalogue
   const handleCreateCustomSubmit = () => {
     if (!newExName.trim()) {
       Alert.alert('Nom requis', 'Merci de renseigner un nom pour l’exercice.');
@@ -223,7 +217,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* En-tête épuré mooscles */}
+        {/* En-tête sobre mooscles */}
         <View style={styles.headerRow}>
           <View style={styles.titleCol}>
             <Text style={styles.brandTitle}>
@@ -233,11 +227,11 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
           </View>
 
           <TouchableOpacity style={styles.historyButton} onPress={onOpenHistory} activeOpacity={0.8}>
-            <Text style={styles.historyButtonText}>📜 Historique</Text>
+            <Text style={styles.historyButtonText}>Historique</Text>
           </TouchableOpacity>
         </View>
 
-        {/* 1. Sélecteur de Séance PPL */}
+        {/* 1. Sélecteur PPL façon Segment Control */}
         <View style={styles.workoutTabs}>
           {workouts.map((w) => {
             const isSelected = w.id === selectedWorkoutId;
@@ -256,10 +250,10 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
           })}
         </View>
 
-        {/* 2. Configuration des Temps de Repos */}
+        {/* 2. Repos Automatique (Sobre & Épuré) */}
         <View style={styles.restCard}>
           <View style={styles.restRow}>
-            <Text style={styles.restTitle}>⚙️ Repos Machines</Text>
+            <Text style={styles.restTitle}>Repos Machines</Text>
             <View style={styles.timePills}>
               {[60, 90, 120].map((secs) => (
                 <TouchableOpacity
@@ -279,7 +273,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
           </View>
 
           <View style={[styles.restRow, styles.restDivider]}>
-            <Text style={styles.restTitle}>🔥 Repos Finisher</Text>
+            <Text style={styles.restTitle}>Repos Finisher Barre</Text>
             <View style={styles.timePills}>
               {[120, 180, 240].map((secs) => (
                 <TouchableOpacity
@@ -320,7 +314,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
           onDelete={handleDeleteExercise}
         />
 
-        {/* Gros Bouton CTA mooscles */}
+        {/* Bouton CTA Volt */}
         <TouchableOpacity style={styles.startButton} onPress={handleStart} activeOpacity={0.85}>
           <Text style={styles.startButtonText}>DÉMARRER LA SÉANCE</Text>
         </TouchableOpacity>
@@ -360,12 +354,12 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
                         {catEx.name}
                       </Text>
                       <Text style={styles.catalogItemSub}>
-                        {isFinisher ? '🔥 Finisher Barre (20kg)' : '⚙️ Machine Hammer'} • {catEx.plannedWeights?.[0] || 40} kg
+                        {isFinisher ? 'Finisher Barre' : 'Machine Hammer'} • {catEx.plannedWeights?.[0] || 40} kg
                       </Text>
                     </View>
 
-                    <Text style={styles.catalogItemAction}>
-                      {isSelectedInSession ? '✓ Ajouté' : '+ Ajouter'}
+                    <Text style={[styles.catalogItemAction, isSelectedInSession && styles.catalogItemActionDisabled]}>
+                      {isSelectedInSession ? 'Ajouté' : '+ Ajouter'}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -380,7 +374,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
               }}
               activeOpacity={0.8}
             >
-              <Text style={styles.createCustomBtnText}>➕ Créer un nouvel exercice</Text>
+              <Text style={styles.createCustomBtnText}>+ Créer un nouvel exercice</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -397,7 +391,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
       <Modal visible={editingExercise !== null} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Charges & Séries</Text>
+            <Text style={styles.modalTitle}>Modifier les charges</Text>
             <Text style={styles.modalSubtitle} numberOfLines={1}>
               {editingExercise?.name}
             </Text>
@@ -505,7 +499,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
                 onPress={() => setNewExCategory('HAMMER_STRENGTH')}
               >
                 <Text style={[styles.pillBtnText, newExCategory === 'HAMMER_STRENGTH' && styles.pillBtnTextActive]}>
-                  ⚙️ Machine
+                  Machine
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -513,7 +507,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
                 onPress={() => setNewExCategory('FREE_WEIGHT')}
               >
                 <Text style={[styles.pillBtnText, newExCategory === 'FREE_WEIGHT' && styles.pillBtnTextActive]}>
-                  🔥 Barre (20kg)
+                  Barre Libre (20kg)
                 </Text>
               </TouchableOpacity>
             </View>
@@ -560,7 +554,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
   },
   titleCol: {
     flex: 1,
@@ -573,20 +567,19 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   brandDot: {
-    color: THEME.colors.limeCream,
+    color: THEME.colors.accent,
   },
   brandSubtitle: {
     fontSize: 11,
-    fontWeight: '700',
-    color: THEME.colors.oceanMist,
-    letterSpacing: 0.5,
+    fontWeight: '600',
+    color: THEME.colors.textSecondary,
     marginTop: 2,
   },
   historyButton: {
     backgroundColor: THEME.colors.cardBg,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
   },
@@ -597,30 +590,30 @@ const styles = StyleSheet.create({
   },
   workoutTabs: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 14,
-    width: '100%',
-  },
-  workoutTab: {
-    flex: 1,
     backgroundColor: THEME.colors.cardBg,
-    paddingVertical: 12,
+    padding: 4,
     borderRadius: 12,
-    alignItems: 'center',
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
   },
+  workoutTab: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
   workoutTabActive: {
-    backgroundColor: THEME.colors.bondiBlue,
-    borderColor: THEME.colors.limeCream,
+    backgroundColor: THEME.colors.cardInner,
   },
   workoutTabText: {
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '700',
     color: THEME.colors.textSecondary,
   },
   workoutTabTextActive: {
-    color: '#FFFFFF',
+    color: THEME.colors.textPrimary,
+    fontWeight: '900',
   },
   restCard: {
     backgroundColor: THEME.colors.cardBg,
@@ -643,7 +636,7 @@ const styles = StyleSheet.create({
   },
   restTitle: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
     color: THEME.colors.textPrimary,
   },
   timePills: {
@@ -654,13 +647,13 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.colors.cardInner,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
   },
   timePillActive: {
-    backgroundColor: THEME.colors.emerald,
-    borderColor: THEME.colors.limeCream,
+    backgroundColor: THEME.colors.textPrimary,
+    borderColor: THEME.colors.textPrimary,
   },
   timePillText: {
     fontSize: 11,
@@ -668,7 +661,7 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary,
   },
   timePillTextActive: {
-    color: '#081119',
+    color: THEME.colors.accentTextDark,
   },
   exerciseHeaderRow: {
     flexDirection: 'row',
@@ -680,42 +673,42 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: THEME.colors.textSecondary,
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
   addBtn: {
-    backgroundColor: 'rgba(82, 182, 154, 0.15)',
+    backgroundColor: THEME.colors.cardBg,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: THEME.colors.oceanMist,
+    borderColor: THEME.colors.cardBorder,
   },
   addBtnText: {
-    color: THEME.colors.limeCream,
+    color: THEME.colors.accent,
     fontSize: 11,
     fontWeight: '800',
   },
   startButton: {
-    backgroundColor: THEME.colors.limeCream,
+    backgroundColor: THEME.colors.accent,
     paddingVertical: 16,
-    borderRadius: 16,
+    borderRadius: 14,
     alignItems: 'center',
     marginTop: 12,
-    shadowColor: THEME.colors.limeCream,
+    shadowColor: THEME.colors.accent,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
   },
   startButtonText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '900',
-    color: '#081119',
+    color: THEME.colors.accentTextDark,
     letterSpacing: 0.8,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(8, 17, 25, 0.94)',
+    backgroundColor: 'rgba(9, 9, 11, 0.92)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
@@ -724,7 +717,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 360,
     backgroundColor: THEME.colors.cardBg,
-    borderRadius: 20,
+    borderRadius: 18,
     padding: 18,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
@@ -734,7 +727,7 @@ const styles = StyleSheet.create({
     maxWidth: 360,
     maxHeight: '80%',
     backgroundColor: THEME.colors.cardBg,
-    borderRadius: 20,
+    borderRadius: 18,
     padding: 18,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
@@ -750,13 +743,13 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.colors.cardInner,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
     marginBottom: 6,
   },
   catalogItemDisabled: {
-    opacity: 0.4,
+    opacity: 0.35,
     borderColor: THEME.colors.cardBorder,
   },
   catalogItemInfo: {
@@ -779,31 +772,34 @@ const styles = StyleSheet.create({
   catalogItemAction: {
     fontSize: 11,
     fontWeight: '800',
-    color: THEME.colors.limeCream,
+    color: THEME.colors.accent,
+  },
+  catalogItemActionDisabled: {
+    color: THEME.colors.textMuted,
   },
   createCustomBtn: {
-    backgroundColor: 'rgba(82, 182, 154, 0.12)',
+    backgroundColor: THEME.colors.cardInner,
     borderWidth: 1,
-    borderColor: THEME.colors.oceanMist,
-    paddingVertical: 11,
-    borderRadius: 10,
+    borderColor: THEME.colors.cardBorder,
+    paddingVertical: 10,
+    borderRadius: 8,
     alignItems: 'center',
     marginBottom: 8,
   },
   createCustomBtnText: {
-    color: THEME.colors.limeCream,
+    color: THEME.colors.textPrimary,
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '900',
     color: THEME.colors.textPrimary,
   },
   modalSubtitle: {
     fontSize: 12,
-    color: THEME.colors.oceanMist,
-    fontWeight: '700',
+    color: THEME.colors.textSecondary,
+    fontWeight: '600',
     marginTop: 2,
     marginBottom: 8,
   },
@@ -826,11 +822,11 @@ const styles = StyleSheet.create({
     borderColor: THEME.colors.cardBorder,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 6,
   },
   pillBtnActive: {
-    backgroundColor: THEME.colors.bondiBlue,
-    borderColor: THEME.colors.limeCream,
+    backgroundColor: THEME.colors.textPrimary,
+    borderColor: THEME.colors.textPrimary,
   },
   pillBtnText: {
     fontSize: 11,
@@ -838,7 +834,7 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary,
   },
   pillBtnTextActive: {
-    color: '#FFFFFF',
+    color: THEME.colors.accentTextDark,
   },
   shortcutsRow: {
     flexDirection: 'row',
@@ -849,7 +845,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: THEME.colors.cardInner,
     borderWidth: 1,
-    borderColor: THEME.colors.oceanMist,
+    borderColor: THEME.colors.cardBorder,
     paddingVertical: 5,
     borderRadius: 6,
     alignItems: 'center',
@@ -857,7 +853,7 @@ const styles = StyleSheet.create({
   shortcutItemText: {
     fontSize: 10,
     fontWeight: '700',
-    color: THEME.colors.limeCream,
+    color: THEME.colors.textPrimary,
   },
   perSetContainer: {
     gap: 6,
@@ -870,13 +866,13 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.colors.cardInner,
     paddingVertical: 6,
     paddingHorizontal: 10,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
   },
   setRowTitle: {
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
   stepperWrap: {
@@ -893,12 +889,12 @@ const styles = StyleSheet.create({
     borderColor: THEME.colors.cardBorder,
   },
   stepBtnText: {
-    color: THEME.colors.limeCream,
+    color: THEME.colors.textPrimary,
     fontSize: 10,
     fontWeight: '800',
   },
   stepValue: {
-    color: '#FFFFFF',
+    color: THEME.colors.textPrimary,
     fontSize: 13,
     fontWeight: '900',
     minWidth: 48,
@@ -908,7 +904,7 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.colors.cardInner,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
-    borderRadius: 10,
+    borderRadius: 8,
     padding: 10,
     color: '#FFFFFF',
     fontSize: 14,
@@ -917,30 +913,32 @@ const styles = StyleSheet.create({
   modalActions: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 18,
+    marginTop: 16,
   },
   cancelBtn: {
     flex: 1,
-    backgroundColor: THEME.colors.cardBorder,
+    backgroundColor: THEME.colors.cardInner,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 8,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
   },
   cancelBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: THEME.colors.textPrimary,
+    color: THEME.colors.textSecondary,
   },
   saveBtn: {
     flex: 1,
-    backgroundColor: THEME.colors.limeCream,
+    backgroundColor: THEME.colors.accent,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 8,
     alignItems: 'center',
   },
   saveBtnText: {
     fontSize: 13,
     fontWeight: '900',
-    color: '#081119',
+    color: THEME.colors.accentTextDark,
   },
 });

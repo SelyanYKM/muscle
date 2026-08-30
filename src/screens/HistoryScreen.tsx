@@ -46,7 +46,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
       const sessionKey = `${log.date}_${log.workoutId}`;
       const workoutName =
         log.workoutId === 1
-          ? 'Push (Pectoraux / Épaules / Triceps)'
+          ? 'Push (Pecs / Épaules / Triceps)'
           : log.workoutId === 2
           ? 'Pull (Dos / Arrière d’épaules / Biceps)'
           : 'Legs (Quadriceps / Ischios / Mollets)';
@@ -122,7 +122,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
       {sessions.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyEmoji}>📜</Text>
-          <Text style={styles.emptyText}>Aucune séance enregistrée pour le moment.</Text>
+          <Text style={styles.emptyText}>Aucune séance enregistrée.</Text>
           <Text style={styles.emptySubtext}>Complète ton premier entraînement pour voir tes charges évoluer !</Text>
         </View>
       ) : (
@@ -133,7 +133,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
 
             return (
               <View key={sIdx} style={styles.sessionCard}>
-                {/* En-tête de la séance (cliquable pour déplier/replier) */}
+                {/* En-tête de la séance (cliquable) */}
                 <TouchableOpacity
                   style={styles.sessionHeader}
                   onPress={() => toggleSessionExpand(sessionKey)}
@@ -155,7 +155,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                   <Text style={styles.expandChevron}>{isExpanded ? '▲' : '▼'}</Text>
                 </TouchableOpacity>
 
-                {/* Contenu détaillé de la séance */}
+                {/* Contenu détaillé */}
                 {isExpanded && (
                   <View style={styles.sessionDetailsBox}>
                     {session.exercises.map((ex, exIdx) => (
@@ -198,24 +198,24 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 18,
   },
   backButton: {
     backgroundColor: THEME.colors.cardBg,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
     marginRight: 12,
   },
   backButtonText: {
     color: THEME.colors.textPrimary,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '900',
     color: THEME.colors.textPrimary,
   },
@@ -226,28 +226,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   emptyEmoji: {
-    fontSize: 48,
-    marginBottom: 12,
+    fontSize: 40,
+    marginBottom: 10,
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: THEME.colors.textPrimary,
     textAlign: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   emptySubtext: {
-    fontSize: 13,
+    fontSize: 12,
     color: THEME.colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 16,
   },
   sessionList: {
-    gap: 12,
+    gap: 10,
   },
   sessionCard: {
     backgroundColor: THEME.colors.cardBg,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
     overflow: 'hidden',
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 14,
+    padding: 12,
   },
   sessionHeaderLeft: {
     flex: 1,
@@ -265,72 +265,72 @@ const styles = StyleSheet.create({
   dateBadge: {
     backgroundColor: THEME.colors.cardInner,
     alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    marginBottom: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginBottom: 4,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
   },
   dateBadgeText: {
-    color: THEME.colors.limeCream,
-    fontSize: 11,
+    color: THEME.colors.textSecondary,
+    fontSize: 10,
     fontWeight: '800',
     textTransform: 'uppercase',
   },
   sessionWorkoutTitle: {
-    fontSize: 15,
-    fontWeight: '900',
+    fontSize: 14,
+    fontWeight: '800',
     color: THEME.colors.textPrimary,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   sessionMetricsSummary: {
-    fontSize: 12,
+    fontSize: 11,
     color: THEME.colors.textSecondary,
     fontWeight: '600',
   },
   volumeHighlight: {
-    color: THEME.colors.limeCream,
+    color: THEME.colors.textPrimary,
     fontWeight: '800',
   },
   expandChevron: {
     color: THEME.colors.textMuted,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900',
   },
   sessionDetailsBox: {
     borderTopWidth: 1,
     borderTopColor: THEME.colors.cardBorder,
     backgroundColor: THEME.colors.cardInner,
-    padding: 12,
-    gap: 12,
+    padding: 10,
+    gap: 8,
   },
   exerciseDetailRow: {
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(28, 54, 77, 0.4)',
-    paddingBottom: 8,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+    paddingBottom: 6,
   },
   exerciseDetailName: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
     color: THEME.colors.textPrimary,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   setsChipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 4,
   },
   setChip: {
     backgroundColor: THEME.colors.cardBg,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 4,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
   },
   setChipText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: THEME.colors.textSecondary,
   },

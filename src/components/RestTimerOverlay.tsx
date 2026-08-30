@@ -8,7 +8,7 @@ import {
   View
 } from 'react-native';
 import { THEME } from '../theme';
-import { triggerLightHaptic, triggerNotificationSuccessHaptic, triggerWarningHaptic } from '../utils/haptics';
+import { triggerLightHaptic, triggerSuccessHaptic, triggerWarningHaptic } from '../utils/haptics';
 
 interface RestTimerOverlayProps {
   initialSeconds: number;
@@ -56,7 +56,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
       setSecondsRemaining((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          triggerNotificationSuccessHaptic();
+          triggerSuccessHaptic();
           playBip();
           onFinish();
           return 0;
@@ -89,7 +89,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     <Modal visible transparent animationType="fade">
       <View style={styles.backdrop}>
         <View style={styles.container}>
-          <Text style={styles.topSub}>TEMPS DE RÉCUPÉRATION</Text>
+          <Text style={styles.topSub}>RÉCUPÉRATION</Text>
 
           {/* Chronomètre Géant */}
           <Text style={styles.timeBig}>{formattedTime}</Text>
@@ -116,7 +116,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
 
           {/* Teaser Prochaine Série */}
           <View style={styles.nextSetInfoCard}>
-            <Text style={styles.nextSetLabel}>PROCHAINE SÉRIE :</Text>
+            <Text style={styles.nextSetLabel}>PROCHAINE SÉRIE</Text>
             <Text style={styles.nextSetTitle} numberOfLines={1}>
               {exerciseName}
             </Text>
@@ -144,7 +144,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(8, 17, 25, 0.96)',
+    backgroundColor: 'rgba(9, 9, 11, 0.94)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 360,
     backgroundColor: THEME.colors.cardBg,
-    borderRadius: 22,
+    borderRadius: 20,
     padding: 20,
     alignItems: 'center',
     borderWidth: 1,
@@ -162,28 +162,28 @@ const styles = StyleSheet.create({
   topSub: {
     fontSize: 10,
     fontWeight: '800',
-    color: THEME.colors.oceanMist,
+    color: THEME.colors.textSecondary,
     letterSpacing: 1.5,
     marginBottom: 4,
   },
   timeBig: {
-    fontSize: 58,
+    fontSize: 56,
     fontWeight: '900',
-    color: THEME.colors.limeCream,
+    color: THEME.colors.textPrimary,
     letterSpacing: -1,
   },
   progressBarBg: {
     width: '100%',
-    height: 6,
+    height: 4,
     backgroundColor: THEME.colors.cardInner,
-    borderRadius: 3,
+    borderRadius: 2,
     marginVertical: 14,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: THEME.colors.limeCream,
-    borderRadius: 3,
+    backgroundColor: THEME.colors.accent,
+    borderRadius: 2,
   },
   adjustRow: {
     flexDirection: 'row',
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   nextSetInfoCard: {
     width: '100%',
     backgroundColor: THEME.colors.cardInner,
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 12,
     alignItems: 'center',
     marginBottom: 16,
@@ -232,18 +232,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   nextSetHighlight: {
-    color: THEME.colors.limeCream,
+    color: THEME.colors.accent,
     fontWeight: '900',
   },
   skipButton: {
     width: '100%',
-    backgroundColor: THEME.colors.limeCream,
+    backgroundColor: THEME.colors.accent,
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: 'center',
   },
   skipButtonText: {
-    color: '#081119',
+    color: THEME.colors.accentTextDark,
     fontSize: 14,
     fontWeight: '900',
   },

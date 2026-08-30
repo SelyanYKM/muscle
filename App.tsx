@@ -44,7 +44,7 @@ export default function App() {
   if (!isDbReady) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={THEME.colors.limeCream} />
+        <ActivityIndicator size="large" color={THEME.colors.accent} />
         <Text style={styles.loadingText}>mooscles initialisation...</Text>
         <StatusBar style="light" />
       </View>

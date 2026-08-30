@@ -21,7 +21,7 @@ import {
   SetResult,
   WorkoutLogEntry,
 } from '../types';
-import { triggerLightHaptic, triggerNotificationSuccessHaptic } from '../utils/haptics';
+import { triggerLightHaptic, triggerSuccessHaptic } from '../utils/haptics';
 
 interface LiveWorkoutScreenProps {
   sessionConfig: SessionConfig;
@@ -50,7 +50,6 @@ export const LiveWorkoutScreen: React.FC<LiveWorkoutScreenProps> = ({
   const [setIndex, setSetIndex] = useState<number>(0);
   const [isResting, setIsResting] = useState<boolean>(false);
 
-  // Stockage des résultats de séries par index d'exercice
   const [sessionResults, setSessionResults] = useState<{ [exIndex: number]: SetResult[] }>({});
 
   const currentExercise = sessionConfig.configuredExercises[exerciseIndex];
@@ -147,7 +146,7 @@ export const LiveWorkoutScreen: React.FC<LiveWorkoutScreenProps> = ({
   };
 
   const handleFinalizeWorkout = (finalResults: { [exIndex: number]: SetResult[] }) => {
-    triggerNotificationSuccessHaptic();
+    triggerSuccessHaptic();
     const durationMinutes = Math.max(1, Math.round((Date.now() - startTime) / 60000));
     const todayStr = new Date().toISOString().split('T')[0];
 
@@ -247,7 +246,7 @@ export const LiveWorkoutScreen: React.FC<LiveWorkoutScreenProps> = ({
         <View style={styles.header}>
           <View style={styles.titleCol}>
             <Text style={styles.headerSubtitle}>
-              MOOSCLES LIVE • EXERCICE {exerciseIndex + 1}/{totalExercises}
+              EXERCICE {exerciseIndex + 1}/{totalExercises}
             </Text>
             <Text style={styles.headerTitle} numberOfLines={1}>
               {sessionConfig.workoutName}
@@ -259,7 +258,7 @@ export const LiveWorkoutScreen: React.FC<LiveWorkoutScreenProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Barre de progression séance */}
+        {/* Barre de progression discrète */}
         <View style={styles.progressBarWrapper}>
           <View style={[styles.progressBarFill, { width: `${Math.min(100, progressRatio * 100)}%` }]} />
         </View>
@@ -276,7 +275,7 @@ export const LiveWorkoutScreen: React.FC<LiveWorkoutScreenProps> = ({
           canUndo={setIndex > 0}
         />
 
-        {/* Modal de Chrono de Repos */}
+        {/* Modal Chrono de Repos */}
         {isResting && (
           <RestTimerOverlay
             initialSeconds={getRestDuration()}
@@ -315,8 +314,8 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 10,
     fontWeight: '800',
-    color: THEME.colors.oceanMist,
-    letterSpacing: 1.5,
+    color: THEME.colors.textSecondary,
+    letterSpacing: 1.2,
   },
   headerTitle: {
     fontSize: 17,
@@ -328,7 +327,7 @@ const styles = StyleSheet.create({
   quitButton: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 10,
+    borderRadius: 8,
     backgroundColor: THEME.colors.cardBg,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
@@ -340,15 +339,15 @@ const styles = StyleSheet.create({
   },
   progressBarWrapper: {
     width: '100%',
-    height: 6,
+    height: 4,
     backgroundColor: THEME.colors.cardBg,
-    borderRadius: 3,
-    marginBottom: 20,
+    borderRadius: 2,
+    marginBottom: 18,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: THEME.colors.limeCream,
-    borderRadius: 3,
+    backgroundColor: THEME.colors.accent,
+    borderRadius: 2,
   },
 });

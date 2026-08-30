@@ -1,36 +1,44 @@
 /**
- * Charte graphique et palette "Meadow Green / Deep Teal" pour mooscles
+ * Design System "Sportify Athletic Dark" pour mooscles
+ * Inspiré des meilleures applications sportives modernes (Nike Training, Whoop, Strong, Apple Fitness) :
+ * - Noir profond mat & surfaces charbon épurées
+ * - Bordures ultra-fines non intrusives
+ * - Typographie blanche à fort contraste
+ * - Une seule touche d'accent dynamique "Electric Volt" (#CCFF00) utilisée avec parcimonie
  */
 export const THEME = {
   name: 'mooscles',
   colors: {
-    // Arrière-plans sombres OLED / Pro
-    bg: '#081119',
-    cardBg: '#10202F',
-    cardBorder: '#1C364D',
-    cardInner: '#0B1724',
-    cardFinisherBg: '#181924',
-    cardFinisherBorder: '#42242B',
+    // Fond & Surfaces
+    bg: '#09090B',            // Noir profond (OLED)
+    cardBg: '#131317',        // Surface de carte charbon
+    cardBorder: '#23232B',    // Bordure discrète
+    cardInner: '#1C1C24',     // Éléments interactifs internes / steppers
+    cardFinisherBg: '#161317',
+    cardFinisherBorder: '#381C24',
 
-    // Textes
+    // Textes & Typographie
     textPrimary: '#FFFFFF',
-    textSecondary: '#9BB1C2',
-    textMuted: '#577287',
+    textSecondary: '#8E8E9F',
+    textMuted: '#525262',
 
-    // Palette Meadow Green & Deep Teal (Coolors)
-    limeCream: '#D9ED92',   // #D9ED92 - Accent principal punchy / CTA / chiffres clés
-    lightGreen: '#B5E48C',  // #B5E48C - Badges & highlights
-    willowGreen: '#99D98C', // #99D98C
-    emerald: '#76C893',     // #76C893 - Succès / Validation / Facile
-    oceanMist: '#52B69A',   // #52B69A - Teal doux
-    bondiBlue: '#168AAD',   // #168AAD - Boutons interactifs / Onglets actifs
-    cerulean: '#1A759F',    // #1A759F
-    balticBlue: '#1E6091',  // #1E6091
-    yaleBlue: '#184E77',    // #184E77
+    // Accent Sportif Dynamique (Volt / Neon Lime)
+    accent: '#CCFF00',
+    accentMuted: 'rgba(204, 255, 0, 0.12)',
+    accentTextDark: '#09090B',
 
-    // États de ressenti
-    feelingEasy: '#76C893',
-    feelingMedium: '#F59E0B',
-    feelingHard: '#EF4444',
+    // Badges neutres
+    badgeBg: '#1F1F27',
+    badgeText: '#A1A1B2',
+    finisherBadgeBg: '#2A171B',
+    finisherBadgeText: '#F87171',
+
+    // États de ressenti sobres
+    feelingEasyBg: '#0D241B',
+    feelingEasyBorder: '#10B981',
+    feelingMediumBg: '#26180C',
+    feelingMediumBorder: '#F59E0B',
+    feelingHardBg: '#281014',
+    feelingHardBorder: '#EF4444',
   },
 };
