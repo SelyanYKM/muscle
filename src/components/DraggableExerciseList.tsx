@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   PanResponder,
@@ -29,43 +29,46 @@ export const DraggableExerciseList: React.FC<DraggableExerciseListProps> = ({
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const dragY = useRef(new Animated.Value(0)).current;
 
-  // PanResponder dédié exclusivement au déplacement vertical par poignée
-  const dragPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 3,
-      onPanResponderGrant: () => {
-        triggerMediumHaptic();
-      },
-      onPanResponderMove: (_, gestureState) => {
-        dragY.setValue(gestureState.dy);
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        if (draggingIndex === null) return;
+  // Refs pour éviter les closures périmées dans PanResponder
+  const draggingIndexRef = useRef<number | null>(null);
+  const exercisesRef = useRef<ConfiguredExercise[]>(exercises);
 
-        const movedPositions = Math.round(gestureState.dy / ITEM_HEIGHT);
-        const newIndex = Math.max(
-          0,
-          Math.min(exercises.length - 1, draggingIndex + movedPositions)
-        );
+  useEffect(() => {
+    exercisesRef.current = exercises;
+  }, [exercises]);
 
-        if (newIndex !== draggingIndex) {
-          triggerLightHaptic();
-          const updated = [...exercises];
-          const [movedItem] = updated.splice(draggingIndex, 1);
-          updated.splice(newIndex, 0, movedItem);
-          onReorder(updated);
-        }
+  const startDrag = (index: number) => {
+    triggerMediumHaptic();
+    draggingIndexRef.current = index;
+    setDraggingIndex(index);
+    dragY.setValue(0);
+  };
 
-        setDraggingIndex(null);
-        dragY.setValue(0);
-      },
-      onPanResponderTerminate: () => {
-        setDraggingIndex(null);
-        dragY.setValue(0);
-      },
-    })
-  ).current;
+  const endDrag = (gestureDy: number) => {
+    const currentIndex = draggingIndexRef.current;
+    if (currentIndex !== null) {
+      const movedPositions = Math.round(gestureDy / ITEM_HEIGHT);
+      const list = exercisesRef.current;
+      const targetIndex = Math.max(0, Math.min(list.length - 1, currentIndex + movedPositions));
+
+      if (targetIndex !== currentIndex && targetIndex >= 0 && targetIndex < list.length) {
+        triggerLightHaptic();
+        const updated = [...list];
+        const [movedItem] = updated.splice(currentIndex, 1);
+        updated.splice(targetIndex, 0, movedItem);
+        onReorder(updated);
+      }
+    }
+
+    // Réinitialisation inconditionnelle
+    draggingIndexRef.current = null;
+    setDraggingIndex(null);
+    Animated.spring(dragY, {
+      toValue: 0,
+      useNativeDriver: false,
+      friction: 6,
+    }).start();
+  };
 
   return (
     <View style={styles.listContainer}>
@@ -83,8 +86,9 @@ export const DraggableExerciseList: React.FC<DraggableExerciseListProps> = ({
             index={index}
             isDragging={isDragging}
             dragY={dragY}
-            dragPanResponder={dragPanResponder}
-            onStartDrag={() => setDraggingIndex(index)}
+            onStartDrag={() => startDrag(index)}
+            onEndDrag={endDrag}
+            onMoveDrag={(dy) => dragY.setValue(dy)}
             onEdit={() => onEdit(ex)}
             onDelete={() => onDelete(index)}
             isFinisher={isFinisher}
@@ -101,8 +105,9 @@ interface DraggableItemRowProps {
   index: number;
   isDragging: boolean;
   dragY: Animated.Value;
-  dragPanResponder: any;
   onStartDrag: () => void;
+  onEndDrag: (dy: number) => void;
+  onMoveDrag: (dy: number) => void;
   onEdit: () => void;
   onDelete: () => void;
   isFinisher: boolean;
@@ -114,8 +119,9 @@ const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
   index,
   isDragging,
   dragY,
-  dragPanResponder,
   onStartDrag,
+  onEndDrag,
+  onMoveDrag,
   onEdit,
   onDelete,
   isFinisher,
@@ -123,15 +129,35 @@ const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
 }) => {
   const swipeX = useRef(new Animated.Value(0)).current;
 
-  // PanResponder pour le swipe horizontal avec verrouillage angulaire strict
+  // PanResponder dédié pour la poignée de Drag & Drop
+  const dragHandlePanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 2,
+      onPanResponderGrant: () => {
+        onStartDrag();
+      },
+      onPanResponderMove: (_, g) => {
+        onMoveDrag(g.dy);
+      },
+      onPanResponderRelease: (_, g) => {
+        onEndDrag(g.dy);
+      },
+      onPanResponderTerminate: (_, g) => {
+        onEndDrag(g.dy);
+      },
+    })
+  ).current;
+
+  // PanResponder pour le swipe horizontal avec verrouillage d'angle strict
   const swipePanResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) => {
         // Ne s'active QUE sur un geste horizontal franc et jamais sur un glissement vertical
-        const isStrictlyHorizontal =
+        return (
           Math.abs(gestureState.dx) > 35 &&
-          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 2.5;
-        return isStrictlyHorizontal;
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 2.5
+        );
       },
       onPanResponderMove: (_, gestureState) => {
         if (gestureState.dx < 0) {
@@ -164,7 +190,7 @@ const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* Carte principale avec effet flottant lors du drag */}
+      {/* Carte principale avec effet flottant */}
       <Animated.View
         style={[
           styles.card,
@@ -181,12 +207,8 @@ const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
         ]}
         {...swipePanResponder.panHandlers}
       >
-        {/* Poignée de Drag & Drop totalement isolée */}
-        <View
-          style={styles.dragHandle}
-          onTouchStart={onStartDrag}
-          {...dragPanResponder.panHandlers}
-        >
+        {/* Poignée de Drag & Drop */}
+        <View style={styles.dragHandle} {...dragHandlePanResponder.panHandlers}>
           <Text style={[styles.dragHandleIcon, isDragging && styles.dragHandleIconActive]}>
             ⠿
           </Text>
@@ -280,7 +302,7 @@ const styles = StyleSheet.create({
     elevation: 20,
   },
   dragHandle: {
-    width: 32,
+    width: 38,
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
@@ -288,7 +310,7 @@ const styles = StyleSheet.create({
   },
   dragHandleIcon: {
     color: THEME.colors.textMuted,
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '900',
   },
   dragHandleIconActive: {

@@ -657,3 +657,81 @@ export function deleteWorkoutSession(date: string, workoutId: number): void {
     console.error('Erreur deleteWorkoutSession:', error);
   }
 }
+
+/**
+ * Met à jour un exercice complet et ses séries pour une séance passée.
+ */
+export function updateExerciseLogsForSession(
+  date: string,
+  workoutId: number,
+  oldExerciseName: string,
+  newExerciseName: string,
+  updatedSets: { setNumber: number; weight: number; repsTarget: number; repsDone: number; feeling: 'EASY' | 'MEDIUM' | 'HARD' }[]
+): void {
+  if (!db || Platform.OS === 'web') {
+    // Retirer les anciens logs de cet exercice
+    memoryLogs = memoryLogs.filter(
+      (log) => !(log.date === date && log.workoutId === workoutId && log.exerciseName === oldExerciseName)
+    );
+    // Insérer les nouveaux
+    for (const s of updatedSets) {
+      memoryLogs.push({
+        workoutId,
+        exerciseId: 0,
+        exerciseName: newExerciseName,
+        date,
+        setNumber: s.setNumber,
+        weight: s.weight,
+        repsTarget: s.repsTarget,
+        repsDone: s.repsDone,
+        feeling: s.feeling,
+      });
+    }
+    return;
+  }
+
+  try {
+    // Supprimer les anciens logs pour cet exercice lors de cette séance
+    db.runSync(
+      `DELETE FROM workout_logs WHERE date = ? AND workout_id = ? AND exercise_name = ?;`,
+      [date, workoutId, oldExerciseName]
+    );
+
+    // Insérer les séries mises à jour
+    for (const s of updatedSets) {
+      db.runSync(
+        `INSERT INTO workout_logs 
+        (workout_id, exercise_id, exercise_name, date, set_number, weight, reps_target, reps_done, feeling)
+        VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?);`,
+        [workoutId, newExerciseName, date, s.setNumber, s.weight, s.repsTarget, s.repsDone, s.feeling]
+      );
+    }
+  } catch (error) {
+    console.error('Erreur updateExerciseLogsForSession:', error);
+  }
+}
+
+/**
+ * Supprime un exercice d'une séance passée.
+ */
+export function deleteExerciseFromSession(
+  date: string,
+  workoutId: number,
+  exerciseName: string
+): void {
+  if (!db || Platform.OS === 'web') {
+    memoryLogs = memoryLogs.filter(
+      (log) => !(log.date === date && log.workoutId === workoutId && log.exerciseName === exerciseName)
+    );
+    return;
+  }
+
+  try {
+    db.runSync(
+      `DELETE FROM workout_logs WHERE date = ? AND workout_id = ? AND exercise_name = ?;`,
+      [date, workoutId, exerciseName]
+    );
+  } catch (error) {
+    console.error('Erreur deleteExerciseFromSession:', error);
+  }
+}
