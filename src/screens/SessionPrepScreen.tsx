@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
+  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -242,13 +243,19 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* En-tête sobre mooscles */}
+        {/* En-tête sobre mooscles avec Logo Officiel */}
         <View style={styles.headerRow}>
-          <View style={styles.titleCol}>
-            <Text style={styles.brandTitle}>
-              mooscles<Text style={styles.brandDot}>.</Text>
-            </Text>
-            <Text style={styles.brandSubtitle}>Surcharge progressive PPL</Text>
+          <View style={styles.brandTitleRow}>
+            <Image
+              source={require('../../assets/mooscles_logo.jpg')}
+              style={styles.brandLogoImage}
+            />
+            <View style={styles.titleCol}>
+              <Text style={styles.brandTitle}>
+                mooscles<Text style={styles.brandDot}>.</Text>
+              </Text>
+              <Text style={styles.brandSubtitle}>Surcharge progressive PPL</Text>
+            </View>
           </View>
 
           <TouchableOpacity
@@ -677,9 +684,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 18,
   },
-  titleCol: {
+  brandTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
     marginRight: 10,
+    gap: 10,
+  },
+  brandLogoImage: {
+    width: 38,
+    height: 38,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+  },
+  titleCol: {
+    flex: 1,
   },
   brandTitle: {
     fontSize: 26,

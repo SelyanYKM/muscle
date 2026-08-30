@@ -1,6 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { initDatabase } from './src/database/db';
 import { HistoryScreen } from './src/screens/HistoryScreen';
 import { LiveWorkoutScreen } from './src/screens/LiveWorkoutScreen';
@@ -8,6 +9,7 @@ import { SessionPrepScreen } from './src/screens/SessionPrepScreen';
 import { WorkoutSummaryScreen } from './src/screens/WorkoutSummaryScreen';
 import { THEME } from './src/theme';
 import { NextSessionPlan, SessionConfig, SetResult } from './src/types';
+import { configureAppAudio } from './src/utils/audio';
 
 type ScreenState = 'PREP' | 'LIVE' | 'SUMMARY' | 'HISTORY';
 
@@ -32,8 +34,9 @@ export default function App() {
     async function setup() {
       try {
         await initDatabase();
+        await configureAppAudio();
       } catch (e) {
-        console.error('Erreur init database:', e);
+        console.error('Erreur init database / audio:', e);
       } finally {
         setIsDbReady(true);
       }
@@ -67,39 +70,41 @@ export default function App() {
   };
 
   return (
-    <View style={styles.appContainer}>
-      <StatusBar style="light" />
+    <SafeAreaProvider>
+      <View style={styles.appContainer}>
+        <StatusBar style="light" />
 
-      {currentScreen === 'PREP' && (
-        <SessionPrepScreen
-          onStartSession={handleStartSession}
-          onOpenHistory={() => setCurrentScreen('HISTORY')}
-        />
-      )}
+        {currentScreen === 'PREP' && (
+          <SessionPrepScreen
+            onStartSession={handleStartSession}
+            onOpenHistory={() => setCurrentScreen('HISTORY')}
+          />
+        )}
 
-      {currentScreen === 'LIVE' && activeSessionConfig && (
-        <LiveWorkoutScreen
-          sessionConfig={activeSessionConfig}
-          onFinishSession={handleFinishSession}
-          onQuitSession={handleQuitSession}
-        />
-      )}
+        {currentScreen === 'LIVE' && activeSessionConfig && (
+          <LiveWorkoutScreen
+            sessionConfig={activeSessionConfig}
+            onFinishSession={handleFinishSession}
+            onQuitSession={handleQuitSession}
+          />
+        )}
 
-      {currentScreen === 'SUMMARY' && lastSummaryData && (
-        <WorkoutSummaryScreen
-          summary={lastSummaryData}
-          onClose={() => {
-            setLastSummaryData(null);
-            setActiveSessionConfig(null);
-            setCurrentScreen('PREP');
-          }}
-        />
-      )}
+        {currentScreen === 'SUMMARY' && lastSummaryData && (
+          <WorkoutSummaryScreen
+            summary={lastSummaryData}
+            onClose={() => {
+              setLastSummaryData(null);
+              setActiveSessionConfig(null);
+              setCurrentScreen('PREP');
+            }}
+          />
+        )}
 
-      {currentScreen === 'HISTORY' && (
-        <HistoryScreen onBack={() => setCurrentScreen('PREP')} />
-      )}
-    </View>
+        {currentScreen === 'HISTORY' && (
+          <HistoryScreen onBack={() => setCurrentScreen('PREP')} />
+        )}
+      </View>
+    </SafeAreaProvider>
   );
 }
 
