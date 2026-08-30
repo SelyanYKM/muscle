@@ -5,15 +5,16 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { THEME } from '../theme';
 import { Exercise, Feeling } from '../types';
 import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
 import { PlateBreakdown } from './PlateBreakdown';
 
 interface ExerciseCardProps {
   exercise: Exercise;
-  setIndex: number; // 0, 1, 2
-  totalSets: number; // 3
-  currentWeight: number; // kg
+  setIndex: number;
+  totalSets: number;
+  currentWeight: number;
   targetReps: number;
   onCompleteSet: (repsDone: number, feeling: Feeling) => void;
   onUndo?: () => void;
@@ -32,7 +33,6 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
 }) => {
   const [repsDone, setRepsDone] = useState(targetReps);
 
-  // Synchronise les reps par défaut si l'exercice change
   React.useEffect(() => {
     setRepsDone(targetReps);
   }, [exercise.id, setIndex, targetReps]);
@@ -53,7 +53,7 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
   const isFinisher = exercise.category === 'FREE_WEIGHT';
 
   return (
-    <View style={styles.cardContainer}>
+    <View style={[styles.cardContainer, isFinisher && styles.cardContainerFinisher]}>
       {/* En-tête : Catégorie & Numéro de série */}
       <View style={styles.topHeader}>
         <View style={[styles.badge, isFinisher ? styles.finisherBadge : styles.machineBadge]}>
@@ -117,10 +117,10 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
         </View>
       </View>
 
-      {/* Section des 3 boutons de ressenti géants */}
+      {/* 3 boutons de ressenti géants */}
       <View style={styles.feelingSection}>
         <Text style={styles.sectionLabel}>RESSENTI EN FIN DE SÉRIE</Text>
-        
+
         <View style={styles.feelingButtonsGrid}>
           {/* Bouton Facile */}
           <TouchableOpacity
@@ -175,16 +175,19 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
 
 const styles = StyleSheet.create({
   cardContainer: {
-    backgroundColor: '#0F172A',
-    borderRadius: 24,
-    padding: 20,
+    backgroundColor: THEME.colors.cardBg,
+    borderRadius: 22,
+    padding: 18,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.35,
     shadowRadius: 10,
     elevation: 8,
+  },
+  cardContainerFinisher: {
+    borderColor: THEME.colors.cardFinisherBorder,
   },
   topHeader: {
     flexDirection: 'row',
@@ -193,18 +196,18 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   machineBadge: {
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    backgroundColor: 'rgba(82, 182, 154, 0.15)',
     borderWidth: 1,
-    borderColor: '#0284C7',
+    borderColor: THEME.colors.oceanMist,
   },
   machineBadgeText: {
-    color: '#38BDF8',
-    fontSize: 11,
+    color: THEME.colors.limeCream,
+    fontSize: 10,
     fontWeight: '800',
   },
   finisherBadge: {
@@ -214,170 +217,168 @@ const styles = StyleSheet.create({
   },
   finisherBadgeText: {
     color: '#F87171',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
   },
   badgeText: {
-    fontSize: 11,
-    fontWeight: '800',
     letterSpacing: 0.5,
   },
   setIndicator: {
-    backgroundColor: '#1E293B',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 8,
+    backgroundColor: THEME.colors.cardInner,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#475569',
+    borderColor: THEME.colors.cardBorder,
   },
   setIndicatorText: {
-    color: '#F8FAFC',
-    fontSize: 12,
+    color: THEME.colors.textPrimary,
+    fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
   exerciseName: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '900',
-    color: '#FFFFFF',
-    marginBottom: 16,
-    lineHeight: 28,
+    color: THEME.colors.textPrimary,
+    marginBottom: 14,
+    lineHeight: 26,
   },
   targetRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 10,
+    gap: 10,
+    marginBottom: 8,
   },
   targetStatBox: {
     flex: 1,
-    backgroundColor: '#1E293B',
-    borderRadius: 14,
-    padding: 12,
+    backgroundColor: THEME.colors.cardInner,
+    borderRadius: 12,
+    padding: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
     alignItems: 'center',
   },
   targetStatLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
-    color: '#94A3B8',
-    letterSpacing: 1,
-    marginBottom: 4,
+    color: THEME.colors.textSecondary,
+    letterSpacing: 0.8,
+    marginBottom: 3,
   },
   targetStatValue: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '900',
-    color: '#38BDF8',
+    color: THEME.colors.limeCream,
   },
   unitText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#94A3B8',
+    color: THEME.colors.textSecondary,
   },
   repsSelectorSection: {
     marginTop: 6,
-    marginBottom: 14,
+    marginBottom: 12,
     alignItems: 'center',
   },
   sectionLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
-    color: '#94A3B8',
-    letterSpacing: 1,
-    marginBottom: 8,
+    color: THEME.colors.textSecondary,
+    letterSpacing: 0.8,
+    marginBottom: 6,
     textAlign: 'center',
   },
   repsStepper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
+    backgroundColor: THEME.colors.cardInner,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#334155',
-    padding: 4,
+    borderColor: THEME.colors.cardBorder,
+    padding: 3,
     width: '100%',
-    maxWidth: 260,
+    maxWidth: 240,
   },
   stepButton: {
-    width: 52,
-    height: 48,
-    backgroundColor: '#334155',
-    borderRadius: 12,
+    width: 48,
+    height: 44,
+    backgroundColor: THEME.colors.cardBg,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepButtonText: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#F8FAFC',
+    color: THEME.colors.limeCream,
   },
   repsNumberContainer: {
     flex: 1,
     alignItems: 'center',
   },
   repsNumberText: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '900',
-    color: '#FFFFFF',
+    color: THEME.colors.textPrimary,
   },
   repsSublabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
-    color: '#64748B',
+    color: THEME.colors.textMuted,
   },
   feelingSection: {
-    marginTop: 6,
+    marginTop: 4,
   },
   feelingButtonsGrid: {
-    gap: 10,
+    gap: 8,
   },
   feelingButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
     borderWidth: 1.5,
   },
   easyButton: {
-    backgroundColor: '#064E3B',
-    borderColor: '#10B981',
+    backgroundColor: '#0A3326',
+    borderColor: THEME.colors.emerald,
   },
   mediumButton: {
-    backgroundColor: '#7C2D12',
-    borderColor: '#F97316',
+    backgroundColor: '#3E200C',
+    borderColor: THEME.colors.feelingMedium,
   },
   hardButton: {
-    backgroundColor: '#7F1D1D',
-    borderColor: '#EF4444',
+    backgroundColor: '#3D1313',
+    borderColor: THEME.colors.feelingHard,
   },
   feelingEmoji: {
-    fontSize: 22,
-    marginRight: 14,
+    fontSize: 20,
+    marginRight: 12,
   },
   feelingTextWrapper: {
     flex: 1,
   },
   feelingTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
   feelingSubtitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 2,
+    marginTop: 1,
   },
   undoButton: {
-    marginTop: 14,
-    paddingVertical: 8,
+    marginTop: 12,
+    paddingVertical: 6,
     alignItems: 'center',
   },
   undoText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#94A3B8',
+    color: THEME.colors.textSecondary,
   },
 });

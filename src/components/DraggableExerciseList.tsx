@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { THEME } from '../theme';
 import { ConfiguredExercise } from '../types';
 import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
 
@@ -17,7 +18,7 @@ interface DraggableExerciseListProps {
   onDelete: (index: number) => void;
 }
 
-const ITEM_HEIGHT = 74; // Hauteur standardisée pour calcul du drag & drop
+const ITEM_HEIGHT = 74;
 
 export const DraggableExerciseList: React.FC<DraggableExerciseListProps> = ({
   exercises,
@@ -30,7 +31,6 @@ export const DraggableExerciseList: React.FC<DraggableExerciseListProps> = ({
 
   const panResponder = PanResponder.create({
     onMoveShouldSetPanResponder: (_, gestureState) => {
-      // Détecter un déplacement vertical significatif pour le drag
       return Math.abs(gestureState.dy) > 5;
     },
     onPanResponderGrant: () => {
@@ -139,14 +139,12 @@ const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
 
   return (
     <View style={styles.itemWrapper}>
-      {/* Bouton Supprimer en arrière-plan (Swipe gauche) */}
       <View style={styles.deleteBackground}>
         <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
           <Text style={styles.deleteBtnText}>Suppr.</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Carte principale */}
       <Animated.View
         style={[
           styles.card,
@@ -163,7 +161,6 @@ const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
         ]}
         {...swipePanResponder.panHandlers}
       >
-        {/* Poignée de Drag & Drop (Maintenir et glisser pour déplacer) */}
         <View
           style={styles.dragHandle}
           onTouchStart={onStartDrag}
@@ -172,7 +169,6 @@ const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
           <Text style={styles.dragHandleIcon}>⠿</Text>
         </View>
 
-        {/* Index & Titre */}
         <View style={styles.infoSection}>
           <Text style={styles.exerciseTitle} numberOfLines={1}>
             <Text style={styles.indexPrefix}>{index + 1}. </Text>
@@ -192,7 +188,6 @@ const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
           </View>
         </View>
 
-        {/* Crayon pour éditer */}
         <TouchableOpacity style={styles.pencilBtn} onPress={onEdit} activeOpacity={0.7}>
           <Text style={styles.pencilIcon}>✏️</Text>
         </TouchableOpacity>
@@ -241,22 +236,22 @@ const styles = StyleSheet.create({
     height: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E293B',
+    backgroundColor: THEME.colors.cardBg,
     borderRadius: 14,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
   },
   cardFinisher: {
-    borderColor: '#7F1D1D',
-    backgroundColor: '#1A1822',
+    borderColor: THEME.colors.cardFinisherBorder,
+    backgroundColor: THEME.colors.cardFinisherBg,
   },
   cardDragging: {
-    borderColor: '#38BDF8',
-    backgroundColor: '#0F172A',
-    shadowColor: '#38BDF8',
+    borderColor: THEME.colors.limeCream,
+    backgroundColor: THEME.colors.cardInner,
+    shadowColor: THEME.colors.limeCream,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.35,
     shadowRadius: 10,
     elevation: 12,
   },
@@ -268,7 +263,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   dragHandleIcon: {
-    color: '#64748B',
+    color: THEME.colors.textMuted,
     fontSize: 20,
     fontWeight: '900',
   },
@@ -281,11 +276,11 @@ const styles = StyleSheet.create({
   exerciseTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#F8FAFC',
+    color: THEME.colors.textPrimary,
     lineHeight: 18,
   },
   indexPrefix: {
-    color: '#38BDF8',
+    color: THEME.colors.limeCream,
     fontWeight: '900',
   },
   subInfoRow: {
@@ -300,10 +295,10 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   machineBadge: {
-    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    backgroundColor: 'rgba(82, 182, 154, 0.15)',
   },
   machineBadgeText: {
-    color: '#38BDF8',
+    color: THEME.colors.oceanMist,
     fontSize: 9,
     fontWeight: '800',
   },
@@ -320,23 +315,23 @@ const styles = StyleSheet.create({
   },
   metaSummary: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: THEME.colors.textSecondary,
     fontWeight: '600',
     flexShrink: 1,
   },
   weightText: {
-    color: '#FFFFFF',
+    color: THEME.colors.limeCream,
     fontWeight: '800',
   },
   pencilBtn: {
     width: 34,
     height: 34,
     borderRadius: 8,
-    backgroundColor: '#0F172A',
+    backgroundColor: THEME.colors.cardInner,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
   },
   pencilIcon: {
     fontSize: 13,

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { DraggableExerciseList } from '../components/DraggableExerciseList';
 import { addCustomExercise, getAllCatalogExercises, getExercisesForWorkout, getWorkouts, updateExerciseCustomSettings } from '../database/db';
+import { THEME } from '../theme';
 import { ConfiguredExercise, EquipmentCategory, SessionConfig } from '../types';
 import { triggerLightHaptic, triggerMediumHaptic } from '../utils/haptics';
 
@@ -85,7 +86,6 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
   // Ajouter un exercice depuis la liste déroulante du catalogue
   const handleSelectFromCatalog = (ex: ConfiguredExercise) => {
     triggerMediumHaptic();
-    // Cloner pour éviter les collisions d'ID de séance
     const alreadyExists = exercises.some((e) => e.id === ex.id);
     if (alreadyExists) {
       Alert.alert('Déjà présent', 'Cet exercice est déjà dans la séance.');
@@ -223,11 +223,13 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* En-tête épuré */}
+        {/* En-tête épuré mooscles */}
         <View style={styles.headerRow}>
           <View style={styles.titleCol}>
-            <Text style={styles.appSubtitle}>SURCHARGE PROGRESSIVE</Text>
-            <Text style={styles.appTitle}>Séance du jour</Text>
+            <Text style={styles.brandTitle}>
+              mooscles<Text style={styles.brandDot}>.</Text>
+            </Text>
+            <Text style={styles.brandSubtitle}>Surcharge progressive PPL</Text>
           </View>
 
           <TouchableOpacity style={styles.historyButton} onPress={onOpenHistory} activeOpacity={0.8}>
@@ -254,7 +256,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
           })}
         </View>
 
-        {/* 2. Configuration des Temps de Repos (Compact & Net) */}
+        {/* 2. Configuration des Temps de Repos */}
         <View style={styles.restCard}>
           <View style={styles.restRow}>
             <Text style={styles.restTitle}>⚙️ Repos Machines</Text>
@@ -297,7 +299,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
           </View>
         </View>
 
-        {/* 3. Exercices Prévus : En-tête + Bouton Ajouter via Catalogue */}
+        {/* 3. Exercices Prévus */}
         <View style={styles.exerciseHeaderRow}>
           <Text style={styles.sectionHeading}>EXERCICES ({exercises.length})</Text>
 
@@ -310,7 +312,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Liste Drag & Drop sans débordement */}
+        {/* Liste Drag & Drop */}
         <DraggableExerciseList
           exercises={exercises}
           onReorder={handleReorder}
@@ -318,18 +320,18 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
           onDelete={handleDeleteExercise}
         />
 
-        {/* Bouton Démarrer la Séance */}
+        {/* Gros Bouton CTA mooscles */}
         <TouchableOpacity style={styles.startButton} onPress={handleStart} activeOpacity={0.85}>
-          <Text style={styles.startButtonText}>🚀 DÉMARRER LA SÉANCE</Text>
+          <Text style={styles.startButtonText}>DÉMARRER LA SÉANCE</Text>
         </TouchableOpacity>
       </ScrollView>
 
-      {/* MODAL 1 : LISTE DÉROULANTE / SÉLECTEUR DU CATALOGUE */}
+      {/* MODAL 1 : CATALOGUE D'EXERCICES */}
       <Modal visible={isPickerModalOpen} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.pickerModalCard}>
             <Text style={styles.modalTitle}>Catalogue d'exercices</Text>
-            <Text style={styles.modalSubtitle}>Choisis un exercice pour ta séance {selectedWorkout.name}</Text>
+            <Text style={styles.modalSubtitle}>Sélectionne pour ta séance {selectedWorkout.name}</Text>
 
             <ScrollView style={styles.catalogList} showsVerticalScrollIndicator={false}>
               {catalogExercises.map((catEx) => {
@@ -358,19 +360,18 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
                         {catEx.name}
                       </Text>
                       <Text style={styles.catalogItemSub}>
-                        {isFinisher ? '🔥 Finisher Barre (20kg)' : '⚙️ Machine Hammer Strength'} • {catEx.plannedWeights?.[0] || 40} kg
+                        {isFinisher ? '🔥 Finisher Barre (20kg)' : '⚙️ Machine Hammer'} • {catEx.plannedWeights?.[0] || 40} kg
                       </Text>
                     </View>
 
                     <Text style={styles.catalogItemAction}>
-                      {isSelectedInSession ? '✓ Déjà ajouté' : '+ Ajouter'}
+                      {isSelectedInSession ? '✓ Ajouté' : '+ Ajouter'}
                     </Text>
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
 
-            {/* Bouton Créer un exercice personnalisé */}
             <TouchableOpacity
               style={styles.createCustomBtn}
               onPress={() => {
@@ -392,11 +393,11 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
         </View>
       </Modal>
 
-      {/* MODAL 2 : ÉDITION DÉTAILLÉE PAR SÉRIE (CRAYON) */}
+      {/* MODAL 2 : ÉDITION DÉTAILLÉE PAR SÉRIE */}
       <Modal visible={editingExercise !== null} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Modifier les charges</Text>
+            <Text style={styles.modalTitle}>Charges & Séries</Text>
             <Text style={styles.modalSubtitle} numberOfLines={1}>
               {editingExercise?.name}
             </Text>
@@ -481,20 +482,20 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
         </View>
       </Modal>
 
-      {/* MODAL 3 : CRÉER UN NOUVEL EXERCICE PERSONNALISÉ */}
+      {/* MODAL 3 : CRÉER UN NOUVEL EXERCICE */}
       <Modal visible={isCreateModalOpen} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Nouvel exercice</Text>
             <Text style={styles.modalSubtitle}>Ajouter au catalogue permanent</Text>
 
-            <Text style={styles.modalSectionLabel}>NOM DE LA MACHINE / EXERCICE</Text>
+            <Text style={styles.modalSectionLabel}>NOM DE LA MACHINE</Text>
             <TextInput
               style={styles.modalTextInput}
               value={newExName}
               onChangeText={setNewExName}
               placeholder="ex: HS Lateral Raise"
-              placeholderTextColor="#64748B"
+              placeholderTextColor={THEME.colors.textMuted}
             />
 
             <Text style={styles.modalSectionLabel}>TYPE</Text>
@@ -524,7 +525,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
               value={newExWeight}
               onChangeText={setNewExWeight}
               placeholder="40"
-              placeholderTextColor="#64748B"
+              placeholderTextColor={THEME.colors.textMuted}
             />
 
             <View style={styles.modalActions}>
@@ -545,7 +546,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
 const styles = StyleSheet.create({
   screenWrapper: {
     flex: 1,
-    backgroundColor: '#0B0F19',
+    backgroundColor: THEME.colors.bg,
   },
   container: {
     flex: 1,
@@ -565,28 +566,32 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 10,
   },
-  appSubtitle: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#38BDF8',
-    letterSpacing: 1.5,
-  },
-  appTitle: {
-    fontSize: 24,
+  brandTitle: {
+    fontSize: 26,
     fontWeight: '900',
-    color: '#FFFFFF',
+    color: THEME.colors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  brandDot: {
+    color: THEME.colors.limeCream,
+  },
+  brandSubtitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: THEME.colors.oceanMist,
+    letterSpacing: 0.5,
     marginTop: 2,
   },
   historyButton: {
-    backgroundColor: '#1E293B',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    backgroundColor: THEME.colors.cardBg,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
   },
   historyButtonText: {
-    color: '#F8FAFC',
+    color: THEME.colors.textPrimary,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -598,31 +603,31 @@ const styles = StyleSheet.create({
   },
   workoutTab: {
     flex: 1,
-    backgroundColor: '#1E293B',
+    backgroundColor: THEME.colors.cardBg,
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
   },
   workoutTabActive: {
-    backgroundColor: '#0284C7',
-    borderColor: '#38BDF8',
+    backgroundColor: THEME.colors.bondiBlue,
+    borderColor: THEME.colors.limeCream,
   },
   workoutTabText: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#94A3B8',
+    color: THEME.colors.textSecondary,
   },
   workoutTabTextActive: {
     color: '#FFFFFF',
   },
   restCard: {
-    backgroundColor: '#1E293B',
+    backgroundColor: THEME.colors.cardBg,
     borderRadius: 14,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
     marginBottom: 16,
     gap: 10,
   },
@@ -633,37 +638,37 @@ const styles = StyleSheet.create({
   },
   restDivider: {
     borderTopWidth: 1,
-    borderTopColor: '#334155',
+    borderTopColor: THEME.colors.cardBorder,
     paddingTop: 10,
   },
   restTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#F8FAFC',
+    color: THEME.colors.textPrimary,
   },
   timePills: {
     flexDirection: 'row',
     gap: 6,
   },
   timePill: {
-    backgroundColor: '#0F172A',
+    backgroundColor: THEME.colors.cardInner,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
   },
   timePillActive: {
-    backgroundColor: '#38BDF8',
-    borderColor: '#38BDF8',
+    backgroundColor: THEME.colors.emerald,
+    borderColor: THEME.colors.limeCream,
   },
   timePillText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#94A3B8',
+    color: THEME.colors.textSecondary,
   },
   timePillTextActive: {
-    color: '#0F172A',
+    color: '#081119',
   },
   exerciseHeaderRow: {
     flexDirection: 'row',
@@ -674,43 +679,43 @@ const styles = StyleSheet.create({
   sectionHeading: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#94A3B8',
+    color: THEME.colors.textSecondary,
     letterSpacing: 1,
   },
   addBtn: {
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    backgroundColor: 'rgba(82, 182, 154, 0.15)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#0284C7',
+    borderColor: THEME.colors.oceanMist,
   },
   addBtnText: {
-    color: '#38BDF8',
+    color: THEME.colors.limeCream,
     fontSize: 11,
     fontWeight: '800',
   },
   startButton: {
-    backgroundColor: '#38BDF8',
+    backgroundColor: THEME.colors.limeCream,
     paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',
     marginTop: 12,
-    shadowColor: '#38BDF8',
+    shadowColor: THEME.colors.limeCream,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 4,
   },
   startButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '900',
-    color: '#0F172A',
-    letterSpacing: 0.5,
+    color: '#081119',
+    letterSpacing: 0.8,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+    backgroundColor: 'rgba(8, 17, 25, 0.94)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
@@ -718,21 +723,21 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: '#1E293B',
+    backgroundColor: THEME.colors.cardBg,
     borderRadius: 20,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
   },
   pickerModalCard: {
     width: '100%',
     maxWidth: 360,
     maxHeight: '80%',
-    backgroundColor: '#1E293B',
+    backgroundColor: THEME.colors.cardBg,
     borderRadius: 20,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
   },
   catalogList: {
     maxHeight: 260,
@@ -742,17 +747,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
+    backgroundColor: THEME.colors.cardInner,
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
     marginBottom: 6,
   },
   catalogItemDisabled: {
     opacity: 0.4,
-    borderColor: '#1E293B',
+    borderColor: THEME.colors.cardBorder,
   },
   catalogItemInfo: {
     flex: 1,
@@ -761,43 +766,43 @@ const styles = StyleSheet.create({
   catalogItemName: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: THEME.colors.textPrimary,
   },
   catalogItemNameDisabled: {
-    color: '#64748B',
+    color: THEME.colors.textMuted,
   },
   catalogItemSub: {
     fontSize: 10,
-    color: '#94A3B8',
+    color: THEME.colors.textSecondary,
     marginTop: 2,
   },
   catalogItemAction: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#38BDF8',
+    color: THEME.colors.limeCream,
   },
   createCustomBtn: {
-    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    backgroundColor: 'rgba(82, 182, 154, 0.12)',
     borderWidth: 1,
-    borderColor: '#0284C7',
+    borderColor: THEME.colors.oceanMist,
     paddingVertical: 11,
     borderRadius: 10,
     alignItems: 'center',
     marginBottom: 8,
   },
   createCustomBtnText: {
-    color: '#38BDF8',
+    color: THEME.colors.limeCream,
     fontSize: 12,
     fontWeight: '800',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '900',
-    color: '#FFFFFF',
+    color: THEME.colors.textPrimary,
   },
   modalSubtitle: {
     fontSize: 12,
-    color: '#38BDF8',
+    color: THEME.colors.oceanMist,
     fontWeight: '700',
     marginTop: 2,
     marginBottom: 8,
@@ -805,7 +810,7 @@ const styles = StyleSheet.create({
   modalSectionLabel: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#94A3B8',
+    color: THEME.colors.textSecondary,
     letterSpacing: 0.5,
     marginTop: 8,
     marginBottom: 6,
@@ -816,24 +821,24 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   pillBtn: {
-    backgroundColor: '#0F172A',
+    backgroundColor: THEME.colors.cardInner,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
   },
   pillBtnActive: {
-    backgroundColor: '#38BDF8',
-    borderColor: '#38BDF8',
+    backgroundColor: THEME.colors.bondiBlue,
+    borderColor: THEME.colors.limeCream,
   },
   pillBtnText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#94A3B8',
+    color: THEME.colors.textSecondary,
   },
   pillBtnTextActive: {
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
   shortcutsRow: {
     flexDirection: 'row',
@@ -842,9 +847,9 @@ const styles = StyleSheet.create({
   },
   shortcutItem: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: THEME.colors.cardInner,
     borderWidth: 1,
-    borderColor: '#0284C7',
+    borderColor: THEME.colors.oceanMist,
     paddingVertical: 5,
     borderRadius: 6,
     alignItems: 'center',
@@ -852,7 +857,7 @@ const styles = StyleSheet.create({
   shortcutItemText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#38BDF8',
+    color: THEME.colors.limeCream,
   },
   perSetContainer: {
     gap: 6,
@@ -862,17 +867,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
+    backgroundColor: THEME.colors.cardInner,
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
   },
   setRowTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#F8FAFC',
+    color: THEME.colors.textPrimary,
   },
   stepperWrap: {
     flexDirection: 'row',
@@ -880,15 +885,15 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   stepBtn: {
-    backgroundColor: '#1E293B',
+    backgroundColor: THEME.colors.cardBg,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
   },
   stepBtnText: {
-    color: '#38BDF8',
+    color: THEME.colors.limeCream,
     fontSize: 10,
     fontWeight: '800',
   },
@@ -900,9 +905,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   modalTextInput: {
-    backgroundColor: '#0F172A',
+    backgroundColor: THEME.colors.cardInner,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
     borderRadius: 10,
     padding: 10,
     color: '#FFFFFF',
@@ -916,7 +921,7 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     flex: 1,
-    backgroundColor: '#334155',
+    backgroundColor: THEME.colors.cardBorder,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
@@ -924,11 +929,11 @@ const styles = StyleSheet.create({
   cancelBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#F8FAFC',
+    color: THEME.colors.textPrimary,
   },
   saveBtn: {
     flex: 1,
-    backgroundColor: '#38BDF8',
+    backgroundColor: THEME.colors.limeCream,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
@@ -936,6 +941,6 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: 13,
     fontWeight: '900',
-    color: '#0F172A',
+    color: '#081119',
   },
 });

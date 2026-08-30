@@ -1,108 +1,139 @@
+import { Audio } from 'expo-av';
 import React, { useEffect, useState } from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { playTimerEndSound } from '../utils/audio';
-import { triggerLightHaptic, triggerTimerEndHaptic } from '../utils/haptics';
+import {
+  Modal,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { THEME } from '../theme';
+import { triggerLightHaptic, triggerNotificationSuccessHaptic, triggerWarningHaptic } from '../utils/haptics';
 
 interface RestTimerOverlayProps {
-  visible: boolean;
-  totalDurationSeconds: number;
-  nextExerciseName: string;
+  initialSeconds: number;
+  exerciseName: string;
   nextSetNumber: number;
   nextWeight: number;
+  onSkip: () => void;
   onFinish: () => void;
 }
 
 export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
-  visible,
-  totalDurationSeconds,
-  nextExerciseName,
+  initialSeconds,
+  exerciseName,
   nextSetNumber,
   nextWeight,
+  onSkip,
   onFinish,
 }) => {
-  const [secondsLeft, setSecondsLeft] = useState(totalDurationSeconds);
+  const [secondsRemaining, setSecondsRemaining] = useState(initialSeconds);
+  const [totalSeconds, setTotalSeconds] = useState(initialSeconds);
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
 
   useEffect(() => {
-    if (visible) {
-      setSecondsLeft(totalDurationSeconds);
+    return () => {
+      if (sound) {
+        sound.unloadAsync();
+      }
+    };
+  }, [sound]);
+
+  const playBip = async () => {
+    try {
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg' },
+        { shouldPlay: true }
+      );
+      setSound(newSound);
+    } catch {
+      // audio fallback
     }
-  }, [visible, totalDurationSeconds]);
+  };
 
   useEffect(() => {
-    if (!visible) return;
+    const timer = setInterval(() => {
+      setSecondsRemaining((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          triggerNotificationSuccessHaptic();
+          playBip();
+          onFinish();
+          return 0;
+        }
 
-    if (secondsLeft <= 0) {
-      triggerTimerEndHaptic();
-      playTimerEndSound();
-      onFinish();
-      return;
-    }
+        if (prev === 4 || prev === 3 || prev === 2) {
+          triggerWarningHaptic();
+        }
 
-    const interval = setInterval(() => {
-      setSecondsLeft((prev) => prev - 1);
+        return prev - 1;
+      });
     }, 1000);
 
-    return () => clearInterval(interval);
-  }, [visible, secondsLeft, onFinish]);
-
-  if (!visible) return null;
-
-  const minutes = Math.floor(secondsLeft / 60);
-  const seconds = secondsLeft % 60;
-  const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-
-  const progressPercent = Math.max(0, Math.min(100, (secondsLeft / totalDurationSeconds) * 100));
+    return () => clearInterval(timer);
+  }, []);
 
   const addTime = (secs: number) => {
     triggerLightHaptic();
-    setSecondsLeft((prev) => Math.max(0, prev + secs));
+    setSecondsRemaining((prev) => prev + secs);
+    setTotalSeconds((prev) => prev + secs);
   };
 
+  const minutes = Math.floor(secondsRemaining / 60);
+  const seconds = secondsRemaining % 60;
+  const formattedTime = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+
+  const progressPercent = totalSeconds > 0 ? (secondsRemaining / totalSeconds) * 100 : 0;
+
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible transparent animationType="fade">
       <View style={styles.backdrop}>
-        <View style={styles.card}>
-          <Text style={styles.timerBadge}>TEMPS DE REPOS</Text>
+        <View style={styles.container}>
+          <Text style={styles.topSub}>TEMPS DE RÉCUPÉRATION</Text>
 
-          {/* Chrono Principal */}
-          <View style={styles.timerCircle}>
-            <Text style={styles.timerNumber}>{formattedTime}</Text>
-            <View style={styles.progressBarBackground}>
-              <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
-            </View>
+          {/* Chronomètre Géant */}
+          <Text style={styles.timeBig}>{formattedTime}</Text>
+
+          {/* Jauge de progression */}
+          <View style={styles.progressBarBg}>
+            <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
           </View>
 
-          {/* Prochaine série en aperçu */}
-          <View style={styles.previewBox}>
-            <Text style={styles.previewLabel}>À SUIVRE</Text>
-            <Text style={styles.previewExercise} numberOfLines={1}>
-              {nextExerciseName}
-            </Text>
-            <Text style={styles.previewDetails}>
-              Série {nextSetNumber} • {nextWeight} kg
-            </Text>
-          </View>
-
-          {/* Boutons d'ajustement du temps */}
-          <View style={styles.controlsRow}>
-            <TouchableOpacity style={styles.adjustButton} onPress={() => addTime(-15)}>
-              <Text style={styles.adjustButtonText}>-15s</Text>
+          {/* Boutons d'ajustement du repos */}
+          <View style={styles.adjustRow}>
+            <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(-15)}>
+              <Text style={styles.adjustBtnText}>-15s</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.adjustButton} onPress={() => addTime(30)}>
-              <Text style={styles.adjustButtonText}>+30s</Text>
+            <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(30)}>
+              <Text style={styles.adjustBtnText}>+30s</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(60)}>
+              <Text style={styles.adjustBtnText}>+60s</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Passer le repos */}
+          {/* Teaser Prochaine Série */}
+          <View style={styles.nextSetInfoCard}>
+            <Text style={styles.nextSetLabel}>PROCHAINE SÉRIE :</Text>
+            <Text style={styles.nextSetTitle} numberOfLines={1}>
+              {exerciseName}
+            </Text>
+            <Text style={styles.nextSetDetails}>
+              Série {nextSetNumber} • <Text style={styles.nextSetHighlight}>{nextWeight} kg</Text>
+            </Text>
+          </View>
+
+          {/* Bouton Passer */}
           <TouchableOpacity
             style={styles.skipButton}
             onPress={() => {
               triggerLightHaptic();
-              onFinish();
+              onSkip();
             }}
           >
-            <Text style={styles.skipButtonText}>Passer le repos & Commencer</Text>
+            <Text style={styles.skipButtonText}>Je suis prêt (Passer)</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -113,115 +144,107 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+    backgroundColor: 'rgba(8, 17, 25, 0.96)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 16,
   },
-  card: {
+  container: {
     width: '100%',
-    maxWidth: 380,
-    backgroundColor: '#1E293B',
-    borderRadius: 24,
-    padding: 24,
+    maxWidth: 360,
+    backgroundColor: THEME.colors.cardBg,
+    borderRadius: 22,
+    padding: 20,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#334155',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 10,
+    borderColor: THEME.colors.cardBorder,
   },
-  timerBadge: {
-    fontSize: 12,
+  topSub: {
+    fontSize: 10,
     fontWeight: '800',
-    color: '#38BDF8',
+    color: THEME.colors.oceanMist,
     letterSpacing: 1.5,
-    marginBottom: 16,
+    marginBottom: 4,
   },
-  timerCircle: {
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  timerNumber: {
-    fontSize: 64,
+  timeBig: {
+    fontSize: 58,
     fontWeight: '900',
-    color: '#FFFFFF',
-    fontVariant: ['tabular-nums'],
-    letterSpacing: 2,
+    color: THEME.colors.limeCream,
+    letterSpacing: -1,
   },
-  progressBarBackground: {
+  progressBarBg: {
     width: '100%',
-    height: 8,
-    backgroundColor: '#334155',
-    borderRadius: 4,
-    marginTop: 12,
+    height: 6,
+    backgroundColor: THEME.colors.cardInner,
+    borderRadius: 3,
+    marginVertical: 14,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: '#38BDF8',
-    borderRadius: 4,
+    backgroundColor: THEME.colors.limeCream,
+    borderRadius: 3,
   },
-  previewBox: {
-    width: '100%',
-    backgroundColor: '#0F172A',
-    borderRadius: 14,
-    padding: 14,
-    alignItems: 'center',
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#1E293B',
-  },
-  previewLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#64748B',
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  previewExercise: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#F8FAFC',
-    textAlign: 'center',
-  },
-  previewDetails: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#38BDF8',
-    marginTop: 4,
-  },
-  controlsRow: {
+  adjustRow: {
     flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-    marginBottom: 14,
+    gap: 8,
+    marginBottom: 16,
   },
-  adjustButton: {
-    flex: 1,
-    backgroundColor: '#334155',
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
+  adjustBtn: {
+    backgroundColor: THEME.colors.cardInner,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
   },
-  adjustButtonText: {
-    fontSize: 15,
+  adjustBtnText: {
+    color: THEME.colors.textPrimary,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#F8FAFC',
+  },
+  nextSetInfoCard: {
+    width: '100%',
+    backgroundColor: THEME.colors.cardInner,
+    borderRadius: 14,
+    padding: 12,
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+  },
+  nextSetLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: THEME.colors.textSecondary,
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  nextSetTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: THEME.colors.textPrimary,
+  },
+  nextSetDetails: {
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  nextSetHighlight: {
+    color: THEME.colors.limeCream,
+    fontWeight: '900',
   },
   skipButton: {
     width: '100%',
-    backgroundColor: '#38BDF8',
-    paddingVertical: 15,
+    backgroundColor: THEME.colors.limeCream,
+    paddingVertical: 14,
     borderRadius: 14,
     alignItems: 'center',
   },
   skipButtonText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
+    color: '#081119',
+    fontSize: 14,
+    fontWeight: '900',
   },
 });

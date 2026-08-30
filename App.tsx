@@ -6,6 +6,7 @@ import { HistoryScreen } from './src/screens/HistoryScreen';
 import { LiveWorkoutScreen } from './src/screens/LiveWorkoutScreen';
 import { SessionPrepScreen } from './src/screens/SessionPrepScreen';
 import { WorkoutSummaryScreen } from './src/screens/WorkoutSummaryScreen';
+import { THEME } from './src/theme';
 import { NextSessionPlan, SessionConfig, SetResult } from './src/types';
 
 type ScreenState = 'PREP' | 'LIVE' | 'SUMMARY' | 'HISTORY';
@@ -43,8 +44,8 @@ export default function App() {
   if (!isDbReady) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#38BDF8" />
-        <Text style={styles.loadingText}>Initialisation de la base locale...</Text>
+        <ActivityIndicator size="large" color={THEME.colors.limeCream} />
+        <Text style={styles.loadingText}>mooscles initialisation...</Text>
         <StatusBar style="light" />
       </View>
     );
@@ -105,18 +106,19 @@ export default function App() {
 const styles = StyleSheet.create({
   appContainer: {
     flex: 1,
-    backgroundColor: '#0B0F19',
+    backgroundColor: THEME.colors.bg,
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#0B0F19',
+    backgroundColor: THEME.colors.bg,
     justifyContent: 'center',
     alignItems: 'center',
     gap: 14,
   },
   loadingText: {
-    color: '#94A3B8',
+    color: THEME.colors.textSecondary,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 });

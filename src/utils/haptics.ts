@@ -22,6 +22,8 @@ export function triggerSuccessHaptic() {
   } catch {}
 }
 
+export const triggerNotificationSuccessHaptic = triggerSuccessHaptic;
+
 export function triggerWarningHaptic() {
   if (Platform.OS === 'web') return;
   try {

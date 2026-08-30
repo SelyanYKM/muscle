@@ -6,7 +6,8 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { getRecentLogs, getWorkouts } from '../database/db';
+import { getRecentLogs } from '../database/db';
+import { THEME } from '../theme';
 import { WorkoutLogEntry } from '../types';
 import { triggerLightHaptic } from '../utils/haptics';
 
@@ -14,217 +15,162 @@ interface HistoryScreenProps {
   onBack: () => void;
 }
 
-interface GroupedExercise {
-  exerciseId: number;
+interface GroupedExerciseLogs {
   exerciseName: string;
   sets: WorkoutLogEntry[];
-  totalVolume: number;
 }
 
 interface GroupedSession {
-  sessionKey: string; // e.g. "2026-08-30_1"
   date: string;
   workoutId: number;
   workoutName: string;
-  exercises: GroupedExercise[];
   totalVolume: number;
   totalSets: number;
+  exercises: GroupedExerciseLogs[];
 }
 
 export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
   const [sessions, setSessions] = useState<GroupedSession[]>([]);
-  const [expandedSessions, setExpandedSessions] = useState<Record<string, boolean>>({});
+  const [expandedSessions, setExpandedSessions] = useState<{ [sessionKey: string]: boolean }>({});
 
   useEffect(() => {
-    const rawLogs = getRecentLogs(200);
-    const workouts = getWorkouts();
-    const workoutNameMap: Record<number, string> = {};
-    for (const w of workouts) {
-      workoutNameMap[w.id] = w.name;
-    }
+    loadHierarchicalLogs();
+  }, []);
 
-    // Regrouper par Séance (Date + WorkoutId)
-    const sessionMap: Record<string, GroupedSession> = {};
+  const loadHierarchicalLogs = () => {
+    const rawLogs = getRecentLogs(300);
+
+    const sessionMap = new Map<string, GroupedSession>();
 
     for (const log of rawLogs) {
-      const key = `${log.date}_${log.workoutId}`;
-      const workoutName = workoutNameMap[log.workoutId] || `Séance #${log.workoutId}`;
+      const sessionKey = `${log.date}_${log.workoutId}`;
+      const workoutName =
+        log.workoutId === 1
+          ? 'Push (Pectoraux / Épaules / Triceps)'
+          : log.workoutId === 2
+          ? 'Pull (Dos / Arrière d’épaules / Biceps)'
+          : 'Legs (Quadriceps / Ischios / Mollets)';
 
-      if (!sessionMap[key]) {
-        sessionMap[key] = {
-          sessionKey: key,
+      if (!sessionMap.has(sessionKey)) {
+        sessionMap.set(sessionKey, {
           date: log.date,
           workoutId: log.workoutId,
           workoutName,
-          exercises: [],
           totalVolume: 0,
           totalSets: 0,
-        };
+          exercises: [],
+        });
       }
 
-      const session = sessionMap[key];
+      const session = sessionMap.get(sessionKey)!;
       session.totalVolume += log.weight * log.repsDone;
       session.totalSets += 1;
 
-      // Trouver ou créer le groupe d'exercice dans la séance
-      let exGroup = session.exercises.find((e) => e.exerciseId === log.exerciseId);
+      let exGroup = session.exercises.find((e) => e.exerciseName === log.exerciseName);
       if (!exGroup) {
         exGroup = {
-          exerciseId: log.exerciseId,
           exerciseName: log.exerciseName,
           sets: [],
-          totalVolume: 0,
         };
         session.exercises.push(exGroup);
       }
 
       exGroup.sets.push(log);
-      exGroup.totalVolume += log.weight * log.repsDone;
     }
 
-    // Trier les séries par numéro de série croissant
-    for (const session of Object.values(sessionMap)) {
-      for (const ex of session.exercises) {
-        ex.sets.sort((a, b) => a.setNumber - b.setNumber);
-      }
-    }
-
-    const sessionList = Object.values(sessionMap);
+    const sessionList = Array.from(sessionMap.values());
     setSessions(sessionList);
 
-    // Par défaut, ouvrir la séance la plus récente
     if (sessionList.length > 0) {
-      setExpandedSessions({ [sessionList[0].sessionKey]: true });
+      const firstKey = `${sessionList[0].date}_${sessionList[0].workoutId}`;
+      setExpandedSessions({ [firstKey]: true });
     }
-  }, []);
+  };
 
-  const toggleSession = (key: string) => {
+  const toggleSessionExpand = (sessionKey: string) => {
     triggerLightHaptic();
     setExpandedSessions((prev) => ({
       ...prev,
-      [key]: !prev[key],
+      [sessionKey]: !prev[sessionKey],
     }));
   };
 
-  const getFeelingBadge = (feeling: string) => {
-    switch (feeling) {
-      case 'EASY':
-        return { emoji: '🟢', label: 'Facile', color: '#10B981' };
-      case 'MEDIUM':
-        return { emoji: '🟠', label: 'Juste', color: '#F59E0B' };
-      default:
-        return { emoji: '🔴', label: 'Échec', color: '#EF4444' };
+  const formatDate = (dateStr: string) => {
+    try {
+      const [year, month, day] = dateStr.split('-');
+      const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      return d.toLocaleDateString('fr-FR', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+      });
+    } catch {
+      return dateStr;
     }
   };
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* En-tête */}
+      {/* En-tête avec bouton Retour */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => {
-            triggerLightHaptic();
-            onBack();
-          }}
-        >
+        <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <Text style={styles.backButtonText}>← Retour</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Historique des Séances</Text>
+        <Text style={styles.title}>Historique des séances</Text>
       </View>
 
       {sessions.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>🏋️‍♂️</Text>
-          <Text style={styles.emptyTitle}>Aucune séance enregistrée</Text>
-          <Text style={styles.emptySub}>
-            Complète ta première séance pour voir tes performances regroupées ici.
-          </Text>
+          <Text style={styles.emptyEmoji}>📜</Text>
+          <Text style={styles.emptyText}>Aucune séance enregistrée pour le moment.</Text>
+          <Text style={styles.emptySubtext}>Complète ton premier entraînement pour voir tes charges évoluer !</Text>
         </View>
       ) : (
-        <View style={styles.sessionsList}>
-          {sessions.map((session) => {
-            const isExpanded = expandedSessions[session.sessionKey] ?? false;
+        <View style={styles.sessionList}>
+          {sessions.map((session, sIdx) => {
+            const sessionKey = `${session.date}_${session.workoutId}`;
+            const isExpanded = !!expandedSessions[sessionKey];
 
             return (
-              <View key={session.sessionKey} style={styles.sessionCard}>
-                {/* En-tête de la séance (Cliquable pour déplier/replier) */}
+              <View key={sIdx} style={styles.sessionCard}>
+                {/* En-tête de la séance (cliquable pour déplier/replier) */}
                 <TouchableOpacity
                   style={styles.sessionHeader}
-                  onPress={() => toggleSession(session.sessionKey)}
+                  onPress={() => toggleSessionExpand(sessionKey)}
                   activeOpacity={0.8}
                 >
                   <View style={styles.sessionHeaderLeft}>
-                    <View style={styles.workoutBadge}>
-                      <Text style={styles.workoutBadgeText}>{session.workoutName.toUpperCase()}</Text>
+                    <View style={styles.dateBadge}>
+                      <Text style={styles.dateBadgeText}>{formatDate(session.date)}</Text>
                     </View>
-                    <Text style={styles.sessionDate}>📅 {session.date}</Text>
-                  </View>
-
-                  <View style={styles.sessionHeaderRight}>
-                    <Text style={styles.expandIcon}>{isExpanded ? '▲' : '▼'}</Text>
-                  </View>
-                </TouchableOpacity>
-
-                {/* Métriques globales de la séance */}
-                <View style={styles.sessionSummaryRow}>
-                  <View style={styles.miniStat}>
-                    <Text style={styles.miniStatLabel}>EXERCICES</Text>
-                    <Text style={styles.miniStatValue}>{session.exercises.length}</Text>
-                  </View>
-                  <View style={styles.miniStat}>
-                    <Text style={styles.miniStatLabel}>SÉRIES</Text>
-                    <Text style={styles.miniStatValue}>{session.totalSets}</Text>
-                  </View>
-                  <View style={styles.miniStat}>
-                    <Text style={styles.miniStatLabel}>VOLUME TOTAL</Text>
-                    <Text style={styles.miniStatValue}>
-                      {session.totalVolume.toLocaleString('fr-FR')} kg
+                    <Text style={styles.sessionWorkoutTitle} numberOfLines={1}>
+                      {session.workoutName}
+                    </Text>
+                    <Text style={styles.sessionMetricsSummary}>
+                      {session.exercises.length} exos • {session.totalSets} séries •{' '}
+                      <Text style={styles.volumeHighlight}>{Math.round(session.totalVolume)} kg vol.</Text>
                     </Text>
                   </View>
-                </View>
 
-                {/* Détail des exercices (Affiché si déplié) */}
+                  <Text style={styles.expandChevron}>{isExpanded ? '▲' : '▼'}</Text>
+                </TouchableOpacity>
+
+                {/* Contenu détaillé de la séance */}
                 {isExpanded && (
-                  <View style={styles.exercisesContainer}>
+                  <View style={styles.sessionDetailsBox}>
                     {session.exercises.map((ex, exIdx) => (
-                      <View key={ex.exerciseId || exIdx} style={styles.exerciseBox}>
-                        <View style={styles.exerciseBoxHeader}>
-                          <Text style={styles.exerciseBoxTitle} numberOfLines={1}>
-                            {ex.exerciseName}
-                          </Text>
-                          <Text style={styles.exerciseBoxVolume}>
-                            {ex.totalVolume.toLocaleString('fr-FR')} kg
-                          </Text>
-                        </View>
+                      <View key={exIdx} style={styles.exerciseDetailRow}>
+                        <Text style={styles.exerciseDetailName}>{ex.exerciseName}</Text>
 
-                        {/* Liste des séries de cet exercice */}
-                        <View style={styles.setsList}>
-                          {ex.sets.map((set, sIdx) => {
-                            const badge = getFeelingBadge(set.feeling);
-                            return (
-                              <View key={set.id || sIdx} style={styles.setRow}>
-                                <View style={styles.setColNum}>
-                                  <Text style={styles.setColNumText}>S{set.setNumber}</Text>
-                                </View>
-
-                                <View style={styles.setColWeightReps}>
-                                  <Text style={styles.setWeightText}>{set.weight} kg</Text>
-                                  <Text style={styles.setRepsText}>× {set.repsDone} reps</Text>
-                                  {set.repsDone < set.repsTarget && (
-                                    <Text style={styles.setTargetSub}>(obj: {set.repsTarget})</Text>
-                                  )}
-                                </View>
-
-                                <View style={[styles.feelingTag, { borderColor: badge.color }]}>
-                                  <Text style={styles.feelingEmojiText}>{badge.emoji}</Text>
-                                  <Text style={[styles.feelingLabelText, { color: badge.color }]}>
-                                    {badge.label}
-                                  </Text>
-                                </View>
-                              </View>
-                            );
-                          })}
+                        <View style={styles.setsChipsRow}>
+                          {ex.sets.map((set, setIdx) => (
+                            <View key={setIdx} style={styles.setChip}>
+                              <Text style={styles.setChipText}>
+                                S{set.setNumber}: {set.repsDone} reps @ {set.weight}kg{' '}
+                                {set.feeling === 'EASY' ? '🟢' : set.feeling === 'MEDIUM' ? '🟠' : '🔴'}
+                              </Text>
+                            </View>
+                          ))}
                         </View>
                       </View>
                     ))}
@@ -242,218 +188,150 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0B0F19',
+    backgroundColor: THEME.colors.bg,
   },
   content: {
-    padding: 20,
+    paddingHorizontal: 16,
     paddingTop: 50,
     paddingBottom: 40,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
-    gap: 16,
+    marginBottom: 20,
   },
   backButton: {
-    backgroundColor: '#1E293B',
+    backgroundColor: THEME.colors.cardBg,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
+    marginRight: 12,
   },
   backButtonText: {
-    color: '#38BDF8',
-    fontSize: 14,
+    color: THEME.colors.textPrimary,
+    fontSize: 13,
     fontWeight: '700',
   },
   title: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '900',
-    color: '#FFFFFF',
+    color: THEME.colors.textPrimary,
   },
   emptyContainer: {
     alignItems: 'center',
-    marginTop: 60,
-    padding: 20,
+    justifyContent: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 20,
   },
   emptyEmoji: {
-    fontSize: 50,
+    fontSize: 48,
     marginBottom: 12,
   },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  emptySub: {
-    fontSize: 13,
-    color: '#64748B',
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: THEME.colors.textPrimary,
     textAlign: 'center',
-    marginTop: 6,
+    marginBottom: 6,
+  },
+  emptySubtext: {
+    fontSize: 13,
+    color: THEME.colors.textSecondary,
+    textAlign: 'center',
     lineHeight: 18,
   },
-  sessionsList: {
-    gap: 16,
+  sessionList: {
+    gap: 12,
   },
   sessionCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 20,
+    backgroundColor: THEME.colors.cardBg,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
     overflow: 'hidden',
   },
   sessionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#162032',
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    padding: 14,
   },
   sessionHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  workoutBadge: {
-    backgroundColor: '#0284C7',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  workoutBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  sessionDate: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#F8FAFC',
-  },
-  sessionHeaderRight: {
-    paddingHorizontal: 6,
-  },
-  expandIcon: {
-    fontSize: 12,
-    color: '#94A3B8',
-  },
-  sessionSummaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#1E293B',
-    borderBottomWidth: 1,
-    borderBottomColor: '#283548',
-  },
-  miniStat: {
-    alignItems: 'center',
-  },
-  miniStatLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#64748B',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  miniStatValue: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#38BDF8',
-  },
-  exercisesContainer: {
-    padding: 14,
-    gap: 12,
-  },
-  exerciseBox: {
-    backgroundColor: '#0F172A',
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#283548',
-  },
-  exerciseBoxHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
-    paddingBottom: 6,
-  },
-  exerciseBoxTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#F8FAFC',
     flex: 1,
-    marginRight: 8,
+    marginRight: 10,
   },
-  exerciseBoxVolume: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#94A3B8',
-  },
-  setsList: {
-    gap: 6,
-  },
-  setRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#162032',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-  },
-  setColNum: {
-    width: 32,
-  },
-  setColNumText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#94A3B8',
-  },
-  setColWeightReps: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 6,
-  },
-  setWeightText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#38BDF8',
-  },
-  setRepsText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#F8FAFC',
-  },
-  setTargetSub: {
-    fontSize: 11,
-    color: '#EF4444',
-    fontWeight: '600',
-  },
-  feelingTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+  dateBadge: {
+    backgroundColor: THEME.colors.cardInner,
+    alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
+    marginBottom: 6,
     borderWidth: 1,
-    backgroundColor: '#0F172A',
+    borderColor: THEME.colors.cardBorder,
   },
-  feelingEmojiText: {
-    fontSize: 11,
-  },
-  feelingLabelText: {
+  dateBadgeText: {
+    color: THEME.colors.limeCream,
     fontSize: 11,
     fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  sessionWorkoutTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: THEME.colors.textPrimary,
+    marginBottom: 4,
+  },
+  sessionMetricsSummary: {
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    fontWeight: '600',
+  },
+  volumeHighlight: {
+    color: THEME.colors.limeCream,
+    fontWeight: '800',
+  },
+  expandChevron: {
+    color: THEME.colors.textMuted,
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  sessionDetailsBox: {
+    borderTopWidth: 1,
+    borderTopColor: THEME.colors.cardBorder,
+    backgroundColor: THEME.colors.cardInner,
+    padding: 12,
+    gap: 12,
+  },
+  exerciseDetailRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(28, 54, 77, 0.4)',
+    paddingBottom: 8,
+  },
+  exerciseDetailName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: THEME.colors.textPrimary,
+    marginBottom: 6,
+  },
+  setsChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  setChip: {
+    backgroundColor: THEME.colors.cardBg,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+  },
+  setChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: THEME.colors.textSecondary,
   },
 });

@@ -6,118 +6,134 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { THEME } from '../theme';
 import { NextSessionPlan, SetResult } from '../types';
-import { triggerLightHaptic } from '../utils/haptics';
 
-interface WorkoutSummaryScreenProps {
+interface ExerciseSummaryItem {
+  exerciseName: string;
+  plan: NextSessionPlan;
+  results: SetResult[];
+}
+
+interface WorkoutSummaryProps {
   summary: {
     workoutName: string;
     durationMinutes: number;
     totalVolume: number;
-    exerciseSummaries: {
-      exerciseName: string;
-      plan: NextSessionPlan;
-      results: SetResult[];
-    }[];
+    exerciseSummaries: ExerciseSummaryItem[];
   };
   onClose: () => void;
 }
 
-export const WorkoutSummaryScreen: React.FC<WorkoutSummaryScreenProps> = ({
+export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
   summary,
   onClose,
 }) => {
-  const getFeelingEmoji = (feeling: 'EASY' | 'MEDIUM' | 'HARD') => {
-    if (feeling === 'EASY') return '🟢';
-    if (feeling === 'MEDIUM') return '🟠';
-    return '🔴';
-  };
-
-  const getVerdictBadge = (verdict: NextSessionPlan['progressionVerdict']) => {
-    switch (verdict) {
-      case 'FULL_INCREASE':
-        return { text: '🔥 +2.5 KG', style: styles.badgeFull, textStyle: styles.badgeFullText };
-      case 'PARTIAL_INCREASE':
-        return { text: '⚡ S1 +2.5 KG', style: styles.badgePartial, textStyle: styles.badgePartialText };
-      case 'DELOAD':
-        return { text: '🔄 DELOAD -10%', style: styles.badgeDeload, textStyle: styles.badgeDeloadText };
-      default:
-        return { text: '🛡️ MAINTIEN', style: styles.badgeMaintain, textStyle: styles.badgeMaintainText };
-    }
-  };
-
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Célébration & Titre */}
-      <View style={styles.celebrationBox}>
-        <Text style={styles.celebrationEmoji}>🎉</Text>
-        <Text style={styles.celebrationTitle}>Séance {summary.workoutName} Validée !</Text>
-        <Text style={styles.celebrationSub}>
-          Excellent travail. Les charges pour ta prochaine séance ont été recalculées automatiquement.
-        </Text>
+      {/* Badge et Titre Victoire */}
+      <View style={styles.victoryHeader}>
+        <Text style={styles.trophyIcon}>⚡</Text>
+        <Text style={styles.victoryTitle}>SÉANCE TERMINÉE !</Text>
+        <Text style={styles.workoutSubtitle}>{summary.workoutName}</Text>
       </View>
 
-      {/* Statistiques Clés */}
+      {/* Cartes Métriques Clés */}
       <View style={styles.statsRow}>
-        <View style={styles.statCard}>
+        <View style={styles.statBox}>
           <Text style={styles.statLabel}>DURÉE</Text>
           <Text style={styles.statValue}>
             {summary.durationMinutes} <Text style={styles.statUnit}>min</Text>
           </Text>
         </View>
 
-        <View style={styles.statCard}>
+        <View style={styles.statBox}>
           <Text style={styles.statLabel}>VOLUME TOTAL</Text>
           <Text style={styles.statValue}>
-            {summary.totalVolume.toLocaleString('fr-FR')} <Text style={styles.statUnit}>kg</Text>
+            {Math.round(summary.totalVolume)} <Text style={styles.statUnit}>kg</Text>
           </Text>
         </View>
       </View>
 
-      {/* Liste des progressions calculées pour la séance N+1 */}
-      <Text style={styles.sectionHeading}>NOUVELLES CHARGES (SÉANCE N+1)</Text>
+      {/* Section Calculateur de Surcharge Progressive */}
+      <Text style={styles.sectionHeading}>BILAN DE SURCHARGE PROGRESSIVE</Text>
 
-      <View style={styles.summaryList}>
-        {summary.exerciseSummaries.map((item, idx) => {
-          const badge = getVerdictBadge(item.plan.progressionVerdict);
-          const feelingsStr = item.results.map((r) => `${getFeelingEmoji(r.feeling)} ${r.repsDone} reps`).join('  •  ');
-          const nextWeightsStr = item.plan.weightsPerSet.join(' / ') + ' kg';
+      <View style={styles.exercisesList}>
+        {summary.exerciseSummaries.map((item, index) => {
+          const isFull = item.plan.progressionVerdict === 'FULL_INCREASE';
+          const isPartial = item.plan.progressionVerdict === 'PARTIAL_INCREASE';
+          const isDeload = item.plan.progressionVerdict === 'DELOAD';
 
           return (
-            <View key={idx} style={styles.exerciseCard}>
-              <View style={styles.exerciseHeader}>
+            <View
+              key={index}
+              style={[
+                styles.exerciseCard,
+                isFull && styles.exerciseCardFull,
+                isPartial && styles.exerciseCardPartial,
+                isDeload && styles.exerciseCardDeload,
+              ]}
+            >
+              {/* En-tête de l'exercice */}
+              <View style={styles.cardHeader}>
                 <Text style={styles.exerciseName} numberOfLines={1}>
                   {item.exerciseName}
                 </Text>
-                <View style={[styles.badgeBase, badge.style]}>
-                  <Text style={[styles.badgeTextBase, badge.textStyle]}>{badge.text}</Text>
+                <View
+                  style={[
+                    styles.verdictBadge,
+                    isFull && styles.verdictBadgeFull,
+                    isPartial && styles.verdictBadgePartial,
+                    isDeload && styles.verdictBadgeDeload,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.verdictBadgeText,
+                      isFull && styles.verdictBadgeTextFull,
+                      isPartial && styles.verdictBadgeTextPartial,
+                      isDeload && styles.verdictBadgeTextDeload,
+                    ]}
+                  >
+                    {isFull
+                      ? '🔥 AUGMENTATION'
+                      : isPartial
+                      ? '⚡ INTERMÉDIAIRE'
+                      : isDeload
+                      ? '🔄 DELOAD'
+                      : '💪 MAINTIEN'}
+                  </Text>
                 </View>
               </View>
 
-              {/* Historique des séries de la séance */}
-              <View style={styles.feelingsRow}>
-                <Text style={styles.feelingsText}>{feelingsStr}</Text>
+              {/* Résumé des séries réalisées */}
+              <View style={styles.setsSummaryRow}>
+                {item.results.map((res, rIdx) => (
+                  <View key={rIdx} style={styles.setResultBadge}>
+                    <Text style={styles.setResultText}>
+                      S{res.setNumber}: {res.repsDone} reps @ {res.weight}kg{' '}
+                      {res.feeling === 'EASY' ? '🟢' : res.feeling === 'MEDIUM' ? '🟠' : '🔴'}
+                    </Text>
+                  </View>
+                ))}
               </View>
 
-              {/* Message de décision de l'algorithme */}
-              <View style={styles.verdictBox}>
-                <Text style={styles.verdictMessage}>{item.plan.message}</Text>
-                <Text style={styles.nextWeightsText}>Poids prévu : {nextWeightsStr}</Text>
+              {/* Instruction et Prochaine charge */}
+              <View style={styles.nextSessionBox}>
+                <Text style={styles.nextSessionLabel}>PROCHAINE SÉANCE :</Text>
+                <Text style={styles.nextWeightsText}>
+                  {item.plan.weightsPerSet.join(' / ')} kg
+                </Text>
+                <Text style={styles.planMessageText}>{item.plan.message}</Text>
               </View>
             </View>
           );
         })}
       </View>
 
-      {/* Bouton de retour */}
-      <TouchableOpacity
-        style={styles.doneButton}
-        onPress={() => {
-          triggerLightHaptic();
-          onClose();
-        }}
-      >
-        <Text style={styles.doneButtonText}>Enregistrer & Retour au Menu</Text>
+      {/* Bouton de Fermeture */}
+      <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+        <Text style={styles.closeButtonText}>ENREGISTRER & RETOUR</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -126,173 +142,190 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0B0F19',
+    backgroundColor: THEME.colors.bg,
   },
   content: {
-    padding: 20,
+    paddingHorizontal: 16,
     paddingTop: 50,
     paddingBottom: 40,
   },
-  celebrationBox: {
+  victoryHeader: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  celebrationEmoji: {
-    fontSize: 50,
-    marginBottom: 10,
+  trophyIcon: {
+    fontSize: 44,
+    marginBottom: 8,
   },
-  celebrationTitle: {
-    fontSize: 26,
+  victoryTitle: {
+    fontSize: 24,
     fontWeight: '900',
-    color: '#FFFFFF',
-    textAlign: 'center',
+    color: THEME.colors.textPrimary,
+    letterSpacing: 0.5,
   },
-  celebrationSub: {
-    fontSize: 13,
-    color: '#94A3B8',
-    textAlign: 'center',
-    marginTop: 6,
-    lineHeight: 18,
+  workoutSubtitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: THEME.colors.oceanMist,
+    marginTop: 4,
   },
   statsRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
+    gap: 10,
+    marginBottom: 22,
   },
-  statCard: {
+  statBox: {
     flex: 1,
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: THEME.colors.cardBg,
+    borderRadius: 14,
+    padding: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
-    color: '#94A3B8',
+    color: THEME.colors.textSecondary,
     letterSpacing: 1,
     marginBottom: 4,
   },
   statValue: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '900',
-    color: '#38BDF8',
+    color: THEME.colors.limeCream,
   },
   statUnit: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#94A3B8',
+    color: THEME.colors.textSecondary,
   },
   sectionHeading: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
-    color: '#94A3B8',
+    color: THEME.colors.textSecondary,
     letterSpacing: 1,
     marginBottom: 12,
   },
-  summaryList: {
+  exercisesList: {
     gap: 12,
-    marginBottom: 30,
+    marginBottom: 26,
   },
   exerciseCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 18,
-    padding: 16,
+    backgroundColor: THEME.colors.cardBg,
+    borderRadius: 16,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
   },
-  exerciseHeader: {
+  exerciseCardFull: {
+    borderColor: THEME.colors.emerald,
+  },
+  exerciseCardPartial: {
+    borderColor: THEME.colors.oceanMist,
+  },
+  exerciseCardDeload: {
+    borderColor: '#EF4444',
+  },
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   exerciseName: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: THEME.colors.textPrimary,
     flex: 1,
     marginRight: 8,
   },
-  badgeBase: {
+  verdictBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: THEME.colors.cardInner,
+  },
+  verdictBadgeFull: {
+    backgroundColor: 'rgba(118, 200, 147, 0.2)',
+  },
+  verdictBadgePartial: {
+    backgroundColor: 'rgba(82, 182, 154, 0.2)',
+  },
+  verdictBadgeDeload: {
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+  },
+  verdictBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: THEME.colors.textSecondary,
+  },
+  verdictBadgeTextFull: {
+    color: THEME.colors.emerald,
+  },
+  verdictBadgeTextPartial: {
+    color: THEME.colors.limeCream,
+  },
+  verdictBadgeTextDeload: {
+    color: '#F87171',
+  },
+  setsSummaryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
+  },
+  setResultBadge: {
+    backgroundColor: THEME.colors.cardInner,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
   },
-  badgeTextBase: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+  setResultText: {
+    fontSize: 11,
+    color: THEME.colors.textPrimary,
+    fontWeight: '700',
   },
-  badgeFull: {
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
-    borderWidth: 1,
-    borderColor: '#10B981',
-  },
-  badgeFullText: {
-    color: '#34D399',
-  },
-  badgePartial: {
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
-    borderWidth: 1,
-    borderColor: '#F59E0B',
-  },
-  badgePartialText: {
-    color: '#FBBF24',
-  },
-  badgeMaintain: {
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
-    borderWidth: 1,
-    borderColor: '#0284C7',
-  },
-  badgeMaintainText: {
-    color: '#38BDF8',
-  },
-  badgeDeload: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-    borderWidth: 1,
-    borderColor: '#EF4444',
-  },
-  badgeDeloadText: {
-    color: '#F87171',
-  },
-  feelingsRow: {
-    marginBottom: 10,
-  },
-  feelingsText: {
-    fontSize: 12,
-    color: '#CBD5E1',
-    fontWeight: '600',
-  },
-  verdictBox: {
-    backgroundColor: '#0F172A',
-    borderRadius: 12,
+  nextSessionBox: {
+    backgroundColor: THEME.colors.cardInner,
+    borderRadius: 10,
     padding: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.colors.cardBorder,
   },
-  verdictMessage: {
-    fontSize: 12,
-    color: '#94A3B8',
-    lineHeight: 16,
+  nextSessionLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: THEME.colors.textSecondary,
+    letterSpacing: 1,
+    marginBottom: 2,
   },
   nextWeightsText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#38BDF8',
-    marginTop: 4,
-  },
-  doneButton: {
-    backgroundColor: '#38BDF8',
-    paddingVertical: 18,
-    borderRadius: 18,
-    alignItems: 'center',
-  },
-  doneButtonText: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '900',
-    color: '#0F172A',
+    color: THEME.colors.limeCream,
+    marginBottom: 4,
+  },
+  planMessageText: {
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    lineHeight: 16,
+  },
+  closeButton: {
+    backgroundColor: THEME.colors.limeCream,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    shadowColor: THEME.colors.limeCream,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  closeButtonText: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#081119',
+    letterSpacing: 0.5,
   },
 });
