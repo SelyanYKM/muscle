@@ -1,15 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  LayoutAnimation,
   PanResponder,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
+  UIManager,
   View
 } from 'react-native';
 import { THEME } from '../theme';
 import { ConfiguredExercise } from '../types';
 import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface DraggableExerciseListProps {
   exercises: ConfiguredExercise[];
@@ -18,7 +25,7 @@ interface DraggableExerciseListProps {
   onDelete: (index: number) => void;
 }
 
-const ITEM_HEIGHT = 72;
+const ITEM_HEIGHT = 74;
 
 export const DraggableExerciseList: React.FC<DraggableExerciseListProps> = ({
   exercises,
@@ -26,53 +33,81 @@ export const DraggableExerciseList: React.FC<DraggableExerciseListProps> = ({
   onEdit,
   onDelete,
 }) => {
+  const [items, setItems] = useState<ConfiguredExercise[]>(exercises);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
-  const dragY = useRef(new Animated.Value(0)).current;
 
-  // Refs pour éviter les closures périmées dans PanResponder
+  const dragY = useRef(new Animated.Value(0)).current;
   const draggingIndexRef = useRef<number | null>(null);
-  const exercisesRef = useRef<ConfiguredExercise[]>(exercises);
+  const itemsRef = useRef<ConfiguredExercise[]>(exercises);
+  const currentDragDy = useRef<number>(0);
 
   useEffect(() => {
-    exercisesRef.current = exercises;
+    setItems(exercises);
+    itemsRef.current = exercises;
   }, [exercises]);
 
-  const startDrag = (index: number) => {
+  const moveItem = (fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= items.length || fromIndex === toIndex) return;
+
+    triggerLightHaptic();
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    const updated = [...items];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    setItems(updated);
+    itemsRef.current = updated;
+    onReorder(updated);
+  };
+
+  const handleStartDrag = (index: number) => {
     triggerMediumHaptic();
     draggingIndexRef.current = index;
     setDraggingIndex(index);
     dragY.setValue(0);
+    currentDragDy.current = 0;
   };
 
-  const endDrag = (gestureDy: number) => {
-    const currentIndex = draggingIndexRef.current;
-    if (currentIndex !== null) {
-      const movedPositions = Math.round(gestureDy / ITEM_HEIGHT);
-      const list = exercisesRef.current;
-      const targetIndex = Math.max(0, Math.min(list.length - 1, currentIndex + movedPositions));
+  const handleDragMove = (dy: number) => {
+    dragY.setValue(dy);
+    currentDragDy.current = dy;
 
-      if (targetIndex !== currentIndex && targetIndex >= 0 && targetIndex < list.length) {
-        triggerLightHaptic();
-        const updated = [...list];
-        const [movedItem] = updated.splice(currentIndex, 1);
-        updated.splice(targetIndex, 0, movedItem);
-        onReorder(updated);
-      }
+    const fromIdx = draggingIndexRef.current;
+    if (fromIdx === null) return;
+
+    const movedSlots = Math.round(dy / ITEM_HEIGHT);
+    const targetIdx = Math.max(0, Math.min(itemsRef.current.length - 1, fromIdx + movedSlots));
+
+    if (targetIdx !== fromIdx) {
+      triggerLightHaptic();
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      const list = [...itemsRef.current];
+      const [moved] = list.splice(fromIdx, 1);
+      list.splice(targetIdx, 0, moved);
+
+      setItems(list);
+      itemsRef.current = list;
+      draggingIndexRef.current = targetIdx;
+      onReorder(list);
+
+      // Réajustement du delta
+      const newDy = dy - (targetIdx - fromIdx) * ITEM_HEIGHT;
+      dragY.setValue(newDy);
+      currentDragDy.current = newDy;
     }
+  };
 
-    // Réinitialisation inconditionnelle
+  const handleEndDrag = () => {
+    triggerLightHaptic();
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
     draggingIndexRef.current = null;
     setDraggingIndex(null);
-    Animated.spring(dragY, {
-      toValue: 0,
-      useNativeDriver: false,
-      friction: 6,
-    }).start();
+    dragY.setValue(0);
+    currentDragDy.current = 0;
   };
 
   return (
     <View style={styles.listContainer}>
-      {exercises.map((ex, index) => {
+      {items.map((ex, index) => {
         const isDragging = draggingIndex === index;
         const isFinisher = ex.category === 'FREE_WEIGHT';
         const weights = ex.plannedWeights || [40];
@@ -84,11 +119,14 @@ export const DraggableExerciseList: React.FC<DraggableExerciseListProps> = ({
             key={ex.id || index}
             exercise={ex}
             index={index}
+            totalItems={items.length}
             isDragging={isDragging}
             dragY={dragY}
-            onStartDrag={() => startDrag(index)}
-            onEndDrag={endDrag}
-            onMoveDrag={(dy) => dragY.setValue(dy)}
+            onStartDrag={() => handleStartDrag(index)}
+            onDragMove={handleDragMove}
+            onEndDrag={handleEndDrag}
+            onMoveUp={() => moveItem(index, index - 1)}
+            onMoveDown={() => moveItem(index, index + 1)}
             onEdit={() => onEdit(ex)}
             onDelete={() => onDelete(index)}
             isFinisher={isFinisher}
@@ -103,11 +141,14 @@ export const DraggableExerciseList: React.FC<DraggableExerciseListProps> = ({
 interface DraggableItemRowProps {
   exercise: ConfiguredExercise;
   index: number;
+  totalItems: number;
   isDragging: boolean;
   dragY: Animated.Value;
   onStartDrag: () => void;
-  onEndDrag: (dy: number) => void;
-  onMoveDrag: (dy: number) => void;
+  onDragMove: (dy: number) => void;
+  onEndDrag: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
   onEdit: () => void;
   onDelete: () => void;
   isFinisher: boolean;
@@ -117,11 +158,14 @@ interface DraggableItemRowProps {
 const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
   exercise,
   index,
+  totalItems,
   isDragging,
   dragY,
   onStartDrag,
+  onDragMove,
   onEndDrag,
-  onMoveDrag,
+  onMoveUp,
+  onMoveDown,
   onEdit,
   onDelete,
   isFinisher,
@@ -129,33 +173,32 @@ const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
 }) => {
   const swipeX = useRef(new Animated.Value(0)).current;
 
-  // PanResponder dédié pour la poignée de Drag & Drop
-  const dragHandlePanResponder = useRef(
+  // PanResponder attaché à la poignée, avec mise à jour continue via refs
+  const dragPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 2,
+      onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
         onStartDrag();
       },
-      onPanResponderMove: (_, g) => {
-        onMoveDrag(g.dy);
+      onPanResponderMove: (_, gestureState) => {
+        onDragMove(gestureState.dy);
       },
-      onPanResponderRelease: (_, g) => {
-        onEndDrag(g.dy);
+      onPanResponderRelease: () => {
+        onEndDrag();
       },
-      onPanResponderTerminate: (_, g) => {
-        onEndDrag(g.dy);
+      onPanResponderTerminate: () => {
+        onEndDrag();
       },
     })
   ).current;
 
-  // PanResponder pour le swipe horizontal avec verrouillage d'angle strict
+  // Swipe horizontal pour supprimer
   const swipePanResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) => {
-        // Ne s'active QUE sur un geste horizontal franc et jamais sur un glissement vertical
         return (
-          Math.abs(gestureState.dx) > 35 &&
+          Math.abs(gestureState.dx) > 30 &&
           Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 2.5
         );
       },
@@ -183,14 +226,14 @@ const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
 
   return (
     <View style={[styles.itemWrapper, isDragging && { zIndex: 9999 }]}>
-      {/* Bouton Supprimer en arrière-plan (Swipe gauche) */}
+      {/* Bouton Supprimer en arrière-plan */}
       <View style={styles.deleteBackground}>
         <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
           <Text style={styles.deleteBtnText}>Suppr.</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Carte principale avec effet flottant */}
+      {/* Carte principale */}
       <Animated.View
         style={[
           styles.card,
@@ -207,14 +250,20 @@ const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
         ]}
         {...swipePanResponder.panHandlers}
       >
-        {/* Poignée de Drag & Drop */}
-        <View style={styles.dragHandle} {...dragHandlePanResponder.panHandlers}>
-          <Text style={[styles.dragHandleIcon, isDragging && styles.dragHandleIconActive]}>
-            ⠿
-          </Text>
+        {/* Poignée de drag avec zone de contact large & retour immédiat */}
+        <View
+          style={styles.dragHandle}
+          hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+          {...dragPanResponder.panHandlers}
+        >
+          <View style={[styles.handlePill, isDragging && styles.handlePillActive]}>
+            <Text style={[styles.dragHandleIcon, isDragging && styles.dragHandleIconActive]}>
+              ⠿
+            </Text>
+          </View>
         </View>
 
-        {/* Index & Titre */}
+        {/* Index & Titre de l'exercice */}
         <View style={styles.infoSection}>
           <Text style={styles.exerciseTitle} numberOfLines={1}>
             <Text style={styles.indexPrefix}>{index + 1}. </Text>
@@ -232,6 +281,20 @@ const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
               {exercise.numSets}×{exercise.targetReps} reps • <Text style={styles.weightText}>{formattedWeights}</Text>
             </Text>
           </View>
+        </View>
+
+        {/* Boutons flèches rapides pour micro-ajustement d'ordre */}
+        <View style={styles.reorderArrowsCol}>
+          {index > 0 && (
+            <TouchableOpacity style={styles.arrowBtn} onPress={onMoveUp} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+              <Text style={styles.arrowIcon}>▲</Text>
+            </TouchableOpacity>
+          )}
+          {index < totalItems - 1 && (
+            <TouchableOpacity style={styles.arrowBtn} onPress={onMoveDown} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+              <Text style={styles.arrowIcon}>▼</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Crayon pour éditer */}
@@ -284,7 +347,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: THEME.colors.cardBg,
     borderRadius: 12,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
   },
@@ -296,30 +359,42 @@ const styles = StyleSheet.create({
     borderColor: THEME.colors.accent,
     backgroundColor: THEME.colors.cardInner,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.7,
-    shadowRadius: 14,
-    elevation: 20,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.8,
+    shadowRadius: 16,
+    elevation: 24,
   },
   dragHandle: {
-    width: 38,
+    paddingHorizontal: 6,
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 6,
+    marginRight: 4,
+  },
+  handlePill: {
+    backgroundColor: THEME.colors.cardInner,
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+  },
+  handlePillActive: {
+    backgroundColor: THEME.colors.accent,
+    borderColor: THEME.colors.accent,
   },
   dragHandleIcon: {
-    color: THEME.colors.textMuted,
-    fontSize: 22,
+    color: THEME.colors.textSecondary,
+    fontSize: 18,
     fontWeight: '900',
   },
   dragHandleIconActive: {
-    color: THEME.colors.accent,
+    color: THEME.colors.accentTextDark,
   },
   infoSection: {
     flex: 1,
     justifyContent: 'center',
-    marginRight: 6,
+    marginRight: 4,
     overflow: 'hidden',
   },
   exerciseTitle: {
@@ -371,6 +446,23 @@ const styles = StyleSheet.create({
   weightText: {
     color: THEME.colors.textPrimary,
     fontWeight: '800',
+  },
+  reorderArrowsCol: {
+    flexDirection: 'column',
+    justifyContent: 'center',
+    gap: 2,
+    marginRight: 6,
+  },
+  arrowBtn: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  arrowIcon: {
+    fontSize: 9,
+    color: THEME.colors.textMuted,
+    fontWeight: '900',
   },
   pencilBtn: {
     width: 32,
