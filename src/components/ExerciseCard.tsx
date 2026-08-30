@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -33,16 +34,60 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
 }) => {
   const [repsDone, setRepsDone] = useState(targetReps);
 
-  React.useEffect(() => {
+  // Animations d'entrée fluide à chaque changement de série ou exercice
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(12)).current;
+
+  // Animation de pression sur les boutons
+  const easyScale = useRef(new Animated.Value(1)).current;
+  const mediumScale = useRef(new Animated.Value(1)).current;
+  const hardScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
     setRepsDone(targetReps);
+    fadeAnim.setValue(0);
+    slideAnim.setValue(12);
+
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, [exercise.id, setIndex, targetReps]);
 
-  const handleFeelingSelect = (feeling: Feeling) => {
-    if (feeling === 'EASY') triggerLightHaptic();
-    else if (feeling === 'MEDIUM') triggerMediumHaptic();
-    else triggerWarningHaptic();
+  const animateButtonPress = (scaleValue: Animated.Value, callback: () => void) => {
+    Animated.sequence([
+      Animated.timing(scaleValue, {
+        toValue: 0.95,
+        duration: 80,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleValue, {
+        toValue: 1,
+        friction: 4,
+        useNativeDriver: true,
+      }),
+    ]).start(() => callback());
+  };
 
-    onCompleteSet(repsDone, feeling);
+  const handleFeelingSelect = (feeling: Feeling) => {
+    if (feeling === 'EASY') {
+      triggerLightHaptic();
+      animateButtonPress(easyScale, () => onCompleteSet(repsDone, feeling));
+    } else if (feeling === 'MEDIUM') {
+      triggerMediumHaptic();
+      animateButtonPress(mediumScale, () => onCompleteSet(repsDone, feeling));
+    } else {
+      triggerWarningHaptic();
+      animateButtonPress(hardScale, () => onCompleteSet(repsDone, feeling));
+    }
   };
 
   const adjustReps = (delta: number) => {
@@ -53,7 +98,16 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
   const isFinisher = exercise.category === 'FREE_WEIGHT';
 
   return (
-    <View style={[styles.cardContainer, isFinisher && styles.cardContainerFinisher]}>
+    <Animated.View
+      style={[
+        styles.cardContainer,
+        isFinisher && styles.cardContainerFinisher,
+        {
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
+        },
+      ]}
+    >
       {/* En-tête : Catégorie & Numéro de série */}
       <View style={styles.topHeader}>
         <View style={[styles.badge, isFinisher ? styles.finisherBadge : styles.machineBadge]}>
@@ -102,7 +156,7 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
       <View style={styles.repsSelectorSection}>
         <Text style={styles.sectionLabel}>RÉPÉTITIONS EFFECTUÉES</Text>
         <View style={styles.repsStepper}>
-          <TouchableOpacity style={styles.stepButton} onPress={() => adjustReps(-1)}>
+          <TouchableOpacity style={styles.stepButton} onPress={() => adjustReps(-1)} activeOpacity={0.7}>
             <Text style={styles.stepButtonText}>-</Text>
           </TouchableOpacity>
 
@@ -111,65 +165,68 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
             <Text style={styles.repsSublabel}>reps</Text>
           </View>
 
-          <TouchableOpacity style={styles.stepButton} onPress={() => adjustReps(1)}>
+          <TouchableOpacity style={styles.stepButton} onPress={() => adjustReps(1)} activeOpacity={0.7}>
             <Text style={styles.stepButtonText}>+</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* 3 boutons de ressenti */}
+      {/* 3 boutons de ressenti épurés sans émojis */}
       <View style={styles.feelingSection}>
         <Text style={styles.sectionLabel}>RESSENTI DE LA SÉRIE</Text>
 
         <View style={styles.feelingButtonsGrid}>
           {/* Bouton Facile */}
-          <TouchableOpacity
-            style={[styles.feelingButton, styles.easyButton]}
-            onPress={() => handleFeelingSelect('EASY')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.feelingEmoji}>🟢</Text>
-            <View style={styles.feelingTextWrapper}>
-              <Text style={styles.feelingTitle}>FACILE</Text>
-              <Text style={styles.feelingSubtitle}>2 reps ou + en réserve</Text>
-            </View>
-          </TouchableOpacity>
+          <Animated.View style={{ transform: [{ scale: easyScale }] }}>
+            <TouchableOpacity
+              style={[styles.feelingButton, styles.easyButton]}
+              onPress={() => handleFeelingSelect('EASY')}
+              activeOpacity={0.85}
+            >
+              <View style={styles.feelingTextWrapper}>
+                <Text style={styles.feelingTitle}>FACILE</Text>
+                <Text style={styles.feelingSubtitle}>2 reps ou + en réserve</Text>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
 
           {/* Bouton Juste */}
-          <TouchableOpacity
-            style={[styles.feelingButton, styles.mediumButton]}
-            onPress={() => handleFeelingSelect('MEDIUM')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.feelingEmoji}>🟠</Text>
-            <View style={styles.feelingTextWrapper}>
-              <Text style={styles.feelingTitle}>JUSTE</Text>
-              <Text style={styles.feelingSubtitle}>0 à 1 rep en réserve</Text>
-            </View>
-          </TouchableOpacity>
+          <Animated.View style={{ transform: [{ scale: mediumScale }] }}>
+            <TouchableOpacity
+              style={[styles.feelingButton, styles.mediumButton]}
+              onPress={() => handleFeelingSelect('MEDIUM')}
+              activeOpacity={0.85}
+            >
+              <View style={styles.feelingTextWrapper}>
+                <Text style={styles.feelingTitle}>JUSTE</Text>
+                <Text style={styles.feelingSubtitle}>0 à 1 rep en réserve</Text>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
 
           {/* Bouton Échec */}
-          <TouchableOpacity
-            style={[styles.feelingButton, styles.hardButton]}
-            onPress={() => handleFeelingSelect('HARD')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.feelingEmoji}>🔴</Text>
-            <View style={styles.feelingTextWrapper}>
-              <Text style={styles.feelingTitle}>ÉCHEC</Text>
-              <Text style={styles.feelingSubtitle}>Reps non atteintes</Text>
-            </View>
-          </TouchableOpacity>
+          <Animated.View style={{ transform: [{ scale: hardScale }] }}>
+            <TouchableOpacity
+              style={[styles.feelingButton, styles.hardButton]}
+              onPress={() => handleFeelingSelect('HARD')}
+              activeOpacity={0.85}
+            >
+              <View style={styles.feelingTextWrapper}>
+                <Text style={styles.feelingTitle}>ÉCHEC</Text>
+                <Text style={styles.feelingSubtitle}>Reps non atteintes</Text>
+              </View>
+            </TouchableOpacity>
+          </Animated.View>
         </View>
       </View>
 
       {/* Pied de carte : Annulation */}
       {canUndo && (
-        <TouchableOpacity style={styles.undoButton} onPress={onUndo}>
+        <TouchableOpacity style={styles.undoButton} onPress={onUndo} activeOpacity={0.7}>
           <Text style={styles.undoText}>↩️ Corriger la série précédente</Text>
         </TouchableOpacity>
       )}
-    </View>
+    </Animated.View>
   );
 };
 
@@ -337,10 +394,6 @@ const styles = StyleSheet.create({
   hardButton: {
     backgroundColor: THEME.colors.feelingHardBg,
     borderColor: THEME.colors.feelingHardBorder,
-  },
-  feelingEmoji: {
-    fontSize: 18,
-    marginRight: 10,
   },
   feelingTextWrapper: {
     alignItems: 'center',

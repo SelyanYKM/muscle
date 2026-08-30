@@ -1,6 +1,7 @@
 import { Audio } from 'expo-av';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   Modal,
   StyleSheet,
   Text,
@@ -31,7 +32,17 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   const [totalSeconds, setTotalSeconds] = useState(initialSeconds);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
 
+  // Animation de pulsation légère sur les secondes
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+
     return () => {
       if (sound) {
         sound.unloadAsync();
@@ -62,6 +73,20 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
           return 0;
         }
 
+        // Petite pulsation à chaque seconde
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.04,
+            duration: 120,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 180,
+            useNativeDriver: true,
+          }),
+        ]).start();
+
         if (prev === 4 || prev === 3 || prev === 2) {
           triggerWarningHaptic();
         }
@@ -88,11 +113,13 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   return (
     <Modal visible transparent animationType="fade">
       <View style={styles.backdrop}>
-        <View style={styles.container}>
+        <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
           <Text style={styles.topSub}>RÉCUPÉRATION</Text>
 
-          {/* Chronomètre Géant */}
-          <Text style={styles.timeBig}>{formattedTime}</Text>
+          {/* Chronomètre Géant avec micro-pulsation */}
+          <Animated.Text style={[styles.timeBig, { transform: [{ scale: pulseAnim }] }]}>
+            {formattedTime}
+          </Animated.Text>
 
           {/* Jauge de progression */}
           <View style={styles.progressBarBg}>
@@ -101,15 +128,15 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
 
           {/* Boutons d'ajustement du repos */}
           <View style={styles.adjustRow}>
-            <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(-15)}>
+            <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(-15)} activeOpacity={0.7}>
               <Text style={styles.adjustBtnText}>-15s</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(30)}>
+            <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(30)} activeOpacity={0.7}>
               <Text style={styles.adjustBtnText}>+30s</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(60)}>
+            <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(60)} activeOpacity={0.7}>
               <Text style={styles.adjustBtnText}>+60s</Text>
             </TouchableOpacity>
           </View>
@@ -132,10 +159,11 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
               triggerLightHaptic();
               onSkip();
             }}
+            activeOpacity={0.85}
           >
             <Text style={styles.skipButtonText}>Je suis prêt (Passer)</Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );

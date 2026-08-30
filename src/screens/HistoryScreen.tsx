@@ -144,18 +144,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
           activeOpacity={0.8}
         >
           <Text style={styles.title}>Historique</Text>
-          <Text style={styles.subHint}>Maintien long pour effacer</Text>
         </TouchableOpacity>
-
-        {sessions.length > 0 && (
-          <TouchableOpacity
-            style={styles.clearBtn}
-            onPress={promptClearHistory}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.clearBtnText}>Purger</Text>
-          </TouchableOpacity>
-        )}
       </View>
 
       {sessions.length === 0 ? (

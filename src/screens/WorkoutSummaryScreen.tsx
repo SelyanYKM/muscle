@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
+  Animated,
   ScrollView,
   StyleSheet,
   Text,
@@ -29,112 +30,138 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
   summary,
   onClose,
 }) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 350,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        friction: 6,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Badge et Titre */}
-      <View style={styles.victoryHeader}>
-        <Text style={styles.trophyIcon}>⚡</Text>
-        <Text style={styles.victoryTitle}>SÉANCE TERMINÉE</Text>
-        <Text style={styles.workoutSubtitle}>{summary.workoutName}</Text>
-      </View>
-
-      {/* Cartes Métriques Clés */}
-      <View style={styles.statsRow}>
-        <View style={styles.statBox}>
-          <Text style={styles.statLabel}>DURÉE</Text>
-          <Text style={styles.statValue}>
-            {summary.durationMinutes} <Text style={styles.statUnit}>min</Text>
-          </Text>
+      <Animated.View
+        style={{
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
+        }}
+      >
+        {/* Badge et Titre */}
+        <View style={styles.victoryHeader}>
+          <Text style={styles.trophyIcon}>⚡</Text>
+          <Text style={styles.victoryTitle}>SÉANCE TERMINÉE</Text>
+          <Text style={styles.workoutSubtitle}>{summary.workoutName}</Text>
         </View>
 
-        <View style={styles.statBox}>
-          <Text style={styles.statLabel}>VOLUME TOTAL</Text>
-          <Text style={styles.statValue}>
-            {Math.round(summary.totalVolume)} <Text style={styles.statUnit}>kg</Text>
-          </Text>
+        {/* Cartes Métriques Clés */}
+        <View style={styles.statsRow}>
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>DURÉE</Text>
+            <Text style={styles.statValue}>
+              {summary.durationMinutes} <Text style={styles.statUnit}>min</Text>
+            </Text>
+          </View>
+
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>VOLUME TOTAL</Text>
+            <Text style={styles.statValue}>
+              {Math.round(summary.totalVolume)} <Text style={styles.statUnit}>kg</Text>
+            </Text>
+          </View>
         </View>
-      </View>
 
-      {/* Section Calculateur de Surcharge Progressive */}
-      <Text style={styles.sectionHeading}>BILAN DE SURCHARGE</Text>
+        {/* Section Calculateur de Surcharge Progressive */}
+        <Text style={styles.sectionHeading}>BILAN DE SURCHARGE</Text>
 
-      <View style={styles.exercisesList}>
-        {summary.exerciseSummaries.map((item, index) => {
-          const isFull = item.plan.progressionVerdict === 'FULL_INCREASE';
-          const isPartial = item.plan.progressionVerdict === 'PARTIAL_INCREASE';
-          const isDeload = item.plan.progressionVerdict === 'DELOAD';
+        <View style={styles.exercisesList}>
+          {summary.exerciseSummaries.map((item, index) => {
+            const isFull = item.plan.progressionVerdict === 'FULL_INCREASE';
+            const isPartial = item.plan.progressionVerdict === 'PARTIAL_INCREASE';
+            const isDeload = item.plan.progressionVerdict === 'DELOAD';
 
-          return (
-            <View
-              key={index}
-              style={[
-                styles.exerciseCard,
-                isFull && styles.exerciseCardFull,
-                isPartial && styles.exerciseCardPartial,
-                isDeload && styles.exerciseCardDeload,
-              ]}
-            >
-              {/* En-tête de l'exercice */}
-              <View style={styles.cardHeader}>
-                <Text style={styles.exerciseName} numberOfLines={1}>
-                  {item.exerciseName}
-                </Text>
-                <View
-                  style={[
-                    styles.verdictBadge,
-                    isFull && styles.verdictBadgeFull,
-                    isPartial && styles.verdictBadgePartial,
-                    isDeload && styles.verdictBadgeDeload,
-                  ]}
-                >
-                  <Text
+            return (
+              <View
+                key={index}
+                style={[
+                  styles.exerciseCard,
+                  isFull && styles.exerciseCardFull,
+                  isPartial && styles.exerciseCardPartial,
+                  isDeload && styles.exerciseCardDeload,
+                ]}
+              >
+                {/* En-tête de l'exercice */}
+                <View style={styles.cardHeader}>
+                  <Text style={styles.exerciseName} numberOfLines={1}>
+                    {item.exerciseName}
+                  </Text>
+                  <View
                     style={[
-                      styles.verdictBadgeText,
-                      isFull && styles.verdictBadgeTextFull,
-                      isPartial && styles.verdictBadgeTextPartial,
-                      isDeload && styles.verdictBadgeTextDeload,
+                      styles.verdictBadge,
+                      isFull && styles.verdictBadgeFull,
+                      isPartial && styles.verdictBadgePartial,
+                      isDeload && styles.verdictBadgeDeload,
                     ]}
                   >
-                    {isFull
-                      ? 'AUGMENTATION'
-                      : isPartial
-                      ? 'INTERMÉDIAIRE'
-                      : isDeload
-                      ? 'DELOAD'
-                      : 'MAINTIEN'}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Résumé des séries */}
-              <View style={styles.setsSummaryRow}>
-                {item.results.map((res, rIdx) => (
-                  <View key={rIdx} style={styles.setResultBadge}>
-                    <Text style={styles.setResultText}>
-                      S{res.setNumber}: {res.repsDone} reps @ {res.weight}kg{' '}
-                      {res.feeling === 'EASY' ? '🟢' : res.feeling === 'MEDIUM' ? '🟠' : '🔴'}
+                    <Text
+                      style={[
+                        styles.verdictBadgeText,
+                        isFull && styles.verdictBadgeTextFull,
+                        isPartial && styles.verdictBadgeTextPartial,
+                        isDeload && styles.verdictBadgeTextDeload,
+                      ]}
+                    >
+                      {isFull
+                        ? 'AUGMENTATION'
+                        : isPartial
+                        ? 'INTERMÉDIAIRE'
+                        : isDeload
+                        ? 'DELOAD'
+                        : 'MAINTIEN'}
                     </Text>
                   </View>
-                ))}
-              </View>
+                </View>
 
-              {/* Instruction et Prochaine charge */}
-              <View style={styles.nextSessionBox}>
-                <Text style={styles.nextSessionLabel}>PROCHAINE SÉANCE</Text>
-                <Text style={styles.nextWeightsText}>
-                  {item.plan.weightsPerSet.join(' / ')} kg
-                </Text>
-                <Text style={styles.planMessageText}>{item.plan.message}</Text>
-              </View>
-            </View>
-          );
-        })}
-      </View>
+                {/* Résumé des séries */}
+                <View style={styles.setsSummaryRow}>
+                  {item.results.map((res, rIdx) => (
+                    <View key={rIdx} style={styles.setResultBadge}>
+                      <Text style={styles.setResultText}>
+                        S{res.setNumber}: {res.repsDone} reps @ {res.weight}kg{' '}
+                        {res.feeling === 'EASY' ? '🟢' : res.feeling === 'MEDIUM' ? '🟠' : '🔴'}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
 
-      {/* Bouton de Fermeture */}
-      <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-        <Text style={styles.closeButtonText}>ENREGISTRER & RETOUR</Text>
-      </TouchableOpacity>
+                {/* Instruction et Prochaine charge */}
+                <View style={styles.nextSessionBox}>
+                  <Text style={styles.nextSessionLabel}>PROCHAINE SÉANCE</Text>
+                  <Text style={styles.nextWeightsText}>
+                    {item.plan.weightsPerSet.join(' / ')} kg
+                  </Text>
+                  <Text style={styles.planMessageText}>{item.plan.message}</Text>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+
+        {/* Bouton de Fermeture */}
+        <TouchableOpacity style={styles.closeButton} onPress={onClose} activeOpacity={0.85}>
+          <Text style={styles.closeButtonText}>ENREGISTRER & RETOUR</Text>
+        </TouchableOpacity>
+      </Animated.View>
     </ScrollView>
   );
 };
