@@ -320,8 +320,9 @@ const styles = StyleSheet.create({
   feelingButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     borderRadius: 12,
     borderWidth: 1,
   },
@@ -342,19 +343,21 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   feelingTextWrapper: {
-    flex: 1,
+    alignItems: 'center',
   },
   feelingTitle: {
     fontSize: 14,
     fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: 0.5,
+    textAlign: 'center',
   },
   feelingSubtitle: {
     fontSize: 10,
     fontWeight: '600',
     color: 'rgba(255, 255, 255, 0.7)',
     marginTop: 1,
+    textAlign: 'center',
   },
   undoButton: {
     marginTop: 10,

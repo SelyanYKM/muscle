@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View
 } from 'react-native';
-import { getRecentLogs } from '../database/db';
+import { clearAllWorkoutLogs, getRecentLogs } from '../database/db';
 import { THEME } from '../theme';
 import { WorkoutLogEntry } from '../types';
-import { triggerLightHaptic } from '../utils/haptics';
+import { triggerLightHaptic, triggerWarningHaptic } from '../utils/haptics';
 
 interface HistoryScreenProps {
   onBack: () => void;
@@ -95,6 +96,26 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
     }));
   };
 
+  const promptClearHistory = () => {
+    triggerWarningHaptic();
+    Alert.alert(
+      "Effacer l'historique ?",
+      "Toutes les séances et performances enregistrées seront définitivement supprimées.",
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Tout effacer',
+          style: 'destructive',
+          onPress: () => {
+            clearAllWorkoutLogs();
+            setSessions([]);
+            setExpandedSessions({});
+          },
+        },
+      ]
+    );
+  };
+
   const formatDate = (dateStr: string) => {
     try {
       const [year, month, day] = dateStr.split('-');
@@ -111,12 +132,30 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* En-tête avec bouton Retour */}
+      {/* En-tête avec bouton Retour & Option Clear au clic long */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <Text style={styles.backButtonText}>← Retour</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Historique des séances</Text>
+
+        <TouchableOpacity
+          style={styles.titleWrapper}
+          onLongPress={promptClearHistory}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.title}>Historique</Text>
+          <Text style={styles.subHint}>Maintien long pour effacer</Text>
+        </TouchableOpacity>
+
+        {sessions.length > 0 && (
+          <TouchableOpacity
+            style={styles.clearBtn}
+            onPress={promptClearHistory}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.clearBtnText}>Purger</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {sessions.length === 0 ? (
@@ -133,7 +172,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
 
             return (
               <View key={sIdx} style={styles.sessionCard}>
-                {/* En-tête de la séance (cliquable) */}
+                {/* En-tête de la séance */}
                 <TouchableOpacity
                   style={styles.sessionHeader}
                   onPress={() => toggleSessionExpand(sessionKey)}
@@ -198,6 +237,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 18,
   },
   backButton: {
@@ -207,17 +247,38 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
-    marginRight: 12,
   },
   backButtonText: {
     color: THEME.colors.textPrimary,
     fontSize: 12,
     fontWeight: '700',
   },
+  titleWrapper: {
+    flex: 1,
+    marginLeft: 12,
+  },
   title: {
     fontSize: 18,
     fontWeight: '900',
     color: THEME.colors.textPrimary,
+  },
+  subHint: {
+    fontSize: 9,
+    color: THEME.colors.textMuted,
+    marginTop: 1,
+  },
+  clearBtn: {
+    backgroundColor: THEME.colors.cardInner,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+  },
+  clearBtnText: {
+    color: '#F87171',
+    fontSize: 11,
+    fontWeight: '700',
   },
   emptyContainer: {
     alignItems: 'center',

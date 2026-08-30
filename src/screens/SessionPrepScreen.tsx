@@ -10,10 +10,10 @@ import {
   View
 } from 'react-native';
 import { DraggableExerciseList } from '../components/DraggableExerciseList';
-import { addCustomExercise, getAllCatalogExercises, getExercisesForWorkout, getWorkouts, updateExerciseCustomSettings } from '../database/db';
+import { addCustomExercise, clearAllWorkoutLogs, getAllCatalogExercises, getExercisesForWorkout, getWorkouts, updateExerciseCustomSettings } from '../database/db';
 import { THEME } from '../theme';
 import { ConfiguredExercise, EquipmentCategory, SessionConfig } from '../types';
-import { triggerLightHaptic, triggerMediumHaptic } from '../utils/haptics';
+import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
 
 interface SessionPrepScreenProps {
   onStartSession: (config: SessionConfig) => void;
@@ -226,7 +226,28 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
             <Text style={styles.brandSubtitle}>Surcharge progressive PPL</Text>
           </View>
 
-          <TouchableOpacity style={styles.historyButton} onPress={onOpenHistory} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={styles.historyButton}
+            onPress={onOpenHistory}
+            onLongPress={() => {
+              triggerWarningHaptic();
+              Alert.alert(
+                "Effacer l'historique ?",
+                "Toutes les séances enregistrées seront définitivement supprimées.",
+                [
+                  { text: 'Annuler', style: 'cancel' },
+                  {
+                    text: 'Tout effacer',
+                    style: 'destructive',
+                    onPress: () => {
+                      clearAllWorkoutLogs();
+                    },
+                  },
+                ]
+              );
+            }}
+            activeOpacity={0.8}
+          >
             <Text style={styles.historyButtonText}>Historique</Text>
           </TouchableOpacity>
         </View>

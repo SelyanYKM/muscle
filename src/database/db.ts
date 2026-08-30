@@ -5,7 +5,6 @@ import { SEED_EXERCISES, SEED_WORKOUTS } from './seed';
 
 let db: SQLite.SQLiteDatabase | null = null;
 
-// Mémoire de secours pour l'environnement Web ou mock
 let memoryLogs: WorkoutLogEntry[] = [];
 let memoryExercises: (Exercise & { plannedWeights: number[]; consecutiveFailures: number; numSets: number })[] = [];
 
@@ -18,7 +17,6 @@ export async function initDatabase(): Promise<void> {
   try {
     db = SQLite.openDatabaseSync('gym_progression.db');
 
-    // 1. Table des types de séances (PPL)
     db.execSync(`
       CREATE TABLE IF NOT EXISTS workouts (
         id INTEGER PRIMARY KEY,
@@ -27,7 +25,6 @@ export async function initDatabase(): Promise<void> {
       );
     `);
 
-    // 2. Table du catalogue d'exercices
     db.execSync(`
       CREATE TABLE IF NOT EXISTS exercises (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,17 +41,15 @@ export async function initDatabase(): Promise<void> {
       );
     `);
 
-    // 3. Table de l'état de progression courant (derniers poids calculés et compteur d'échecs)
     db.execSync(`
       CREATE TABLE IF NOT EXISTS exercise_progression_state (
         exercise_id INTEGER PRIMARY KEY,
-        planned_weights TEXT NOT NULL, -- JSON array ex: "[42.5, 40, 40]"
+        planned_weights TEXT NOT NULL,
         consecutive_failures INTEGER DEFAULT 0,
         FOREIGN KEY (exercise_id) REFERENCES exercises (id)
       );
     `);
 
-    // 4. Table des logs de séries
     db.execSync(`
       CREATE TABLE IF NOT EXISTS workout_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,7 +65,6 @@ export async function initDatabase(): Promise<void> {
       );
     `);
 
-    // Remplissage initial si vide
     const workoutCount = db.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM workouts;');
     if (!workoutCount || workoutCount.count === 0) {
       for (const w of SEED_WORKOUTS) {
@@ -189,9 +183,7 @@ export function getExercisesForWorkout(workoutId: number): ConfiguredExercise[] 
           if (Array.isArray(parsed) && parsed.length > 0) {
             planned = parsed;
           }
-        } catch {
-          // fallback
-        }
+        } catch {}
       }
 
       return {
@@ -226,9 +218,6 @@ export function getExercisesForWorkout(workoutId: number): ConfiguredExercise[] 
   }
 }
 
-/**
- * Récupère tous les exercices du catalogue pour une séance donnée (ou l'ensemble du catalogue).
- */
 export function getAllCatalogExercises(workoutId?: number): ConfiguredExercise[] {
   if (!db || Platform.OS === 'web') {
     const list = workoutId ? memoryExercises.filter((e) => e.workoutId === workoutId) : memoryExercises;
@@ -305,9 +294,6 @@ export function getAllCatalogExercises(workoutId?: number): ConfiguredExercise[]
   }
 }
 
-/**
- * Met à jour les paramètres de base personnalisés par l'utilisateur (tableau de poids par série, reps, séries).
- */
 export function updateExerciseCustomSettings(
   exerciseId: number,
   plannedWeights: number[],
@@ -348,9 +334,6 @@ export function updateExerciseCustomSettings(
   }
 }
 
-/**
- * Ajoute un nouvel exercice personnalisé au catalogue permanent de l'utilisateur.
- */
 export function addCustomExercise(
   workoutId: number,
   name: string,
@@ -445,9 +428,6 @@ export function addCustomExercise(
   }
 }
 
-/**
- * Supprime un exercice du catalogue.
- */
 export function deleteExercise(exerciseId: number): void {
   if (!db || Platform.OS === 'web') {
     memoryExercises = memoryExercises.filter((e) => e.id !== exerciseId);
@@ -560,5 +540,21 @@ export function getRecentLogs(limit: number = 200): WorkoutLogEntry[] {
   } catch (error) {
     console.error('Erreur getRecentLogs:', error);
     return [];
+  }
+}
+
+/**
+ * Supprime la totalité des logs d'entraînement (clear history).
+ */
+export function clearAllWorkoutLogs(): void {
+  if (!db || Platform.OS === 'web') {
+    memoryLogs = [];
+    return;
+  }
+
+  try {
+    db.runSync('DELETE FROM workout_logs;');
+  } catch (error) {
+    console.error('Erreur clearAllWorkoutLogs:', error);
   }
 }

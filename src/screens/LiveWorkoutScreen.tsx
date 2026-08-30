@@ -258,9 +258,22 @@ export const LiveWorkoutScreen: React.FC<LiveWorkoutScreenProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Barre de progression discrète */}
-        <View style={styles.progressBarWrapper}>
-          <View style={[styles.progressBarFill, { width: `${Math.min(100, progressRatio * 100)}%` }]} />
+        {/* Barre de progression segmentée par exercice */}
+        <View style={styles.segmentedProgressRow}>
+          {sessionConfig.configuredExercises.map((_, idx) => {
+            const isPast = idx < exerciseIndex;
+            const isCurrent = idx === exerciseIndex;
+            const currentRatio = isCurrent ? Math.max(0.15, setIndex / numSets) : 0;
+
+            return (
+              <View key={idx} style={styles.segmentTrack}>
+                {isPast && <View style={[styles.segmentFill, { width: '100%' }]} />}
+                {isCurrent && (
+                  <View style={[styles.segmentFill, { width: `${currentRatio * 100}%` }]} />
+                )}
+              </View>
+            );
+          })}
         </View>
 
         {/* Carte Focus active */}
@@ -337,15 +350,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  progressBarWrapper: {
+  segmentedProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     width: '100%',
-    height: 4,
-    backgroundColor: THEME.colors.cardBg,
-    borderRadius: 2,
     marginBottom: 18,
+  },
+  segmentTrack: {
+    flex: 1,
+    height: 4,
+    backgroundColor: THEME.colors.cardInner,
+    borderRadius: 2,
     overflow: 'hidden',
   },
-  progressBarFill: {
+  segmentFill: {
     height: '100%',
     backgroundColor: THEME.colors.accent,
     borderRadius: 2,
