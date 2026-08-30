@@ -1,7 +1,8 @@
-import { Audio } from 'expo-av';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  AppState,
+  AppStateStatus,
   Modal,
   StyleSheet,
   Text,
@@ -9,6 +10,7 @@ import {
   View
 } from 'react-native';
 import { THEME } from '../theme';
+import { playRestTimerAlarm } from '../utils/audio';
 import { triggerLightHaptic, triggerSuccessHaptic, triggerWarningHaptic } from '../utils/haptics';
 
 interface RestTimerOverlayProps {
@@ -30,78 +32,79 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
 }) => {
   const [secondsRemaining, setSecondsRemaining] = useState(initialSeconds);
   const [totalSeconds, setTotalSeconds] = useState(initialSeconds);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
 
-  // Animation de pulsation légère sur les secondes
+  // Timestamp cible absolu pour ne jamais perdre le temps en arrière-plan
+  const targetTimeRef = useRef<number>(Date.now() + initialSeconds * 1000);
+
+  // Animation de pulsation et d'entrée
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
       toValue: 1,
-      duration: 200,
+      duration: 180,
       useNativeDriver: true,
     }).start();
 
-    return () => {
-      if (sound) {
-        sound.unloadAsync();
-      }
-    };
-  }, [sound]);
-
-  const playBip = async () => {
-    try {
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg' },
-        { shouldPlay: true }
-      );
-      setSound(newSound);
-    } catch {
-      // audio fallback
-    }
-  };
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setSecondsRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
+    // Écouteur de retour au premier plan (depuis Spotify / écran verrouillé)
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        const remaining = Math.max(0, Math.ceil((targetTimeRef.current - Date.now()) / 1000));
+        setSecondsRemaining(remaining);
+        if (remaining <= 0) {
           triggerSuccessHaptic();
-          playBip();
+          playRestTimerAlarm();
           onFinish();
-          return 0;
         }
+      }
+    });
 
-        // Petite pulsation à chaque seconde
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.04,
-            duration: 120,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 180,
-            useNativeDriver: true,
-          }),
-        ]).start();
+    // Intervalle régulier d'animation et de décompte
+    const timer = setInterval(() => {
+      const now = Date.now();
+      const remaining = Math.max(0, Math.ceil((targetTimeRef.current - now) / 1000));
+      setSecondsRemaining(remaining);
 
-        if (prev === 4 || prev === 3 || prev === 2) {
-          triggerWarningHaptic();
-        }
+      if (remaining <= 0) {
+        clearInterval(timer);
+        triggerSuccessHaptic();
+        playRestTimerAlarm();
+        onFinish();
+        return;
+      }
 
-        return prev - 1;
-      });
+      // Micro-pulsation
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.04,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      if (remaining === 4 || remaining === 3 || remaining === 2) {
+        triggerWarningHaptic();
+      }
     }, 1000);
 
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      subscription.remove();
+    };
   }, []);
 
   const addTime = (secs: number) => {
     triggerLightHaptic();
-    setSecondsRemaining((prev) => prev + secs);
-    setTotalSeconds((prev) => prev + secs);
+    targetTimeRef.current += secs * 1000;
+    const newRemaining = Math.max(0, Math.ceil((targetTimeRef.current - Date.now()) / 1000));
+    setSecondsRemaining(newRemaining);
+    setTotalSeconds((prev) => Math.max(newRemaining, prev + secs));
   };
 
   const minutes = Math.floor(secondsRemaining / 60);
@@ -116,7 +119,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
         <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
           <Text style={styles.topSub}>RÉCUPÉRATION</Text>
 
-          {/* Chronomètre Géant avec micro-pulsation */}
+          {/* Chronomètre Géant avec pulsation */}
           <Animated.Text style={[styles.timeBig, { transform: [{ scale: pulseAnim }] }]}>
             {formattedTime}
           </Animated.Text>

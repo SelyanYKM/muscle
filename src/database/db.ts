@@ -334,6 +334,54 @@ export function updateExerciseCustomSettings(
   }
 }
 
+export function updateExerciseFullDetails(
+  exerciseId: number,
+  workoutId: number,
+  name: string,
+  category: EquipmentCategory,
+  plannedWeights: number[],
+  targetReps: number,
+  numSets: number
+): void {
+  const defaultWeight = plannedWeights[0] || 40;
+  const baseWeight = category === 'FREE_WEIGHT' ? 20 : 0;
+  const plannedJson = JSON.stringify(plannedWeights);
+
+  if (!db || Platform.OS === 'web') {
+    const ex = memoryExercises.find((e) => e.id === exerciseId);
+    if (ex) {
+      ex.workoutId = workoutId;
+      ex.name = name;
+      ex.category = category;
+      ex.baseWeight = baseWeight;
+      ex.defaultStartingWeight = defaultWeight;
+      ex.defaultTargetReps = targetReps;
+      ex.numSets = numSets;
+      ex.plannedWeights = plannedWeights;
+    }
+    return;
+  }
+
+  try {
+    db.runSync(
+      `UPDATE exercises 
+       SET workout_id = ?, name = ?, category = ?, base_weight = ?, default_starting_weight = ?, default_target_reps = ?, default_sets_count = ?
+       WHERE id = ?;`,
+      [workoutId, name, category, baseWeight, defaultWeight, targetReps, numSets, exerciseId]
+    );
+
+    db.runSync(
+      `INSERT INTO exercise_progression_state (exercise_id, planned_weights, consecutive_failures)
+       VALUES (?, ?, 0)
+       ON CONFLICT(exercise_id) DO UPDATE SET
+         planned_weights = excluded.planned_weights;`,
+      [exerciseId, plannedJson]
+    );
+  } catch (error) {
+    console.error('Erreur updateExerciseFullDetails:', error);
+  }
+}
+
 export function addCustomExercise(
   workoutId: number,
   name: string,
@@ -556,5 +604,56 @@ export function clearAllWorkoutLogs(): void {
     db.runSync('DELETE FROM workout_logs;');
   } catch (error) {
     console.error('Erreur clearAllWorkoutLogs:', error);
+  }
+}
+
+/**
+ * Modifie le type de séance (Push, Pull, Legs) pour tous les logs d'une séance passée donnée.
+ */
+export function updateWorkoutSessionType(
+  date: string,
+  oldWorkoutId: number,
+  newWorkoutId: number
+): void {
+  if (!db || Platform.OS === 'web') {
+    memoryLogs = memoryLogs.map((log) => {
+      if (log.date === date && log.workoutId === oldWorkoutId) {
+        return { ...log, workoutId: newWorkoutId };
+      }
+      return log;
+    });
+    return;
+  }
+
+  try {
+    db.runSync(
+      `UPDATE workout_logs 
+       SET workout_id = ? 
+       WHERE date = ? AND workout_id = ?;`,
+      [newWorkoutId, date, oldWorkoutId]
+    );
+  } catch (error) {
+    console.error('Erreur updateWorkoutSessionType:', error);
+  }
+}
+
+/**
+ * Supprime une séance spécifique de l'historique par date et workoutId.
+ */
+export function deleteWorkoutSession(date: string, workoutId: number): void {
+  if (!db || Platform.OS === 'web') {
+    memoryLogs = memoryLogs.filter(
+      (log) => !(log.date === date && log.workoutId === workoutId)
+    );
+    return;
+  }
+
+  try {
+    db.runSync(
+      `DELETE FROM workout_logs WHERE date = ? AND workout_id = ?;`,
+      [date, workoutId]
+    );
+  } catch (error) {
+    console.error('Erreur deleteWorkoutSession:', error);
   }
 }

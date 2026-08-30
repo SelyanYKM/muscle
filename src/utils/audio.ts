@@ -1,43 +1,53 @@
-import { Audio } from 'expo-av';
+import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import { Platform } from 'react-native';
 
-export async function playTimerEndSound() {
-  if (Platform.OS === 'web') {
-    try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, audioCtx.currentTime); // Note La5 (880Hz)
-      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.5);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.5);
-    } catch {}
-    return;
-  }
+let isAudioConfigured = false;
+
+/**
+ * Configure la session audio pour :
+ * 1. Ne PAS baisser/étouffer le son de la musique en arrière-plan (Spotify, Apple Music).
+ * 2. Permettre la lecture des bips d'alerte par-dessus la musique.
+ */
+export async function configureAppAudio(): Promise<void> {
+  if (isAudioConfigured || Platform.OS === 'web') return;
 
   try {
-    // Configurer le mode audio pour autoriser le son en arrière-plan et en silencieux
     await Audio.setAudioModeAsync({
       playsInSilentModeIOS: true,
-      staysActiveInBackground: true,
-      shouldDuckAndroid: true,
+      allowsRecordingIOS: false,
+      staysActiveInBackground: false,
+      interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+      shouldDuckAndroid: false, // Empêche d'étouffer le volume de Spotify
+      interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+      playThroughEarpieceAndroid: false,
     });
-
-    // Son de cloche/bip moderne court hébergé sur CDN fiable
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg' },
-      { shouldPlay: true }
-    );
-    sound.setOnPlaybackStatusUpdate((status) => {
-      if (status.isLoaded && status.didJustFinish) {
-        sound.unloadAsync();
-      }
-    });
+    isAudioConfigured = true;
   } catch (error) {
-    // Silencieux si hors-ligne sans fichier téléchargé en cache
+    console.warn('Erreur configuration audio:', error);
+  }
+}
+
+/**
+ * Joue une séquence sonore sportive d'alerte de fin de repos (3 tonalités claires).
+ */
+export async function playRestTimerAlarm(): Promise<void> {
+  if (Platform.OS === 'web') return;
+
+  try {
+    await configureAppAudio();
+    const { sound } = await Audio.Sound.createAsync(
+      { uri: 'https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg' },
+      { shouldPlay: true, volume: 1.0 }
+    );
+
+    // Arrêt automatique après 2 secondes pour ne pas déranger
+    setTimeout(async () => {
+      try {
+        await sound.stopAsync();
+        await sound.unloadAsync();
+      } catch {}
+    }, 2000);
+  } catch {
+    // Audio fallback
   }
 }

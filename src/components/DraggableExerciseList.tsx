@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Animated,
   PanResponder,
@@ -27,36 +27,45 @@ export const DraggableExerciseList: React.FC<DraggableExerciseListProps> = ({
   onDelete,
 }) => {
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
-  const dragY = useState(new Animated.Value(0))[0];
+  const dragY = useRef(new Animated.Value(0)).current;
 
-  const panResponder = PanResponder.create({
-    onMoveShouldSetPanResponder: (_, gestureState) => {
-      return Math.abs(gestureState.dy) > 5;
-    },
-    onPanResponderGrant: () => {
-      triggerMediumHaptic();
-    },
-    onPanResponderMove: (_, gestureState) => {
-      dragY.setValue(gestureState.dy);
-    },
-    onPanResponderRelease: (_, gestureState) => {
-      if (draggingIndex === null) return;
+  // PanResponder dédié exclusivement au déplacement vertical par poignée
+  const dragPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 3,
+      onPanResponderGrant: () => {
+        triggerMediumHaptic();
+      },
+      onPanResponderMove: (_, gestureState) => {
+        dragY.setValue(gestureState.dy);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (draggingIndex === null) return;
 
-      const movedPositions = Math.round(gestureState.dy / ITEM_HEIGHT);
-      const newIndex = Math.max(0, Math.min(exercises.length - 1, draggingIndex + movedPositions));
+        const movedPositions = Math.round(gestureState.dy / ITEM_HEIGHT);
+        const newIndex = Math.max(
+          0,
+          Math.min(exercises.length - 1, draggingIndex + movedPositions)
+        );
 
-      if (newIndex !== draggingIndex) {
-        triggerLightHaptic();
-        const updated = [...exercises];
-        const [movedItem] = updated.splice(draggingIndex, 1);
-        updated.splice(newIndex, 0, movedItem);
-        onReorder(updated);
-      }
+        if (newIndex !== draggingIndex) {
+          triggerLightHaptic();
+          const updated = [...exercises];
+          const [movedItem] = updated.splice(draggingIndex, 1);
+          updated.splice(newIndex, 0, movedItem);
+          onReorder(updated);
+        }
 
-      setDraggingIndex(null);
-      dragY.setValue(0);
-    },
-  });
+        setDraggingIndex(null);
+        dragY.setValue(0);
+      },
+      onPanResponderTerminate: () => {
+        setDraggingIndex(null);
+        dragY.setValue(0);
+      },
+    })
+  ).current;
 
   return (
     <View style={styles.listContainer}>
@@ -74,7 +83,7 @@ export const DraggableExerciseList: React.FC<DraggableExerciseListProps> = ({
             index={index}
             isDragging={isDragging}
             dragY={dragY}
-            panResponder={panResponder}
+            dragPanResponder={dragPanResponder}
             onStartDrag={() => setDraggingIndex(index)}
             onEdit={() => onEdit(ex)}
             onDelete={() => onDelete(index)}
@@ -92,7 +101,7 @@ interface DraggableItemRowProps {
   index: number;
   isDragging: boolean;
   dragY: Animated.Value;
-  panResponder: any;
+  dragPanResponder: any;
   onStartDrag: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -105,23 +114,32 @@ const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
   index,
   isDragging,
   dragY,
-  panResponder,
+  dragPanResponder,
   onStartDrag,
   onEdit,
   onDelete,
   isFinisher,
   formattedWeights,
 }) => {
-  const swipeX = useState(new Animated.Value(0))[0];
+  const swipeX = useRef(new Animated.Value(0)).current;
 
-  const swipePanResponder = useState(
+  // PanResponder pour le swipe horizontal avec verrouillage angulaire strict
+  const swipePanResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 15 && Math.abs(g.dy) < 10,
-      onPanResponderMove: (_, g) => {
-        if (g.dx < 0) swipeX.setValue(Math.max(-85, g.dx));
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // Ne s'active QUE sur un geste horizontal franc et jamais sur un glissement vertical
+        const isStrictlyHorizontal =
+          Math.abs(gestureState.dx) > 35 &&
+          Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 2.5;
+        return isStrictlyHorizontal;
       },
-      onPanResponderRelease: (_, g) => {
-        if (g.dx < -45) {
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dx < 0) {
+          swipeX.setValue(Math.max(-85, gestureState.dx));
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dx < -50) {
           triggerLightHaptic();
           Animated.spring(swipeX, { toValue: -75, useNativeDriver: false }).start();
         } else {
@@ -129,7 +147,7 @@ const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
         }
       },
     })
-  )[0];
+  ).current;
 
   const handleDelete = () => {
     triggerWarningHaptic();
@@ -138,37 +156,43 @@ const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
   };
 
   return (
-    <View style={styles.itemWrapper}>
+    <View style={[styles.itemWrapper, isDragging && { zIndex: 9999 }]}>
+      {/* Bouton Supprimer en arrière-plan (Swipe gauche) */}
       <View style={styles.deleteBackground}>
         <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
           <Text style={styles.deleteBtnText}>Suppr.</Text>
         </TouchableOpacity>
       </View>
 
+      {/* Carte principale avec effet flottant lors du drag */}
       <Animated.View
         style={[
           styles.card,
           isFinisher && styles.cardFinisher,
-          isDragging && styles.cardDragging,
+          isDragging && styles.cardFloating,
           {
             transform: [
               { translateX: swipeX },
               { translateY: isDragging ? dragY : 0 },
-              { scale: isDragging ? 1.02 : 1 },
+              { scale: isDragging ? 1.05 : 1 },
             ],
-            zIndex: isDragging ? 999 : 1,
+            zIndex: isDragging ? 9999 : 1,
           },
         ]}
         {...swipePanResponder.panHandlers}
       >
+        {/* Poignée de Drag & Drop totalement isolée */}
         <View
           style={styles.dragHandle}
           onTouchStart={onStartDrag}
-          {...panResponder.panHandlers}
+          {...dragPanResponder.panHandlers}
         >
-          <Text style={styles.dragHandleIcon}>⠿</Text>
+          <Text style={[styles.dragHandleIcon, isDragging && styles.dragHandleIconActive]}>
+            ⠿
+          </Text>
         </View>
 
+        {/* Index & Titre */}
         <View style={styles.infoSection}>
           <Text style={styles.exerciseTitle} numberOfLines={1}>
             <Text style={styles.indexPrefix}>{index + 1}. </Text>
@@ -188,6 +212,7 @@ const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
           </View>
         </View>
 
+        {/* Crayon pour éditer */}
         <TouchableOpacity style={styles.pencilBtn} onPress={onEdit} activeOpacity={0.7}>
           <Text style={styles.pencilIcon}>✏️</Text>
         </TouchableOpacity>
@@ -199,7 +224,7 @@ const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
 const styles = StyleSheet.create({
   listContainer: {
     width: '100%',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   itemWrapper: {
     width: '100%',
@@ -207,7 +232,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     position: 'relative',
     borderRadius: 12,
-    overflow: 'hidden',
   },
   deleteBackground: {
     position: 'absolute',
@@ -246,17 +270,17 @@ const styles = StyleSheet.create({
     borderColor: THEME.colors.cardFinisherBorder,
     backgroundColor: THEME.colors.cardFinisherBg,
   },
-  cardDragging: {
+  cardFloating: {
     borderColor: THEME.colors.accent,
     backgroundColor: THEME.colors.cardInner,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5,
-    shadowRadius: 10,
-    elevation: 12,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.7,
+    shadowRadius: 14,
+    elevation: 20,
   },
   dragHandle: {
-    width: 28,
+    width: 32,
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
@@ -264,8 +288,11 @@ const styles = StyleSheet.create({
   },
   dragHandleIcon: {
     color: THEME.colors.textMuted,
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '900',
+  },
+  dragHandleIconActive: {
+    color: THEME.colors.accent,
   },
   infoSection: {
     flex: 1,

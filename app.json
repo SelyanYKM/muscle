@@ -15,13 +15,19 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "package": "com.selyanykm.mooscles"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-sqlite"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "77795807-b4fc-4579-9e15-ab71e1f8b2c0"
+      }
+    }
   }
 }

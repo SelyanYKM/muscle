@@ -10,7 +10,7 @@ import {
   View
 } from 'react-native';
 import { DraggableExerciseList } from '../components/DraggableExerciseList';
-import { addCustomExercise, clearAllWorkoutLogs, getAllCatalogExercises, getExercisesForWorkout, getWorkouts, updateExerciseCustomSettings } from '../database/db';
+import { addCustomExercise, clearAllWorkoutLogs, getAllCatalogExercises, getExercisesForWorkout, getWorkouts, updateExerciseCustomSettings, updateExerciseFullDetails } from '../database/db';
 import { THEME } from '../theme';
 import { ConfiguredExercise, EquipmentCategory, SessionConfig } from '../types';
 import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
@@ -32,6 +32,9 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
 
   // Modal d'édition de l'exercice (Crayon)
   const [editingExercise, setEditingExercise] = useState<ConfiguredExercise | null>(null);
+  const [editName, setEditName] = useState<string>('');
+  const [editCategory, setEditCategory] = useState<EquipmentCategory>('HAMMER_STRENGTH');
+  const [editWorkoutId, setEditWorkoutId] = useState<number>(1);
   const [editWeightsPerSet, setEditWeightsPerSet] = useState<number[]>([]);
   const [editReps, setEditReps] = useState<number>(8);
   const [editSets, setEditSets] = useState<number>(3);
@@ -95,6 +98,9 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
   const openEditModal = (ex: ConfiguredExercise) => {
     triggerLightHaptic();
     setEditingExercise(ex);
+    setEditName(ex.name);
+    setEditCategory(ex.category);
+    setEditWorkoutId(ex.workoutId);
     const sets = ex.numSets ?? 3;
     setEditSets(sets);
     setEditReps(ex.targetReps ?? 8);
@@ -148,24 +154,43 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
   const saveEditModal = () => {
     if (!editingExercise) return;
     triggerMediumHaptic();
+    const cleanName = editName.trim() || editingExercise.name;
     const repsNum = Math.max(1, editReps);
     const setsNum = Math.max(1, editSets);
     const finalWeights = editWeightsPerSet.slice(0, setsNum);
 
-    const updated = exercises.map((e) => {
-      if (e.id === editingExercise.id) {
-        return {
-          ...e,
-          targetReps: repsNum,
-          numSets: setsNum,
-          plannedWeights: finalWeights,
-        };
-      }
-      return e;
-    });
+    updateExerciseFullDetails(
+      editingExercise.id,
+      editWorkoutId,
+      cleanName,
+      editCategory,
+      finalWeights,
+      repsNum,
+      setsNum
+    );
 
-    setExercises(updated);
-    updateExerciseCustomSettings(editingExercise.id, finalWeights, repsNum, setsNum);
+    if (editWorkoutId !== selectedWorkoutId) {
+      // Déplacé vers un autre programme (ex: Push vers Legs) -> Retirer de la vue courante
+      setExercises(exercises.filter((e) => e.id !== editingExercise.id));
+    } else {
+      const updated = exercises.map((e) => {
+        if (e.id === editingExercise.id) {
+          return {
+            ...e,
+            name: cleanName,
+            category: editCategory,
+            workoutId: editWorkoutId,
+            targetReps: repsNum,
+            numSets: setsNum,
+            plannedWeights: finalWeights,
+            baseWeight: editCategory === 'FREE_WEIGHT' ? 20 : 0,
+          };
+        }
+        return e;
+      });
+      setExercises(updated);
+    }
+
     setEditingExercise(null);
   };
 
@@ -408,14 +433,89 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
         </View>
       </Modal>
 
-      {/* MODAL 2 : ÉDITION DÉTAILLÉE PAR SÉRIE */}
+      {/* MODAL 2 : ÉDITION DÉTAILLÉE DE L'EXERCICE */}
       <Modal visible={editingExercise !== null} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Modifier les charges</Text>
+            <Text style={styles.modalTitle}>Modifier l'exercice</Text>
             <Text style={styles.modalSubtitle} numberOfLines={1}>
-              {editingExercise?.name}
+              Personnalisation & progression
             </Text>
+
+            {/* Nom de l'exercice */}
+            <Text style={styles.modalSectionLabel}>NOM DE L'EXERCICE</Text>
+            <TextInput
+              style={styles.modalTextInput}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="Nom de l'exercice"
+              placeholderTextColor={THEME.colors.textMuted}
+            />
+
+            {/* Programme associé (Push / Pull / Legs) */}
+            <Text style={styles.modalSectionLabel}>PROGRAMME ASSOCIÉ</Text>
+            <View style={styles.pillsGrid}>
+              <TouchableOpacity
+                style={[styles.pillBtn, editWorkoutId === 1 && styles.pillBtnActive]}
+                onPress={() => {
+                  triggerLightHaptic();
+                  setEditWorkoutId(1);
+                }}
+              >
+                <Text style={[styles.pillBtnText, editWorkoutId === 1 && styles.pillBtnTextActive]}>
+                  Push
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.pillBtn, editWorkoutId === 2 && styles.pillBtnActive]}
+                onPress={() => {
+                  triggerLightHaptic();
+                  setEditWorkoutId(2);
+                }}
+              >
+                <Text style={[styles.pillBtnText, editWorkoutId === 2 && styles.pillBtnTextActive]}>
+                  Pull
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.pillBtn, editWorkoutId === 3 && styles.pillBtnActive]}
+                onPress={() => {
+                  triggerLightHaptic();
+                  setEditWorkoutId(3);
+                }}
+              >
+                <Text style={[styles.pillBtnText, editWorkoutId === 3 && styles.pillBtnTextActive]}>
+                  Legs
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Type d'équipement */}
+            <Text style={styles.modalSectionLabel}>TYPE D'ÉQUIPEMENT</Text>
+            <View style={styles.pillsGrid}>
+              <TouchableOpacity
+                style={[styles.pillBtn, editCategory === 'HAMMER_STRENGTH' && styles.pillBtnActive]}
+                onPress={() => {
+                  triggerLightHaptic();
+                  setEditCategory('HAMMER_STRENGTH');
+                }}
+              >
+                <Text style={[styles.pillBtnText, editCategory === 'HAMMER_STRENGTH' && styles.pillBtnTextActive]}>
+                  Machine (0kg base)
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.pillBtn, editCategory === 'FREE_WEIGHT' && styles.pillBtnActive]}
+                onPress={() => {
+                  triggerLightHaptic();
+                  setEditCategory('FREE_WEIGHT');
+                }}
+              >
+                <Text style={[styles.pillBtnText, editCategory === 'FREE_WEIGHT' && styles.pillBtnTextActive]}>
+                  Barre Libre (20kg base)
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             {/* Nombre de séries */}
             <Text style={styles.modalSectionLabel}>SÉRIES</Text>
