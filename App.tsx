@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, BackHandler, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { initDatabase } from './src/database/db';
 import { FreeWorkoutScreen } from './src/screens/FreeWorkoutScreen';
@@ -60,6 +60,40 @@ export default function App() {
     }
     setup();
   }, []);
+
+  // Gestion du bouton retour physique / geste Android pour naviguer entre les écrans
+  useEffect(() => {
+    const onBackPress = () => {
+      if (currentScreen === 'MODE_SELECT') {
+        setCurrentScreen('SPLIT_SELECT');
+        return true;
+      }
+      if (currentScreen === 'PREP') {
+        setCurrentScreen('MODE_SELECT');
+        return true;
+      }
+      if (currentScreen === 'LIVE' || currentScreen === 'LIVE_FREE') {
+        Alert.alert(
+          'Quitter la séance ?',
+          'La séance en cours sera interrompue.',
+          [
+            { text: 'Continuer', style: 'cancel' },
+            { text: 'Quitter', style: 'destructive', onPress: handleResetToHome },
+          ]
+        );
+        return true;
+      }
+      if (currentScreen === 'SUMMARY' || currentScreen === 'HISTORY') {
+        handleResetToHome();
+        return true;
+      }
+      // Sur 'SPLIT_SELECT', retour au comportement OS par défaut (quitte l'app)
+      return false;
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => backHandler.remove();
+  }, [currentScreen]);
 
   if (!isDbReady) {
     return (
