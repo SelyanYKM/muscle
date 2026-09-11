@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
-  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -11,22 +10,32 @@ import {
   View
 } from 'react-native';
 import { DraggableExerciseList } from '../components/DraggableExerciseList';
-import { addCustomExercise, clearAllWorkoutLogs, getAllCatalogExercises, getExercisesForWorkout, getWorkouts, updateExerciseCustomSettings, updateExerciseFullDetails } from '../database/db';
+import {
+  addCustomExercise,
+  getAllCatalogExercises,
+  getExercisesForWorkout,
+  updateExerciseCustomSettings,
+  updateExerciseFullDetails,
+} from '../database/db';
 import { THEME } from '../theme';
 import { ConfiguredExercise, EquipmentCategory, SessionConfig } from '../types';
 import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
 
 interface SessionPrepScreenProps {
+  workoutId: number;
+  workoutName: string;
   onStartSession: (config: SessionConfig) => void;
   onOpenHistory: () => void;
+  onBack: () => void;
 }
 
 export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
+  workoutId,
+  workoutName,
   onStartSession,
   onOpenHistory,
+  onBack,
 }) => {
-  const workouts = getWorkouts();
-  const [selectedWorkoutId, setSelectedWorkoutId] = useState<number>(1);
   const [standardRest, setStandardRest] = useState<number>(90);
   const [finisherRest, setFinisherRest] = useState<number>(180);
   const [exercises, setExercises] = useState<ConfiguredExercise[]>([]);
@@ -52,20 +61,13 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
   const [newExReps, setNewExReps] = useState<number>(8);
   const [newExSets, setNewExSets] = useState<number>(3);
 
-  const selectedWorkout = workouts.find((w) => w.id === selectedWorkoutId) || workouts[0];
-
   useEffect(() => {
-    loadExercises(selectedWorkoutId);
-  }, [selectedWorkoutId]);
+    loadExercises(workoutId);
+  }, [workoutId]);
 
-  const loadExercises = (workoutId: number) => {
-    const list = getExercisesForWorkout(workoutId);
+  const loadExercises = (id: number) => {
+    const list = getExercisesForWorkout(id);
     setExercises(list);
-  };
-
-  const handleWorkoutSelect = (wId: number) => {
-    triggerLightHaptic();
-    setSelectedWorkoutId(wId);
   };
 
   const handleDeleteExercise = (index: number) => {
@@ -79,7 +81,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
 
   const openCatalogPicker = () => {
     triggerLightHaptic();
-    const catalog = getAllCatalogExercises(selectedWorkoutId);
+    const catalog = getAllCatalogExercises(workoutId);
     setCatalogExercises(catalog);
     setIsPickerModalOpen(true);
   };
@@ -170,7 +172,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
       setsNum
     );
 
-    if (editWorkoutId !== selectedWorkoutId) {
+    if (editWorkoutId !== workoutId) {
       // Déplacé vers un autre programme (ex: Push vers Legs) -> Retirer de la vue courante
       setExercises(exercises.filter((e) => e.id !== editingExercise.id));
     } else {
@@ -206,7 +208,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
     const setsNum = Math.max(1, newExSets);
 
     const created = addCustomExercise(
-      selectedWorkoutId,
+      workoutId,
       newExName.trim(),
       newExCategory,
       weightNum,
@@ -228,8 +230,8 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
     }
     triggerLightHaptic();
     onStartSession({
-      workoutId: selectedWorkout.id,
-      workoutName: selectedWorkout.name,
+      workoutId,
+      workoutName,
       standardRestSeconds: standardRest,
       finisherRestSeconds: finisherRest,
       configuredExercises: exercises,
@@ -243,64 +245,30 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* En-tête sobre mooscles avec Logo Officiel */}
-        <View style={styles.headerRow}>
-          <View style={styles.brandTitleRow}>
-            <Image
-              source={require('../../assets/mooscles_logo.jpg')}
-              style={styles.brandLogoImage}
-            />
-            <View style={styles.titleCol}>
-              <Text style={styles.brandTitle}>
-                mooscles<Text style={styles.brandDot}>.</Text>
-              </Text>
-              <Text style={styles.brandSubtitle}>Surcharge progressive PPL</Text>
-            </View>
+        {/* Barre de navigation sobre avec Retour et Split sélectionné */}
+        <View style={styles.topNavBar}>
+          <TouchableOpacity
+            style={styles.backNavBtn}
+            onPress={() => {
+              triggerLightHaptic();
+              onBack();
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.backNavBtnText}>← Retour</Text>
+          </TouchableOpacity>
+
+          <View style={styles.sessionBadge}>
+            <Text style={styles.sessionBadgeText}>{workoutName.toUpperCase()} (GUIDÉ)</Text>
           </View>
 
           <TouchableOpacity
             style={styles.historyButton}
             onPress={onOpenHistory}
-            onLongPress={() => {
-              triggerWarningHaptic();
-              Alert.alert(
-                "Effacer l'historique ?",
-                "Toutes les séances enregistrées seront définitivement supprimées.",
-                [
-                  { text: 'Annuler', style: 'cancel' },
-                  {
-                    text: 'Tout effacer',
-                    style: 'destructive',
-                    onPress: () => {
-                      clearAllWorkoutLogs();
-                    },
-                  },
-                ]
-              );
-            }}
             activeOpacity={0.8}
           >
             <Text style={styles.historyButtonText}>Historique</Text>
           </TouchableOpacity>
-        </View>
-
-        {/* 1. Sélecteur PPL façon Segment Control */}
-        <View style={styles.workoutTabs}>
-          {workouts.map((w) => {
-            const isSelected = w.id === selectedWorkoutId;
-            return (
-              <TouchableOpacity
-                key={w.id}
-                style={[styles.workoutTab, isSelected && styles.workoutTabActive]}
-                onPress={() => handleWorkoutSelect(w.id)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.workoutTabText, isSelected && styles.workoutTabTextActive]}>
-                  {w.name}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
         </View>
 
         {/* 2. Repos Automatique (Sobre & Épuré) */}
@@ -378,7 +346,7 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
         <View style={styles.modalBackdrop}>
           <View style={styles.pickerModalCard}>
             <Text style={styles.modalTitle}>Catalogue d'exercices</Text>
-            <Text style={styles.modalSubtitle}>Sélectionne pour ta séance {selectedWorkout.name}</Text>
+            <Text style={styles.modalSubtitle}>Sélectionne pour ta séance {workoutName}</Text>
 
             <ScrollView style={styles.catalogList} showsVerticalScrollIndicator={false}>
               {catalogExercises.map((catEx) => {
@@ -678,47 +646,42 @@ const styles = StyleSheet.create({
     paddingTop: 50,
     paddingBottom: 36,
   },
-  headerRow: {
+  topNavBar: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 18,
+    marginBottom: 16,
   },
-  brandTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    marginRight: 10,
-    gap: 10,
-  },
-  brandLogoImage: {
-    width: 38,
-    height: 38,
-    borderRadius: 9,
+  backNavBtn: {
+    backgroundColor: THEME.colors.cardBg,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
   },
-  titleCol: {
-    flex: 1,
-  },
-  brandTitle: {
-    fontSize: 26,
-    fontWeight: '900',
+  backNavBtnText: {
     color: THEME.colors.textPrimary,
-    letterSpacing: -0.5,
+    fontSize: 12,
+    fontWeight: '700',
   },
-  brandDot: {
-    color: THEME.colors.accent,
+  sessionBadge: {
+    backgroundColor: THEME.colors.cardInner,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
   },
-  brandSubtitle: {
+  sessionBadgeText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: THEME.colors.textSecondary,
-    marginTop: 2,
+    fontWeight: '900',
+    color: THEME.colors.accent,
+    letterSpacing: 0.8,
   },
   historyButton: {
     backgroundColor: THEME.colors.cardBg,
-    paddingHorizontal: 12,
+    paddingHorizontal: 11,
     paddingVertical: 7,
     borderRadius: 8,
     borderWidth: 1,
@@ -729,33 +692,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  workoutTabs: {
-    flexDirection: 'row',
-    backgroundColor: THEME.colors.cardBg,
-    padding: 4,
-    borderRadius: 12,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-  },
-  workoutTab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  workoutTabActive: {
-    backgroundColor: THEME.colors.cardInner,
-  },
-  workoutTabText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: THEME.colors.textSecondary,
-  },
-  workoutTabTextActive: {
-    color: THEME.colors.textPrimary,
-    fontWeight: '900',
-  },
+
   restCard: {
     backgroundColor: THEME.colors.cardBg,
     borderRadius: 14,

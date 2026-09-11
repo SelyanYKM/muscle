@@ -1,0 +1,305 @@
+import React from 'react';
+import {
+  Alert,
+  Image,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { clearAllWorkoutLogs, getWorkouts } from '../database/db';
+import { THEME } from '../theme';
+import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
+
+interface SplitSelectScreenProps {
+  onSelectWorkout: (workoutId: number, workoutName: string) => void;
+  onOpenHistory: () => void;
+}
+
+export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
+  onSelectWorkout,
+  onOpenHistory,
+}) => {
+  const workouts = getWorkouts();
+
+  const handleSelect = (wId: number, wName: string) => {
+    triggerMediumHaptic();
+    onSelectWorkout(wId, wName);
+  };
+
+  const getSplitDetails = (id: number) => {
+    if (id === 1) {
+      return {
+        letter: 'P',
+        subtitle: 'Pectoraux • Épaules • Triceps',
+        focus: 'Poussée & Développés',
+        exercisesCount: '5 exos cibles',
+      };
+    } else if (id === 2) {
+      return {
+        letter: 'P',
+        subtitle: 'Dos • Arrière d’épaules • Biceps',
+        focus: 'Tirages & Épaisseur',
+        exercisesCount: '5 exos cibles',
+      };
+    } else {
+      return {
+        letter: 'L',
+        subtitle: 'Quadriceps • Ischios • Mollets',
+        focus: 'Force & Volume bas du corps',
+        exercisesCount: '5 exos cibles',
+      };
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        {/* En-tête officiel mooscles */}
+        <View style={styles.headerRow}>
+          <View style={styles.brandRow}>
+            <Image
+              source={require('../../assets/mooscles_logo.jpg')}
+              style={styles.brandLogo}
+            />
+            <View>
+              <Text style={styles.brandTitle}>
+                mooscles<Text style={styles.brandDot}>.</Text>
+              </Text>
+              <Text style={styles.brandSubtitle}>Surcharge progressive PPL</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.historyBtn}
+            onPress={() => {
+              triggerLightHaptic();
+              onOpenHistory();
+            }}
+            onLongPress={() => {
+              triggerWarningHaptic();
+              Alert.alert(
+                "Effacer l'historique ?",
+                "Toutes les séances enregistrées seront définitivement supprimées.",
+                [
+                  { text: 'Annuler', style: 'cancel' },
+                  {
+                    text: 'Tout effacer',
+                    style: 'destructive',
+                    onPress: () => {
+                      clearAllWorkoutLogs();
+                    },
+                  },
+                ]
+              );
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.historyBtnText}>Historique</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Titre de sélection d'étape */}
+        <View style={styles.stepTitleBox}>
+          <Text style={styles.stepNumberBadge}>ÉTAPE 1 SUR 2</Text>
+          <Text style={styles.stepHeading}>Choisis ton split</Text>
+          <Text style={styles.stepSubheading}>Quelle séance attaques-tu aujourd'hui ?</Text>
+        </View>
+
+        {/* 3 Cartes de Split P/P/L */}
+        <View style={styles.cardsContainer}>
+          {workouts.map((w) => {
+            const details = getSplitDetails(w.id);
+
+            return (
+              <TouchableOpacity
+                key={w.id}
+                style={styles.splitCard}
+                onPress={() => handleSelect(w.id, w.name)}
+                activeOpacity={0.85}
+              >
+                {/* Badge lettre majuscule P / P / L */}
+                <View style={styles.letterBadge}>
+                  <Text style={styles.letterBadgeText}>{details.letter}</Text>
+                </View>
+
+                {/* Détails du split */}
+                <View style={styles.cardContent}>
+                  <View style={styles.cardTopRow}>
+                    <Text style={styles.cardTitle}>{w.name}</Text>
+                    <Text style={styles.chevron}>→</Text>
+                  </View>
+
+                  <Text style={styles.cardSubtitle}>{details.subtitle}</Text>
+
+                  <View style={styles.metaRow}>
+                    <View style={styles.metaTag}>
+                      <Text style={styles.metaTagText}>{details.focus}</Text>
+                    </View>
+                    <Text style={styles.metaCount}>{details.exercisesCount}</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: THEME.colors.bg,
+  },
+  container: {
+    paddingHorizontal: 16,
+    paddingTop: 24,
+    paddingBottom: 40,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  brandLogo: {
+    width: 38,
+    height: 38,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+  },
+  brandTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: THEME.colors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  brandDot: {
+    color: THEME.colors.accent,
+  },
+  brandSubtitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: THEME.colors.textSecondary,
+    marginTop: 1,
+  },
+  historyBtn: {
+    backgroundColor: THEME.colors.cardBg,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+  },
+  historyBtnText: {
+    color: THEME.colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  stepTitleBox: {
+    marginBottom: 20,
+  },
+  stepNumberBadge: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: THEME.colors.accent,
+    letterSpacing: 1.5,
+    marginBottom: 4,
+  },
+  stepHeading: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: THEME.colors.textPrimary,
+    letterSpacing: -0.3,
+  },
+  stepSubheading: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: THEME.colors.textSecondary,
+    marginTop: 3,
+  },
+  cardsContainer: {
+    gap: 14,
+  },
+  splitCard: {
+    backgroundColor: THEME.colors.cardBg,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  letterBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: THEME.colors.cardInner,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+  },
+  letterBadgeText: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: THEME.colors.accent,
+  },
+  cardContent: {
+    flex: 1,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+  cardTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: THEME.colors.textPrimary,
+  },
+  chevron: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: THEME.colors.accent,
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  metaTag: {
+    backgroundColor: THEME.colors.cardInner,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 5,
+  },
+  metaTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: THEME.colors.textSecondary,
+  },
+  metaCount: {
+    fontSize: 11,
+    color: THEME.colors.textMuted,
+    fontWeight: '600',
+  },
+});
