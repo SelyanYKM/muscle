@@ -66,7 +66,7 @@ export default function App() {
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={THEME.colors.accent} />
         <Text style={styles.loadingText}>mooscles initialisation...</Text>
-        <StatusBar style="light" />
+        <StatusBar style={THEME.statusBarStyle} />
       </View>
     );
   }
@@ -108,7 +108,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <View style={styles.appContainer}>
-        <StatusBar style="light" />
+        <StatusBar style={THEME.statusBarStyle} />
 
         {/* ÉTAPE 1 : CHOIX DU SPLIT (PUSH / PULL / LEGS) */}
         {currentScreen === 'SPLIT_SELECT' && (

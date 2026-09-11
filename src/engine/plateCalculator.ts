@@ -3,11 +3,11 @@ import { PlateInfo } from '../types';
 export const STANDARD_PLATES = [20, 10, 5, 2.5, 1.25];
 
 export const PLATE_COLORS: Record<number, { bg: string; text: string; border?: string }> = {
-  20: { bg: '#2563EB', text: '#FFFFFF' }, // Bleu olympique
-  10: { bg: '#16A34A', text: '#FFFFFF' }, // Vert olympique
-  5: { bg: '#F8FAFC', text: '#0F172A', border: '#CBD5E1' }, // Blanc
-  2.5: { bg: '#0F172A', text: '#FFFFFF', border: '#334155' }, // Noir / Anthracite
-  1.25: { bg: '#64748B', text: '#FFFFFF' }, // Gris argenté
+  20: { bg: '#3B7AC4', text: '#FFFFFF' }, // Bleu olympique
+  10: { bg: '#349A5A', text: '#FFFFFF' }, // Vert olympique
+  5: { bg: '#D45454', text: '#FFFFFF' },  // Rouge olympique
+  2.5: { bg: '#F1F3F5', text: '#1C1C1E', border: '#D0D5DD' }, // Blanc / Clair
+  1.25: { bg: '#9CA3AF', text: '#FFFFFF' }, // Chrome argenté
 };
 
 /**

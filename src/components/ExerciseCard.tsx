@@ -233,13 +233,19 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
 const styles = StyleSheet.create({
   cardContainer: {
     backgroundColor: THEME.colors.cardBg,
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: 22,
+    padding: 18,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
+    shadowColor: '#8C7060',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    elevation: 3,
   },
   cardContainerFinisher: {
     borderColor: THEME.colors.cardFinisherBorder,
+    backgroundColor: THEME.colors.cardFinisherBg,
   },
   topHeader: {
     flexDirection: 'row',
@@ -248,14 +254,15 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   badge: {
-    paddingHorizontal: 7,
+    paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 5,
+    borderRadius: 6,
   },
   machineBadge: {
     backgroundColor: THEME.colors.badgeBg,
   },
   machineBadgeText: {
+    fontFamily: THEME.fonts.sans,
     color: THEME.colors.badgeText,
     fontSize: 9,
     fontWeight: '800',
@@ -264,6 +271,7 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.colors.finisherBadgeBg,
   },
   finisherBadgeText: {
+    fontFamily: THEME.fonts.sans,
     color: THEME.colors.finisherBadgeText,
     fontSize: 9,
     fontWeight: '800',
@@ -275,20 +283,22 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.colors.cardInner,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 5,
+    borderRadius: 6,
   },
   setIndicatorText: {
+    fontFamily: THEME.fonts.sans,
     color: THEME.colors.textSecondary,
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.8,
   },
   exerciseName: {
-    fontSize: 19,
-    fontWeight: '900',
+    fontFamily: THEME.fonts.serif,
+    fontSize: 22,
+    fontWeight: '700',
     color: THEME.colors.textPrimary,
     marginBottom: 12,
-    lineHeight: 24,
+    lineHeight: 28,
   },
   targetRow: {
     flexDirection: 'row',
@@ -298,11 +308,12 @@ const styles = StyleSheet.create({
   targetStatBox: {
     flex: 1,
     backgroundColor: THEME.colors.cardInner,
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 10,
     alignItems: 'center',
   },
   targetStatLabel: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 9,
     fontWeight: '800',
     color: THEME.colors.textSecondary,
@@ -310,7 +321,8 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   targetStatValue: {
-    fontSize: 22,
+    fontFamily: THEME.fonts.sans,
+    fontSize: 24,
     fontWeight: '900',
     color: THEME.colors.textPrimary,
   },
@@ -320,11 +332,12 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary,
   },
   repsSelectorSection: {
-    marginTop: 4,
+    marginTop: 6,
     marginBottom: 10,
     alignItems: 'center',
   },
   sectionLabel: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 10,
     fontWeight: '800',
     color: THEME.colors.textSecondary,
@@ -359,7 +372,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   repsNumberText: {
-    fontSize: 22,
+    fontFamily: THEME.fonts.sans,
+    fontSize: 24,
     fontWeight: '900',
     color: THEME.colors.textPrimary,
   },
@@ -369,19 +383,24 @@ const styles = StyleSheet.create({
     color: THEME.colors.textMuted,
   },
   feelingSection: {
-    marginTop: 2,
+    marginTop: 4,
   },
   feelingButtonsGrid: {
-    gap: 6,
+    gap: 8,
   },
   feelingButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 14,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
+    shadowColor: '#8C7060',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
   easyButton: {
     backgroundColor: THEME.colors.feelingEasyBg,
@@ -399,17 +418,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   feelingTitle: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 14,
     fontWeight: '900',
-    color: '#FFFFFF',
+    color: THEME.colors.textPrimary,
     letterSpacing: 0.5,
     textAlign: 'center',
   },
   feelingSubtitle: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 10,
     fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginTop: 1,
+    color: THEME.colors.textSecondary,
+    marginTop: 2,
     textAlign: 'center',
   },
   undoButton: {
@@ -418,6 +439,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   undoText: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 11,
     fontWeight: '600',
     color: THEME.colors.textSecondary,
