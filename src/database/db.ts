@@ -65,6 +65,17 @@ export async function initDatabase(): Promise<void> {
       );
     `);
 
+    db.execSync(`
+      CREATE TABLE IF NOT EXISTS app_metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `);
+
+    const catalogVersion = db.getFirstSync<{ value: string }>(
+      "SELECT value FROM app_metadata WHERE key = 'seed_version_v3';"
+    );
+
     const workoutCount = db.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM workouts;');
     if (!workoutCount || workoutCount.count === 0) {
       for (const w of SEED_WORKOUTS) {
@@ -73,37 +84,51 @@ export async function initDatabase(): Promise<void> {
           [w.id, w.name, w.description || '']
         );
       }
+    }
 
+    if (!catalogVersion) {
       for (const ex of SEED_EXERCISES) {
-        db.runSync(
-          `INSERT INTO exercises 
-          (id, workout_id, name, category, min_increment, base_weight, order_index, default_target_reps, default_starting_weight, default_sets_count) 
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-          [
-            ex.id,
-            ex.workoutId,
-            ex.name,
-            ex.category,
-            ex.minIncrement,
-            ex.baseWeight,
-            ex.orderIndex,
-            ex.defaultTargetReps,
+        const existing = db.getFirstSync<{ id: number }>('SELECT id FROM exercises WHERE id = ?;', [ex.id]);
+        if (existing) {
+          db.runSync(
+            `UPDATE exercises 
+             SET name = ?, category = ?, workout_id = ?, order_index = ?, base_weight = ?, default_target_reps = ?, default_starting_weight = ?
+             WHERE id = ?;`,
+            [ex.name, ex.category, ex.workoutId, ex.orderIndex, ex.baseWeight, ex.defaultTargetReps, ex.defaultStartingWeight, ex.id]
+          );
+        } else {
+          db.runSync(
+            `INSERT INTO exercises 
+            (id, workout_id, name, category, min_increment, base_weight, order_index, default_target_reps, default_starting_weight, default_sets_count) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+            [
+              ex.id,
+              ex.workoutId,
+              ex.name,
+              ex.category,
+              ex.minIncrement,
+              ex.baseWeight,
+              ex.orderIndex,
+              ex.defaultTargetReps,
+              ex.defaultStartingWeight,
+              ex.defaultSetsCount || 3,
+            ]
+          );
+
+          const initialWeights = JSON.stringify([
             ex.defaultStartingWeight,
-            ex.defaultSetsCount || 3,
-          ]
-        );
+            ex.defaultStartingWeight,
+            ex.defaultStartingWeight,
+          ]);
 
-        const initialWeights = JSON.stringify([
-          ex.defaultStartingWeight,
-          ex.defaultStartingWeight,
-          ex.defaultStartingWeight,
-        ]);
-
-        db.runSync(
-          'INSERT INTO exercise_progression_state (exercise_id, planned_weights, consecutive_failures) VALUES (?, ?, 0);',
-          [ex.id, initialWeights]
-        );
+          db.runSync(
+            'INSERT OR IGNORE INTO exercise_progression_state (exercise_id, planned_weights, consecutive_failures) VALUES (?, ?, 0);',
+            [ex.id, initialWeights]
+          );
+        }
       }
+
+      db.runSync("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('seed_version_v3', '1');");
     }
   } catch (error) {
     console.warn('Erreur initialisation SQLite, utilisation du mode mémoire de secours:', error);

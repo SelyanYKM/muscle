@@ -7,11 +7,11 @@ export const SEED_WORKOUTS: Workout[] = [
 ];
 
 export const SEED_EXERCISES: Exercise[] = [
-  // --- PUSH ---
+  // --- PUSH (100% Polyarticulaires) ---
   {
     id: 1,
     workoutId: 1,
-    name: 'HS Iso-Lateral Incline Press',
+    name: 'HS Iso-Lateral Super Incline Press',
     category: 'HAMMER_STRENGTH',
     minIncrement: 2.5,
     baseWeight: 0,
@@ -22,18 +22,18 @@ export const SEED_EXERCISES: Exercise[] = [
   {
     id: 2,
     workoutId: 1,
-    name: 'HS Iso-Lateral Shoulder Press',
+    name: 'HS Iso-Lateral Bench Press',
     category: 'HAMMER_STRENGTH',
     minIncrement: 2.5,
     baseWeight: 0,
     orderIndex: 2,
     defaultTargetReps: 8,
-    defaultStartingWeight: 30,
+    defaultStartingWeight: 40,
   },
   {
     id: 3,
     workoutId: 1,
-    name: 'HS Plate-Loaded Seated Dip',
+    name: 'HS Iso-Lateral Decline Press',
     category: 'HAMMER_STRENGTH',
     minIncrement: 2.5,
     baseWeight: 0,
@@ -44,20 +44,31 @@ export const SEED_EXERCISES: Exercise[] = [
   {
     id: 4,
     workoutId: 1,
+    name: 'HS Iso-Lateral Shoulder Press',
+    category: 'HAMMER_STRENGTH',
+    minIncrement: 2.5,
+    baseWeight: 0,
+    orderIndex: 4,
+    defaultTargetReps: 8,
+    defaultStartingWeight: 30,
+  },
+  {
+    id: 5,
+    workoutId: 1,
     name: 'Développé couché barre libre (Finisher)',
     category: 'FREE_WEIGHT',
     minIncrement: 2.5,
     baseWeight: 20, // Barre olympique = 20 kg
-    orderIndex: 4,
+    orderIndex: 5,
     defaultTargetReps: 6,
     defaultStartingWeight: 60,
   },
 
-  // --- PULL ---
+  // --- PULL (100% Polyarticulaires) ---
   {
-    id: 5,
+    id: 6,
     workoutId: 2,
-    name: 'HS Iso-Lateral Front Lat Pulldown',
+    name: 'HS Iso-Lateral Wide Pulldown',
     category: 'HAMMER_STRENGTH',
     minIncrement: 2.5,
     baseWeight: 0,
@@ -66,9 +77,9 @@ export const SEED_EXERCISES: Exercise[] = [
     defaultStartingWeight: 45,
   },
   {
-    id: 6,
+    id: 7,
     workoutId: 2,
-    name: 'HS Iso-Lateral High Row / D.Y. Row',
+    name: 'HS Iso-Lateral Low Row',
     category: 'HAMMER_STRENGTH',
     minIncrement: 2.5,
     baseWeight: 0,
@@ -77,18 +88,18 @@ export const SEED_EXERCISES: Exercise[] = [
     defaultStartingWeight: 45,
   },
   {
-    id: 7,
+    id: 8,
     workoutId: 2,
-    name: 'HS Plate-Loaded Seated Biceps',
+    name: 'HS Iso-Lateral High Row',
     category: 'HAMMER_STRENGTH',
     minIncrement: 2.5,
     baseWeight: 0,
     orderIndex: 3,
     defaultTargetReps: 8,
-    defaultStartingWeight: 25,
+    defaultStartingWeight: 45,
   },
   {
-    id: 8,
+    id: 9,
     workoutId: 2,
     name: 'Deadlift Soulevé de terre (Finisher)',
     category: 'FREE_WEIGHT',
@@ -101,7 +112,7 @@ export const SEED_EXERCISES: Exercise[] = [
 
   // --- LEGS ---
   {
-    id: 9,
+    id: 10,
     workoutId: 3,
     name: 'HS Plate-Loaded Linear Leg Press',
     category: 'HAMMER_STRENGTH',
@@ -112,7 +123,7 @@ export const SEED_EXERCISES: Exercise[] = [
     defaultStartingWeight: 100,
   },
   {
-    id: 10,
+    id: 11,
     workoutId: 3,
     name: 'HS Iso-Lateral Leg Extension',
     category: 'HAMMER_STRENGTH',
@@ -123,7 +134,7 @@ export const SEED_EXERCISES: Exercise[] = [
     defaultStartingWeight: 40,
   },
   {
-    id: 11,
+    id: 12,
     workoutId: 3,
     name: 'HS Iso-Lateral Leg Curl',
     category: 'HAMMER_STRENGTH',
@@ -134,7 +145,7 @@ export const SEED_EXERCISES: Exercise[] = [
     defaultStartingWeight: 35,
   },
   {
-    id: 12,
+    id: 13,
     workoutId: 3,
     name: 'HS Plate-Loaded Seated Calf Raise',
     category: 'HAMMER_STRENGTH',
@@ -145,7 +156,7 @@ export const SEED_EXERCISES: Exercise[] = [
     defaultStartingWeight: 30,
   },
   {
-    id: 13,
+    id: 14,
     workoutId: 3,
     name: 'Squat barre libre (Finisher)',
     category: 'FREE_WEIGHT',
