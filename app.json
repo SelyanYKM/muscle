@@ -33,7 +33,10 @@
       "favicon": "./assets/icon.png"
     },
     "plugins": [
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-asset",
+      "expo-font",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {
