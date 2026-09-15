@@ -1,53 +1,47 @@
-import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
+import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { Platform } from 'react-native';
 
 let isAudioConfigured = false;
 
 /**
  * Configure la session audio pour :
- * 1. Ne PAS baisser/étouffer le son de la musique en arrière-plan (Spotify, Apple Music).
- * 2. Permettre la lecture des bips d'alerte par-dessus la musique.
+ * 1. Ne PAS couper ou baisser la musique (Spotify, Apple Music).
+ * 2. Jouer le bip d'alerte par-dessus la musique (mixWithOthers).
  */
 export async function configureAppAudio(): Promise<void> {
   if (isAudioConfigured || Platform.OS === 'web') return;
 
   try {
-    await Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      allowsRecordingIOS: false,
-      staysActiveInBackground: false,
-      interruptionModeIOS: InterruptionModeIOS.DoNotMix,
-      shouldDuckAndroid: false, // Empêche d'étouffer le volume de Spotify
-      interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
-      playThroughEarpieceAndroid: false,
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+      interruptionMode: 'mixWithOthers',
     });
     isAudioConfigured = true;
   } catch (error) {
-    console.warn('Erreur configuration audio:', error);
+    // Mode dégradé si non supporté
   }
 }
 
 /**
- * Joue une séquence sonore sportive d'alerte de fin de repos (3 tonalités claires).
+ * Joue une tonalité sportive d'alerte de fin de repos.
  */
 export async function playRestTimerAlarm(): Promise<void> {
   if (Platform.OS === 'web') return;
 
   try {
     await configureAppAudio();
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: 'https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg' },
-      { shouldPlay: true, volume: 1.0 }
-    );
+    const player = createAudioPlayer('https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg');
+    player.play();
 
-    // Arrêt automatique après 2 secondes pour ne pas déranger
-    setTimeout(async () => {
+    // Arrêt et libération automatique après 2 secondes
+    setTimeout(() => {
       try {
-        await sound.stopAsync();
-        await sound.unloadAsync();
+        player.pause();
+        player.release();
       } catch {}
     }, 2000);
   } catch {
-    // Audio fallback
+    // Fallback silencieux (vibrations haptiques prennent le relais)
   }
 }
