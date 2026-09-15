@@ -9,6 +9,7 @@
     "expo-font": "~57.0.4",
     "expo-haptics": "~57.0.3",
     "expo-keep-awake": "~57.0.2",
+    "expo-splash-screen": "~57.0.9",
     "expo-sqlite": "~57.0.3",
     "expo-status-bar": "~57.0.1",
     "expo-updates": "~57.0.22",
@@ -22,8 +23,16 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.4",
-    "eas-cli": "^23.0.0",
     "typescript": "~6.0.3"
+  },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "expo-av"
+        ]
+      }
+    }
   },
   "scripts": {
     "start": "expo start",
