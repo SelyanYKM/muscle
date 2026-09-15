@@ -51,11 +51,11 @@ export const THEME_SPORTIFY_DARK = {
 };
 
 /**
- * THÈME 2 : Athletic Ethos: Soft Strength (Nouveau moodboard "soft Power")
+ * THÈME 2 : Athletic Ethos: Soft Strength (moodboard "Soft Power" — v2, orange adouci en terracotta)
  * - Fonds doux crème & pêche évanescents (#FBF8F5 / #FEEBF6)
  * - Typographie Duo : Serif affirmé (Editorial / Petrona) pour les titres et Sans-Serif géométrique (Manrope) pour la data
  * - Focus Card Violette (#C080E0) et Rest Blue (#8FB9D0) pour le minuteur
- * - Gros boutons de validation aux teintes pastel douces (#90EE90, #FFDAB9, #FF7F7F)
+ * - Boutons de validation pastel doux, distincts de l'accent (vert amande / pêche clair / rose poudré)
  * - Textes en noir profond Deep Carbon (#1C1C1E)
  */
 export const THEME_SOFT_STRENGTH = {
@@ -80,12 +80,12 @@ export const THEME_SOFT_STRENGTH = {
     textSecondary: '#6B6875',   // Gris ardoise chaleureux
     textMuted: '#9E9AA7',       // Légendes adoucies
 
-    // Accents du moodboard
-    accent: '#FF8C70',          // Performance Peach tonique
-    accentMuted: 'rgba(255, 140, 112, 0.16)',
+    // Accents du moodboard — terracotta doux (remplace l'orange vif d'origine)
+    accent: '#E28B72',
+    accentMuted: 'rgba(226, 139, 114, 0.16)',
     accentTextDark: '#FFFFFF',
 
-    // Focus Card & Rest Timer
+    // Focus Card & Rest Timer — violet/bleu, inchangés
     focusCardBg: '#C080E0',     // Focus Violet immersif
     focusCardBorder: '#AE6FD0',
     restOverlayBg: '#8FB9D0',   // Rest Blue ciel apaisant
@@ -96,18 +96,18 @@ export const THEME_SOFT_STRENGTH = {
     finisherBadgeBg: '#FDE8E5',
     finisherBadgeText: '#D94D3B',
 
-    // États de validation (Couleurs olympiques adoucies)
-    feelingEasyBg: '#90EE90',   // Vert pastel doux
-    feelingEasyBorder: '#76D876',
-    feelingEasyText: '#154722',
+    // États de validation — pastel, distincts de l'accent terracotta
+    feelingEasyBg: '#DCF0D4',   // Vert amande
+    feelingEasyBorder: '#C3E4C0',
+    feelingEasyText: '#2C5A35',
 
-    feelingMediumBg: '#FFDAB9', // Pêche moyen
-    feelingMediumBorder: '#F2BE94',
-    feelingMediumText: '#6A3705',
+    feelingMediumBg: '#FFEBD6', // Pêche clair
+    feelingMediumBorder: '#FFDCC0',
+    feelingMediumText: '#8A5321',
 
-    feelingHardBg: '#FF7F7F',   // Corail / Rose fail
-    feelingHardBorder: '#ED6363',
-    feelingHardText: '#681313',
+    feelingHardBg: '#FBD9DC',   // Rose poudré
+    feelingHardBorder: '#F6C3C8',
+    feelingHardText: '#96404A',
   },
 };
 
