@@ -1,30 +1,29 @@
-import notifee, {
-  AlarmType,
-  AndroidImportance,
-  AndroidVisibility,
-  AuthorizationStatus,
-  TriggerType,
-} from '@notifee/react-native';
+import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 // Minuteur de repos fiable en arrière-plan (écran verrouillé, autre appli au premier plan) :
-// une notification programmée via l'AlarmManager Android (le même mécanisme que les
-// réveils/minuteurs natifs), qui résiste au mode économie de batterie bien mieux que le
-// simple WorkManager utilisé par défaut.
-//
-// Un "service au premier plan" (notification persistante + app maintenue active) a aussi été
-// testé : c'est le mécanisme le plus robuste en théorie, mais il a fait planter l'app à deux
-// reprises sur le téléphone de test (Xiaomi/MIUI), même une fois isolé de tout autre bug. La
-// config native nécessaire (déclaration du service dans le manifeste Android, type de service,
-// permissions spéciales) dépasse ce qu'on peut fiabiliser sans accès à de vrais logs de crash
-// ou à un environnement de test natif. Cette version (notification programmée simple, jamais
-// plantée) reste donc la base la plus stable.
+// une notification programmée via expo-notifications, la librairie officielle de l'équipe
+// Expo (open source, maintenue directement par eux, déjà utilisée par la config EAS/Expo
+// Update du projet). Elle passe elle-même par l'AlarmManager Android en interne — le même
+// mécanisme que les réveils/minuteurs natifs — et choisit automatiquement une alarme exacte
+// ou approximative selon ce que l'appareil autorise, sans permission supplémentaire à gérer.
 
 const CHANNEL_ID = 'rest-timer';
 const NOTIFICATION_ID = 'rest-timer-alert';
 const VIBRATION_PATTERN = [0, 400, 250, 400, 250, 400];
 
 let isChannelConfigured = false;
+
+// Comportement quand une notification arrive pendant que l'app est au premier plan :
+// on la montre quand même (banniere + son), sinon expo-notifications la masque par défaut.
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 /**
  * À appeler une fois au démarrage de l'app : prépare le canal Android (son, vibration,
@@ -35,13 +34,12 @@ export async function configureRestTimerChannel(): Promise<void> {
   isChannelConfigured = true;
 
   try {
-    await notifee.createChannel({
-      id: CHANNEL_ID,
+    await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
       name: 'Minuteur de repos',
-      importance: AndroidImportance.HIGH,
-      visibility: AndroidVisibility.PUBLIC,
-      vibration: true,
+      importance: Notifications.AndroidImportance.HIGH,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       vibrationPattern: VIBRATION_PATTERN,
+      enableVibrate: true,
       sound: 'default',
       bypassDnd: true,
     });
@@ -57,8 +55,10 @@ export async function configureRestTimerChannel(): Promise<void> {
 export async function requestRestTimerPermission(): Promise<boolean> {
   if (Platform.OS === 'web') return false;
   try {
-    const settings = await notifee.requestPermission();
-    return settings.authorizationStatus >= AuthorizationStatus.AUTHORIZED;
+    const existing = await Notifications.getPermissionsAsync();
+    if (existing.granted) return true;
+    const requested = await Notifications.requestPermissionsAsync();
+    return requested.granted;
   } catch {
     return false;
   }
@@ -72,26 +72,26 @@ export async function startRestTimerService(endTimeMs: number, body: string): Pr
   if (Platform.OS !== 'android') return null;
 
   try {
-    await notifee.createTriggerNotification(
-      {
-        id: NOTIFICATION_ID,
+    // On annule d'abord toute alerte déjà programmée pour éviter d'avoir deux notifications
+    // en attente (par ex. quand on ajoute du temps avec +30s/+60s en cours de repos).
+    await stopRestTimerService();
+
+    const id = await Notifications.scheduleNotificationAsync({
+      identifier: NOTIFICATION_ID,
+      content: {
         title: 'Repos terminé 💪',
         body,
-        android: {
-          channelId: CHANNEL_ID,
-          pressAction: { id: 'default' },
-        },
+        sound: 'default',
+        vibrate: VIBRATION_PATTERN,
+        priority: 'high',
       },
-      {
-        type: TriggerType.TIMESTAMP,
-        timestamp: endTimeMs,
-        // "AND_ALLOW_WHILE_IDLE" (non exact) plutôt que la variante "EXACT" : cette dernière
-        // demande une permission spéciale (SCHEDULE_EXACT_ALARM) sur Android 12+, pas
-        // indispensable pour un minuteur de repos (quelques secondes de marge sont acceptables).
-        alarmManager: { type: AlarmType.SET_AND_ALLOW_WHILE_IDLE },
-      }
-    );
-    return NOTIFICATION_ID;
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: endTimeMs,
+        channelId: CHANNEL_ID,
+      },
+    });
+    return id;
   } catch {
     // Mode dégradé : le minuteur reste utilisable au premier plan, juste moins robuste
     // une fois l'app quittée.
@@ -103,7 +103,7 @@ export async function stopRestTimerService(): Promise<void> {
   if (Platform.OS !== 'android') return;
 
   try {
-    await notifee.cancelTriggerNotification(NOTIFICATION_ID);
+    await Notifications.cancelScheduledNotificationAsync(NOTIFICATION_ID);
   } catch {
     // Déjà annulée/déclenchée : sans conséquence
   }
