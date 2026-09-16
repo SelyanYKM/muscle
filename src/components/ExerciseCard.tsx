@@ -264,7 +264,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.35,
     shadowRadius: 24,
-    elevation: 6,
   },
   topHeader: {
     flexDirection: 'row',
@@ -445,7 +444,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.16,
     shadowRadius: 12,
-    elevation: 2,
   },
   feelingTextWrapper: {
     alignItems: 'center',

@@ -283,7 +283,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.35,
     shadowRadius: 30,
-    elevation: 10,
   },
   container: {
     borderRadius: 34,

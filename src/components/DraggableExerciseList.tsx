@@ -354,7 +354,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
-    elevation: 2,
   },
   cardFinisher: {
     borderColor: THEME.colors.cardFinisherBorder,
@@ -367,7 +366,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.18,
     shadowRadius: 20,
-    elevation: 8,
   },
   dragHandle: {
     paddingHorizontal: 6,

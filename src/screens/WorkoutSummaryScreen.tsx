@@ -218,7 +218,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.4,
     shadowRadius: 20,
-    elevation: 4,
   },
   trophyIcon: {
     fontSize: 24,
@@ -385,7 +384,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 14 },
     shadowOpacity: 0.4,
     shadowRadius: 24,
-    elevation: 4,
   },
   closeButtonText: {
     fontSize: 14,

@@ -782,7 +782,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
     shadowRadius: 12,
-    elevation: 3,
   },
   startButtonText: {
     fontFamily: THEME.fonts.sans,
@@ -810,7 +809,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.15,
     shadowRadius: 24,
-    elevation: 8,
   },
   pickerModalCard: {
     width: '100%',
@@ -825,7 +823,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.15,
     shadowRadius: 24,
-    elevation: 8,
   },
   catalogList: {
     maxHeight: 260,
