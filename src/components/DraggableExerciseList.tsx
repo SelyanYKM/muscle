@@ -226,12 +226,24 @@ const DraggableItemRow: React.FC<DraggableItemRowProps> = ({
 
   return (
     <View style={[styles.itemWrapper, isDragging && { zIndex: 9999 }]}>
-      {/* Bouton Supprimer en arrière-plan */}
-      <View style={styles.deleteBackground}>
+      {/* Bouton Supprimer en arrière-plan, invisible tant qu'on n'a pas glissé */}
+      <Animated.View
+        style={[
+          styles.deleteBackground,
+          {
+            opacity: swipeX.interpolate({
+              inputRange: [-75, -10, 0],
+              outputRange: [1, 1, 0],
+              extrapolate: 'clamp',
+            }),
+          },
+        ]}
+        pointerEvents={isDragging ? 'none' : 'box-none'}
+      >
         <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
           <Text style={styles.deleteBtnText}>Suppr.</Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
 
       {/* Carte principale */}
       <Animated.View
@@ -327,7 +339,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#DC2626',
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: 20,
   },
   deleteBtn: {
     width: '100%',
