@@ -63,8 +63,11 @@ export const THEME_SOFT_STRENGTH = {
   name: 'Athletic Ethos: Soft Strength',
   statusBarStyle: 'dark' as const,
   fonts: {
-    serif: Platform.select({ ios: 'Georgia', android: 'serif', default: 'serif' }),
-    sans: Platform.select({ ios: 'System', android: 'sans-serif', default: 'sans-serif' }),
+    // Duo typographique du moodboard : serif affirmé (Petrona) pour les titres,
+    // sans-serif géométrique (Manrope) pour le reste. Chargées via useFonts dans App.tsx ;
+    // avant que le chargement soit terminé, on retombe sur les polices système du téléphone.
+    serif: 'Petrona_700Bold',
+    sans: 'Manrope_800ExtraBold',
   },
   colors: {
     // Fonds & Cartes douces texturées "peluche"

@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@expo-google-fonts/manrope": "^0.4.2",
+    "@expo-google-fonts/petrona": "^0.4.4",
     "expo": "^57.0.0",
     "expo-asset": "~57.0.17",
     "expo-audio": "~57.0.5",
