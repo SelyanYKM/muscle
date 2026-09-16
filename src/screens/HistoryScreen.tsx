@@ -1,3 +1,4 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -314,7 +315,15 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <View style={styles.root}>
+      <LinearGradient
+        colors={[THEME.colors.bgGradientPeach, THEME.colors.bgGradientPink, THEME.colors.bgGradientSand]}
+        locations={[0, 0.55, 1]}
+        start={{ x: 1, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* En-tête avec bouton Retour & Option Clear au clic long */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.8}>
@@ -609,14 +618,18 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
           </View>
         </View>
       </Modal>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
     backgroundColor: THEME.colors.bg,
+  },
+  container: {
+    flex: 1,
   },
   content: {
     paddingHorizontal: 16,

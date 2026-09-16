@@ -1,3 +1,4 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import {
   Alert,
@@ -89,6 +90,7 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
         subtitle: 'Pectoraux • Épaules • Triceps',
         focus: 'Poussée & Développés',
         exercisesCount: '5 exos cibles',
+        gradient: ['#F4C3AE', '#E28B72'] as [string, string],
       };
     } else if (id === 2) {
       return {
@@ -96,6 +98,7 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
         subtitle: 'Dos • Arrière d’épaules • Biceps',
         focus: 'Tirages & Épaisseur',
         exercisesCount: '5 exos cibles',
+        gradient: ['#E8D3F5', '#C080E0'] as [string, string],
       };
     } else {
       return {
@@ -103,12 +106,21 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
         subtitle: 'Quadriceps • Ischios • Mollets',
         focus: 'Force & Volume bas du corps',
         exercisesCount: '5 exos cibles',
+        gradient: ['#DCE9F2', '#8FB9D0'] as [string, string],
       };
     }
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.root}>
+      <LinearGradient
+        colors={[THEME.colors.bgGradientPeach, THEME.colors.bgGradientPink, THEME.colors.bgGradientSand]}
+        locations={[0, 0.55, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         {/* En-tête officiel mooscles */}
         <View style={styles.headerRow}>
@@ -205,9 +217,14 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
                 activeOpacity={0.85}
               >
                 {/* Badge lettre majuscule P / P / L */}
-                <View style={styles.letterBadge}>
+                <LinearGradient
+                  colors={details.gradient}
+                  start={{ x: 0.1, y: 0 }}
+                  end={{ x: 0.9, y: 1 }}
+                  style={styles.letterBadge}
+                >
                   <Text style={styles.letterBadgeText}>{details.letter}</Text>
-                </View>
+                </LinearGradient>
 
                 {/* Détails du split */}
                 <View style={styles.cardContent}>
@@ -230,14 +247,18 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
           })}
         </View>
       </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  root: {
     flex: 1,
     backgroundColor: THEME.colors.bg,
+  },
+  safeArea: {
+    flex: 1,
   },
   container: {
     paddingHorizontal: 16,
@@ -280,12 +301,12 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   historyBtn: {
-    backgroundColor: THEME.colors.cardBg,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(255, 255, 255, 0.95)',
     shadowColor: '#8C7060',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -315,11 +336,11 @@ const styles = StyleSheet.create({
   },
   resumeCard: {
     width: 168,
-    backgroundColor: THEME.colors.cardBg,
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(255, 255, 255, 0.95)',
     shadowColor: '#8C7060',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
@@ -392,35 +413,32 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   splitCard: {
-    backgroundColor: THEME.colors.cardBg,
-    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    borderRadius: 24,
     padding: 18,
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(255, 255, 255, 0.95)',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
     shadowColor: '#8C7060',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.07,
-    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
     elevation: 2,
   },
   letterBadge: {
     width: 50,
     height: 50,
-    borderRadius: 14,
-    backgroundColor: THEME.colors.cardInner,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
   },
   letterBadgeText: {
     fontFamily: THEME.fonts.serif,
     fontSize: 24,
     fontWeight: '700',
-    color: THEME.colors.accent,
+    color: '#1C1C1E',
   },
   cardContent: {
     flex: 1,

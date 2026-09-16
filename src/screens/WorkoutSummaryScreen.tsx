@@ -1,3 +1,4 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
@@ -50,7 +51,15 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
   }, []);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <View style={styles.root}>
+      <LinearGradient
+        colors={[THEME.colors.bgGradientPeach, THEME.colors.bgGradientPink, THEME.colors.bgGradientSand]}
+        locations={[0, 0.55, 1]}
+        start={{ x: 1, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Animated.View
         style={{
           opacity: fadeAnim,
@@ -59,7 +68,14 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
       >
         {/* Badge et Titre */}
         <View style={styles.victoryHeader}>
-          <Text style={styles.trophyIcon}>⚡</Text>
+          <LinearGradient
+            colors={['#F4C3AE', '#E28B72']}
+            start={{ x: 0.15, y: 0 }}
+            end={{ x: 0.85, y: 1 }}
+            style={styles.trophyCircle}
+          >
+            <Text style={styles.trophyIcon}>⚡</Text>
+          </LinearGradient>
           <Text style={styles.victoryTitle}>SÉANCE TERMINÉE</Text>
           <Text style={styles.workoutSubtitle}>{summary.workoutName}</Text>
         </View>
@@ -158,18 +174,29 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
         </View>
 
         {/* Bouton de Fermeture */}
-        <TouchableOpacity style={styles.closeButton} onPress={onClose} activeOpacity={0.85}>
-          <Text style={styles.closeButtonText}>ENREGISTRER & RETOUR</Text>
+        <TouchableOpacity onPress={onClose} activeOpacity={0.85}>
+          <LinearGradient
+            colors={['#F4C3AE', '#E28B72']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0.4 }}
+            style={styles.closeButton}
+          >
+            <Text style={styles.closeButtonText}>ENREGISTRER & RETOUR</Text>
+          </LinearGradient>
         </TouchableOpacity>
       </Animated.View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  root: {
     flex: 1,
     backgroundColor: THEME.colors.bg,
+  },
+  container: {
+    flex: 1,
   },
   content: {
     paddingHorizontal: 16,
@@ -180,9 +207,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 18,
   },
+  trophyCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 999,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+    shadowColor: '#E28B72',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 4,
+  },
   trophyIcon: {
-    fontSize: 38,
-    marginBottom: 6,
+    fontSize: 24,
   },
   victoryTitle: {
     fontSize: 22,
@@ -203,12 +242,12 @@ const styles = StyleSheet.create({
   },
   statBox: {
     flex: 1,
-    backgroundColor: THEME.colors.cardBg,
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    borderRadius: 20,
+    padding: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(255, 255, 255, 0.95)',
   },
   statLabel: {
     fontSize: 9,
@@ -239,17 +278,17 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
   exerciseCard: {
-    backgroundColor: THEME.colors.cardBg,
-    borderRadius: 14,
-    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.76)',
+    borderRadius: 22,
+    padding: 14,
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(28, 28, 30, 0.08)',
   },
   exerciseCardFull: {
     borderColor: THEME.colors.feelingEasyBorder,
   },
   exerciseCardPartial: {
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(28, 28, 30, 0.08)',
   },
   exerciseCardDeload: {
     borderColor: THEME.colors.feelingHardBorder,
@@ -339,15 +378,19 @@ const styles = StyleSheet.create({
     lineHeight: 15,
   },
   closeButton: {
-    backgroundColor: THEME.colors.accent,
-    paddingVertical: 15,
-    borderRadius: 12,
+    paddingVertical: 16,
+    borderRadius: 999,
     alignItems: 'center',
+    shadowColor: '#E28B72',
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.4,
+    shadowRadius: 24,
+    elevation: 4,
   },
   closeButtonText: {
     fontSize: 14,
     fontWeight: '900',
-    color: THEME.colors.accentTextDark,
+    color: '#1C1C1E',
     letterSpacing: 0.5,
   },
 });

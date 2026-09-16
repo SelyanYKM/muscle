@@ -1,3 +1,4 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -240,6 +241,13 @@ export const SessionPrepScreen: React.FC<SessionPrepScreenProps> = ({
 
   return (
     <View style={styles.screenWrapper}>
+      <LinearGradient
+        colors={[THEME.colors.bgGradientPeach, THEME.colors.bgGradientPink]}
+        locations={[0, 0.6]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
@@ -653,12 +661,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   backNavBtn: {
-    backgroundColor: THEME.colors.cardBg,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(255, 255, 255, 0.95)',
   },
   backNavBtnText: {
     color: THEME.colors.textPrimary,
@@ -666,26 +674,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   sessionBadge: {
-    backgroundColor: THEME.colors.cardInner,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-  },
-  sessionBadgeText: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: THEME.colors.accent,
-    letterSpacing: 0.8,
-  },
-  historyButton: {
-    backgroundColor: THEME.colors.cardBg,
+    backgroundColor: THEME.colors.badgeBg,
     paddingHorizontal: 11,
     paddingVertical: 7,
-    borderRadius: 8,
+    borderRadius: 999,
+  },
+  sessionBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: THEME.colors.accentStrong,
+    letterSpacing: 0.6,
+  },
+  historyButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(255, 255, 255, 0.95)',
   },
   historyButtonText: {
     color: THEME.colors.textPrimary,
@@ -694,11 +700,11 @@ const styles = StyleSheet.create({
   },
 
   restCard: {
-    backgroundColor: THEME.colors.cardBg,
-    borderRadius: 14,
-    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    borderRadius: 20,
+    padding: 14,
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(255, 255, 255, 0.95)',
     marginBottom: 16,
     gap: 10,
   },
@@ -754,15 +760,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   addBtn: {
-    backgroundColor: THEME.colors.cardBg,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(226, 139, 114, 0.45)',
   },
   addBtnText: {
-    color: THEME.colors.accent,
+    color: THEME.colors.accentStrong,
     fontSize: 11,
     fontWeight: '800',
   },

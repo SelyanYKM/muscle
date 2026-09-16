@@ -1,3 +1,4 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import {
   SafeAreaView,
@@ -29,7 +30,15 @@ export const WorkoutModeSelectScreen: React.FC<WorkoutModeSelectScreenProps> = (
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.root}>
+      <LinearGradient
+        colors={[THEME.colors.bgGradientPeach, THEME.colors.bgGradientPink, THEME.colors.bgGradientSand]}
+        locations={[0, 0.55, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         {/* Bouton retour vers choix de split */}
         <View style={styles.topNav}>
@@ -139,14 +148,18 @@ export const WorkoutModeSelectScreen: React.FC<WorkoutModeSelectScreenProps> = (
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  root: {
     flex: 1,
     backgroundColor: THEME.colors.bg,
+  },
+  safeArea: {
+    flex: 1,
   },
   container: {
     paddingHorizontal: 16,
@@ -160,12 +173,12 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   backBtn: {
-    backgroundColor: THEME.colors.cardBg,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(255, 255, 255, 0.95)',
   },
   backBtnText: {
     color: THEME.colors.textPrimary,
@@ -173,17 +186,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   workoutBadge: {
-    backgroundColor: THEME.colors.cardInner,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    backgroundColor: THEME.colors.badgeBg,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 999,
   },
   workoutBadgeText: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: THEME.colors.accent,
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: THEME.colors.accentStrong,
     letterSpacing: 0.8,
   },
   stepTitleBox: {
@@ -215,23 +226,23 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   modeCard: {
-    backgroundColor: THEME.colors.cardBg,
-    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.66)',
+    borderRadius: 26,
     padding: 20,
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(28, 28, 30, 0.08)',
     shadowColor: '#8C7060',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
     elevation: 3,
   },
   guidedCard: {
     borderColor: THEME.colors.accent,
-    backgroundColor: '#FFFDFB',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
   },
   freeCard: {
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(28, 28, 30, 0.08)',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -242,7 +253,7 @@ const styles = StyleSheet.create({
   modeIconCircle: {
     width: 42,
     height: 42,
-    borderRadius: 10,
+    borderRadius: 14,
     backgroundColor: THEME.colors.cardInner,
     justifyContent: 'center',
     alignItems: 'center',
@@ -253,25 +264,25 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   pillBadge: {
-    backgroundColor: 'rgba(204, 255, 0, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 5,
+    backgroundColor: 'rgba(226, 139, 114, 0.18)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(204, 255, 0, 0.3)',
+    borderColor: 'rgba(226, 139, 114, 0.4)',
   },
   pillBadgeText: {
-    color: THEME.colors.accent,
+    color: THEME.colors.accentDark,
     fontSize: 9,
-    fontWeight: '900',
+    fontWeight: '800',
     letterSpacing: 0.5,
   },
   freePillBadge: {
-    backgroundColor: THEME.colors.cardInner,
-    borderColor: THEME.colors.cardBorder,
+    backgroundColor: THEME.colors.badgeBg,
+    borderColor: 'transparent',
   },
   freePillBadgeText: {
-    color: THEME.colors.textSecondary,
+    color: THEME.colors.badgeText,
   },
   modeTitle: {
     fontFamily: THEME.fonts.serif,

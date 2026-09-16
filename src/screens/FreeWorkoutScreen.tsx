@@ -1,4 +1,5 @@
 import { useKeepAwake } from 'expo-keep-awake';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
@@ -325,7 +326,15 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   }, 0);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.root}>
+      <LinearGradient
+        colors={[THEME.colors.bgGradientPeach, THEME.colors.bgGradientPink]}
+        locations={[0, 0.6]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         {/* En-tête de la séance libre */}
         <View style={styles.topHeader}>
@@ -441,31 +450,40 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           {/* 3 Boutons de validation par Ressenti */}
           <Text style={[styles.sectionLabel, { marginTop: 8, marginBottom: 8 }]}>VALIDER LA SÉRIE</Text>
           <View style={styles.feelingRow}>
-            <TouchableOpacity
-              style={[styles.feelBtn, styles.feelBtnEasy]}
-              onPress={() => handleCompleteSet('EASY')}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.feelBtnTitle}>FACILE</Text>
-              <Text style={styles.feelBtnSub}>2+ en réserve</Text>
+            <TouchableOpacity onPress={() => handleCompleteSet('EASY')} activeOpacity={0.85} style={styles.feelBtnFlex}>
+              <LinearGradient
+                colors={THEME.colors.feelingEasyGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0.4 }}
+                style={styles.feelBtn}
+              >
+                <Text style={[styles.feelBtnTitle, { color: THEME.colors.feelingEasyText }]}>FACILE</Text>
+                <Text style={[styles.feelBtnSub, { color: THEME.colors.feelingEasyText }]}>2+ en réserve</Text>
+              </LinearGradient>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.feelBtn, styles.feelBtnMedium]}
-              onPress={() => handleCompleteSet('MEDIUM')}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.feelBtnTitle}>JUSTE</Text>
-              <Text style={styles.feelBtnSub}>0-1 en réserve</Text>
+            <TouchableOpacity onPress={() => handleCompleteSet('MEDIUM')} activeOpacity={0.85} style={styles.feelBtnFlex}>
+              <LinearGradient
+                colors={THEME.colors.feelingMediumGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0.4 }}
+                style={styles.feelBtn}
+              >
+                <Text style={[styles.feelBtnTitle, { color: THEME.colors.feelingMediumText }]}>JUSTE</Text>
+                <Text style={[styles.feelBtnSub, { color: THEME.colors.feelingMediumText }]}>0-1 en réserve</Text>
+              </LinearGradient>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.feelBtn, styles.feelBtnHard]}
-              onPress={() => handleCompleteSet('HARD')}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.feelBtnTitle}>ÉCHEC</Text>
-              <Text style={styles.feelBtnSub}>Atteint</Text>
+            <TouchableOpacity onPress={() => handleCompleteSet('HARD')} activeOpacity={0.85} style={styles.feelBtnFlex}>
+              <LinearGradient
+                colors={THEME.colors.feelingHardGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0.4 }}
+                style={styles.feelBtn}
+              >
+                <Text style={[styles.feelBtnTitle, { color: THEME.colors.feelingHardText }]}>ÉCHEC</Text>
+                <Text style={[styles.feelBtnSub, { color: THEME.colors.feelingHardText }]}>Atteint</Text>
+              </LinearGradient>
             </TouchableOpacity>
           </View>
         </View>
@@ -645,14 +663,18 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  root: {
     flex: 1,
     backgroundColor: THEME.colors.bg,
+  },
+  safeArea: {
+    flex: 1,
   },
   container: {
     paddingHorizontal: 16,
@@ -712,12 +734,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   quitBtn: {
-    backgroundColor: THEME.colors.cardBg,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(28, 28, 30, 0.08)',
   },
   quitBtnText: {
     fontFamily: THEME.fonts.sans,
@@ -752,15 +774,15 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   currentExCard: {
-    backgroundColor: THEME.colors.cardBg,
-    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    borderRadius: 22,
     padding: 18,
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(255, 255, 255, 0.95)',
     shadowColor: '#8C7060',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
     elevation: 3,
   },
   currentExTop: {
@@ -808,16 +830,16 @@ const styles = StyleSheet.create({
     color: THEME.colors.textPrimary,
   },
   setEntrySection: {
-    backgroundColor: THEME.colors.cardBg,
-    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    borderRadius: 22,
     padding: 18,
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(255, 255, 255, 0.95)',
     marginBottom: 18,
     shadowColor: '#8C7060',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
     elevation: 3,
   },
   steppersRow: {
@@ -883,40 +905,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
-  feelBtn: {
+  feelBtnFlex: {
     flex: 1,
+  },
+  feelBtn: {
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 999,
     alignItems: 'center',
-    borderWidth: 1,
-    shadowColor: '#8C7060',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
+    shadowColor: '#1C1200',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
     elevation: 1,
-  },
-  feelBtnEasy: {
-    backgroundColor: THEME.colors.feelingEasyBg,
-    borderColor: THEME.colors.feelingEasyBorder,
-  },
-  feelBtnMedium: {
-    backgroundColor: THEME.colors.feelingMediumBg,
-    borderColor: THEME.colors.feelingMediumBorder,
-  },
-  feelBtnHard: {
-    backgroundColor: THEME.colors.feelingHardBg,
-    borderColor: THEME.colors.feelingHardBorder,
   },
   feelBtnTitle: {
     fontFamily: THEME.fonts.sans,
-    color: THEME.colors.textPrimary,
     fontSize: 13,
     fontWeight: '900',
     letterSpacing: 0.5,
   },
   feelBtnSub: {
     fontFamily: THEME.fonts.sans,
-    color: THEME.colors.textSecondary,
     fontSize: 9,
     fontWeight: '600',
     marginTop: 2,
@@ -936,12 +945,12 @@ const styles = StyleSheet.create({
     color: THEME.colors.accent,
   },
   emptyLogsCard: {
-    backgroundColor: THEME.colors.cardBg,
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderRadius: 16,
     padding: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(255, 255, 255, 0.85)',
   },
   emptyLogsText: {
     fontSize: 13,
@@ -958,11 +967,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   completedExCard: {
-    backgroundColor: THEME.colors.cardBg,
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.65)',
+    borderRadius: 16,
     padding: 10,
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(255, 255, 255, 0.85)',
   },
   completedExName: {
     fontSize: 13,
