@@ -17,7 +17,9 @@ import {
   addCustomExercise,
   getAllCatalogExercises,
   saveWorkoutLogs,
+  updateExerciseProgression,
 } from '../database/db';
+import { calculateNextSession } from '../engine/progression';
 import { THEME } from '../theme';
 import {
   ConfiguredExercise,
@@ -214,6 +216,25 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     setIsResting(true);
   };
 
+  // Annule la série qu'on vient de valider, appelée depuis l'écran de repos.
+  const handleUndoFromRest = () => {
+    if (!currentExercise) return;
+    triggerLightHaptic();
+    setIsResting(false);
+    setCompletedExercises((prev) => {
+      const existingIdx = prev.findIndex((c) => c.exerciseId === currentExercise.id);
+      if (existingIdx < 0) return prev;
+
+      const remainingSets = prev[existingIdx].sets.slice(0, -1);
+      if (remainingSets.length === 0) {
+        return prev.filter((_, idx) => idx !== existingIdx);
+      }
+      const updated = [...prev];
+      updated[existingIdx] = { ...updated[existingIdx], sets: remainingSets };
+      return updated;
+    });
+  };
+
   // Finaliser la séance libre
   const handleFinalizeSession = () => {
     if (completedExercises.length === 0) {
@@ -250,13 +271,26 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         });
       }
 
+      // Applique le même moteur de surcharge progressive qu'en mode guidé, pour que les
+      // charges proposées la prochaine fois (guidée ou libre) tiennent compte de cette séance.
+      const catalogEx = catalogExercises.find((c) => c.id === exLog.exerciseId);
+      const plan = calculateNextSession(
+        exLog.sets,
+        catalogEx?.targetReps || 8,
+        catalogEx?.minIncrement || 2.5,
+        catalogEx?.consecutiveFailures || 0
+      );
+
+      const newFailureCount =
+        plan.progressionVerdict === 'MAINTAIN' && exLog.sets.some((s) => s.feeling === 'HARD')
+          ? (catalogEx?.consecutiveFailures || 0) + 1
+          : 0;
+
+      updateExerciseProgression(exLog.exerciseId, plan.weightsPerSet, newFailureCount);
+
       exerciseSummaries.push({
         exerciseName: exLog.exerciseName,
-        plan: {
-          weightsPerSet: exLog.sets.map((s) => s.weight),
-          progressionVerdict: 'MAINTAIN',
-          message: 'Séance libre enregistrée avec succès.',
-        },
+        plan,
         results: exLog.sets,
       });
     }
@@ -488,6 +522,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           nextWeight={currentWeight}
           onSkip={() => setIsResting(false)}
           onFinish={() => setIsResting(false)}
+          onUndo={handleUndoFromRest}
         />
       )}
 

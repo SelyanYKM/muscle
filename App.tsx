@@ -13,6 +13,7 @@ import { WorkoutSummaryScreen } from './src/screens/WorkoutSummaryScreen';
 import { THEME } from './src/theme';
 import { NextSessionPlan, SessionConfig, SetResult } from './src/types';
 import { configureAppAudio } from './src/utils/audio';
+import { configureNotifications } from './src/utils/notifications';
 
 type ScreenState =
   | 'SPLIT_SELECT'
@@ -52,6 +53,7 @@ export default function App() {
       try {
         await initDatabase();
         await configureAppAudio();
+        await configureNotifications();
       } catch (e) {
         console.error('Erreur init database / audio:', e);
       } finally {
@@ -111,6 +113,14 @@ export default function App() {
     setCurrentScreen('MODE_SELECT');
   };
 
+  // Reprise rapide depuis le bandeau "Reprendre" : va directement à la préparation
+  // de la séance guidée (mode le plus courant pour relancer un programme déjà fait),
+  // les charges proposées reflètent déjà la progression calculée après la dernière séance.
+  const handleResumeWorkout = (wId: number, wName: string) => {
+    setSelectedWorkout({ id: wId, name: wName });
+    setCurrentScreen('PREP');
+  };
+
   // Étape 2 : Sélection du Mode (Guidé vs Libre)
   const handleSelectMode = (mode: 'GUIDED' | 'FREE') => {
     if (mode === 'GUIDED') {
@@ -148,6 +158,7 @@ export default function App() {
         {currentScreen === 'SPLIT_SELECT' && (
           <SplitSelectScreen
             onSelectWorkout={handleSelectSplit}
+            onResumeWorkout={handleResumeWorkout}
             onOpenHistory={() => setCurrentScreen('HISTORY')}
           />
         )}

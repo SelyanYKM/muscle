@@ -130,6 +130,19 @@ export const LiveWorkoutScreen: React.FC<LiveWorkoutScreenProps> = ({
     }
   };
 
+  // Annule la série qu'on vient de valider, appelée depuis l'écran de repos (avant que
+  // setIndex n'ait avancé). Contrairement à handleUndo ci-dessus (depuis la carte suivante),
+  // ici on ne touche pas setIndex : il pointe encore sur la série qu'on vient de faire.
+  const handleUndoFromRest = () => {
+    triggerLightHaptic();
+    setIsResting(false);
+    setSessionResults((prev) => {
+      const currentExResults = [...(prev[exerciseIndex] || [])];
+      currentExResults.pop();
+      return { ...prev, [exerciseIndex]: currentExResults };
+    });
+  };
+
   const getRestDuration = () => {
     if (!currentExercise) return 90;
     return currentExercise.category === 'FREE_WEIGHT'
@@ -363,6 +376,7 @@ export const LiveWorkoutScreen: React.FC<LiveWorkoutScreenProps> = ({
             nextWeight={nextPreview.weight}
             onSkip={handleRestFinished}
             onFinish={handleRestFinished}
+            onUndo={handleUndoFromRest}
           />
         )}
       </ScrollView>

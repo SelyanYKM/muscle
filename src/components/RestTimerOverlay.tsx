@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 import { THEME } from '../theme';
 import { playRestTimerAlarm } from '../utils/audio';
-import { triggerLightHaptic, triggerSuccessHaptic, triggerWarningHaptic } from '../utils/haptics';
+import { triggerLightHaptic, triggerTimerEndHaptic, triggerWarningHaptic } from '../utils/haptics';
+import { cancelRestEndNotification, scheduleRestEndNotification } from '../utils/notifications';
 
 interface RestTimerOverlayProps {
   initialSeconds: number;
@@ -20,6 +21,8 @@ interface RestTimerOverlayProps {
   nextWeight: number;
   onSkip: () => void;
   onFinish: () => void;
+  /** Ferme le repos et annule la dernière série validée (accessible directement depuis cet écran). */
+  onUndo?: () => void;
 }
 
 export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
@@ -29,6 +32,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   nextWeight,
   onSkip,
   onFinish,
+  onUndo,
 }) => {
   const [secondsRemaining, setSecondsRemaining] = useState(initialSeconds);
   const [totalSeconds, setTotalSeconds] = useState(initialSeconds);
@@ -36,9 +40,29 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   // Timestamp cible absolu pour ne jamais perdre le temps en arrière-plan
   const targetTimeRef = useRef<number>(Date.now() + initialSeconds * 1000);
 
+  // Empêche l'AppState listener et le setInterval de déclencher la fin du repos deux fois
+  const hasEndedRef = useRef<boolean>(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Identifiant de la notification système programmée (pour l'annuler/la replanifier)
+  const notificationIdRef = useRef<string | null>(null);
+
   // Animation de pulsation et d'entrée
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const notificationBody = `${exerciseName} • Série ${nextSetNumber} • ${nextWeight} kg`;
+
+  // Déclenche l'alerte de fin de repos une seule fois, quel que soit le chemin qui la détecte
+  // (retour au premier plan ou minuteur classique).
+  const finishNow = () => {
+    if (hasEndedRef.current) return;
+    hasEndedRef.current = true;
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    cancelRestEndNotification(notificationIdRef.current);
+    triggerTimerEndHaptic();
+    playRestTimerAlarm();
+    onFinish();
+  };
 
   useEffect(() => {
     Animated.timing(fadeAnim, {
@@ -47,30 +71,37 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
       useNativeDriver: true,
     }).start();
 
+    // Notification système programmée pour l'instant où le repos se termine : contrairement
+    // au son/vibration ci-dessus (qui dépendent du code JS en cours d'exécution), elle est
+    // gérée par le téléphone lui-même et sonne donc même écran verrouillé ou app en arrière-plan.
+    let isMounted = true;
+    scheduleRestEndNotification(initialSeconds, notificationBody).then((id) => {
+      if (isMounted) {
+        notificationIdRef.current = id;
+      } else if (id) {
+        cancelRestEndNotification(id);
+      }
+    });
+
     // Écouteur de retour au premier plan (depuis Spotify / écran verrouillé)
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       if (nextAppState === 'active') {
         const remaining = Math.max(0, Math.ceil((targetTimeRef.current - Date.now()) / 1000));
         setSecondsRemaining(remaining);
         if (remaining <= 0) {
-          triggerSuccessHaptic();
-          playRestTimerAlarm();
-          onFinish();
+          finishNow();
         }
       }
     });
 
     // Intervalle régulier d'animation et de décompte
-    const timer = setInterval(() => {
+    intervalRef.current = setInterval(() => {
       const now = Date.now();
       const remaining = Math.max(0, Math.ceil((targetTimeRef.current - now) / 1000));
       setSecondsRemaining(remaining);
 
       if (remaining <= 0) {
-        clearInterval(timer);
-        triggerSuccessHaptic();
-        playRestTimerAlarm();
-        onFinish();
+        finishNow();
         return;
       }
 
@@ -94,8 +125,10 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     }, 1000);
 
     return () => {
-      clearInterval(timer);
+      isMounted = false;
+      if (intervalRef.current) clearInterval(intervalRef.current);
       subscription.remove();
+      cancelRestEndNotification(notificationIdRef.current);
     };
   }, []);
 
@@ -104,7 +137,38 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     targetTimeRef.current += secs * 1000;
     const newRemaining = Math.max(0, Math.ceil((targetTimeRef.current - Date.now()) / 1000));
     setSecondsRemaining(newRemaining);
-    setTotalSeconds((prev) => Math.max(newRemaining, prev + secs));
+    // Le total (dénominateur de la barre de progression) ne grandit que si on AJOUTE du temps ;
+    // retirer du temps raccourcit juste le repos restant sans faire "sauter" la barre.
+    if (secs > 0) {
+      setTotalSeconds((prev) => prev + secs);
+    }
+
+    // Replanifie la notification système avec le nouveau temps restant
+    const previousNotificationId = notificationIdRef.current;
+    notificationIdRef.current = null;
+    cancelRestEndNotification(previousNotificationId);
+    if (newRemaining > 0) {
+      scheduleRestEndNotification(newRemaining, notificationBody).then((id) => {
+        notificationIdRef.current = id;
+      });
+    }
+  };
+
+  const handleSkip = () => {
+    if (hasEndedRef.current) return;
+    hasEndedRef.current = true;
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    cancelRestEndNotification(notificationIdRef.current);
+    triggerLightHaptic();
+    onSkip();
+  };
+
+  const handleUndo = () => {
+    if (hasEndedRef.current || !onUndo) return;
+    hasEndedRef.current = true;
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    cancelRestEndNotification(notificationIdRef.current);
+    onUndo();
   };
 
   const minutes = Math.floor(secondsRemaining / 60);
@@ -156,16 +220,16 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
           </View>
 
           {/* Bouton Passer */}
-          <TouchableOpacity
-            style={styles.skipButton}
-            onPress={() => {
-              triggerLightHaptic();
-              onSkip();
-            }}
-            activeOpacity={0.85}
-          >
+          <TouchableOpacity style={styles.skipButton} onPress={handleSkip} activeOpacity={0.85}>
             <Text style={styles.skipButtonText}>Je suis prêt (Passer)</Text>
           </TouchableOpacity>
+
+          {/* Correction d'une erreur de validation, sans attendre la fin du repos */}
+          {onUndo && (
+            <TouchableOpacity style={styles.undoLink} onPress={handleUndo} activeOpacity={0.7}>
+              <Text style={styles.undoLinkText}>Erreur ? Corriger la dernière série</Text>
+            </TouchableOpacity>
+          )}
         </Animated.View>
       </View>
     </Modal>
@@ -291,5 +355,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  undoLink: {
+    marginTop: 14,
+    paddingVertical: 4,
+  },
+  undoLinkText: {
+    fontFamily: THEME.fonts.sans,
+    color: '#627D98',
+    fontSize: 12,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
 });

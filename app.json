@@ -33,7 +33,14 @@
       "expo-font",
       "expo-status-bar",
       "expo-splash-screen",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#09090B"
+        }
+      ]
     ],
     "extra": {
       "eas": {

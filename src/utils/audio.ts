@@ -1,6 +1,10 @@
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { Platform } from 'react-native';
 
+// Son embarqué dans l'app : aucune connexion réseau requise (contrairement à une URL distante),
+// donc l'alarme fonctionne même sans wifi/4G en salle de sport.
+const REST_TIMER_ALARM_SOUND = require('../../assets/sounds/rest_timer_alarm.wav');
+
 let isAudioConfigured = false;
 
 /**
@@ -31,14 +35,13 @@ export async function playRestTimerAlarm(): Promise<void> {
 
   try {
     await configureAppAudio();
-    const player = createAudioPlayer('https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg');
+    const player = createAudioPlayer(REST_TIMER_ALARM_SOUND);
     player.play();
 
-    // Arrêt et libération automatique après 2 secondes
+    // Libération automatique après 2 secondes (le son dure ~0.7s)
     setTimeout(() => {
       try {
-        player.pause();
-        player.release();
+        player.remove();
       } catch {}
     }, 2000);
   } catch {
