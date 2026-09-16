@@ -18,14 +18,19 @@ export async function configureNotifications(): Promise<void> {
   if (Platform.OS === 'web' || isHandlerConfigured) return;
   isHandlerConfigured = true;
 
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowBanner: true,
-      shouldShowList: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-    }),
-  });
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+  } catch {
+    // Mode dégradé si non supporté : le canal Android ci-dessous doit quand même
+    // être configuré, donc on ne bloque pas la suite.
+  }
 
   if (Platform.OS === 'android') {
     try {
