@@ -22,6 +22,11 @@ jobs:
       - name: Install eas-cli
         run: npm install -g eas-cli
 
+      - name: Link or create the EAS project
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas init --non-interactive
+
       - name: Build Android APK
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
