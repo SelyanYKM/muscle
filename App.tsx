@@ -16,7 +16,7 @@ import { WorkoutSummaryScreen } from './src/screens/WorkoutSummaryScreen';
 import { THEME } from './src/theme';
 import { NextSessionPlan, SessionConfig, SetResult } from './src/types';
 import { configureAppAudio } from './src/utils/audio';
-import { configureRestTimerChannel } from './src/utils/restTimerService';
+import { configureRestTimerChannel, requestRestTimerPermission } from './src/utils/restTimerService';
 
 type ScreenState =
   | 'SPLIT_SELECT'
@@ -61,6 +61,10 @@ export default function App() {
         await initDatabase();
         await configureAppAudio();
         await configureRestTimerChannel();
+        // Demandée ici, avant tout écran en <Modal> (le minuteur de repos inclus) :
+        // le popup système Android pour autoriser les notifications peut ne jamais
+        // s'afficher correctement s'il est demandé pendant qu'une Modal RN est ouverte.
+        await requestRestTimerPermission();
       } catch (e) {
         console.error('Erreur init database / audio:', e);
       } finally {
