@@ -9,9 +9,6 @@
     "runtimeVersion": {
       "policy": "appVersion"
     },
-    "updates": {
-      "url": "https://u.expo.dev/77795807-b4fc-4579-9e15-ab71e1f8b2c0"
-    },
     "ios": {
       "supportsTablet": true
     },
@@ -41,11 +38,6 @@
           "color": "#09090B"
         }
       ]
-    ],
-    "extra": {
-      "eas": {
-        "projectId": "77795807-b4fc-4579-9e15-ab71e1f8b2c0"
-      }
-    }
+    ]
   }
 }
