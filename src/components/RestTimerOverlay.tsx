@@ -1,4 +1,3 @@
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -186,12 +185,11 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
-        <BlurView intensity={30} tint="dark" style={styles.backdropBlur} />
+        <View style={styles.backdropBlur} />
 
         <Animated.View style={[styles.cardWrapper, { opacity: fadeAnim }]}>
-          <BlurView intensity={55} tint="light" style={styles.cardBlur}>
             <LinearGradient
-              colors={['rgba(255,255,255,0.88)', 'rgba(255,255,255,0.76)', 'rgba(255,255,255,0.85)']}
+              colors={['rgba(255,255,255,0.94)', 'rgba(255,255,255,0.88)', 'rgba(255,255,255,0.92)']}
               locations={[0, 0.45, 1]}
               style={styles.container}
             >
@@ -255,7 +253,6 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
                 </TouchableOpacity>
               )}
             </LinearGradient>
-          </BlurView>
         </Animated.View>
       </View>
     </Modal>
@@ -287,10 +284,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 30,
     elevation: 10,
-  },
-  cardBlur: {
-    borderRadius: 34,
-    overflow: 'hidden',
   },
   container: {
     borderRadius: 34,
