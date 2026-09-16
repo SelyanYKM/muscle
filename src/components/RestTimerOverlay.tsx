@@ -12,7 +12,11 @@ import {
 import { THEME } from '../theme';
 import { playRestTimerAlarm } from '../utils/audio';
 import { triggerLightHaptic, triggerTimerEndHaptic, triggerWarningHaptic } from '../utils/haptics';
-import { cancelRestEndNotification, scheduleRestEndNotification } from '../utils/notifications';
+import {
+  requestRestTimerPermission,
+  startRestTimerService,
+  stopRestTimerService,
+} from '../utils/restTimerService';
 
 interface RestTimerOverlayProps {
   initialSeconds: number;
@@ -43,8 +47,6 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   // Empêche l'AppState listener et le setInterval de déclencher la fin du repos deux fois
   const hasEndedRef = useRef<boolean>(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Identifiant de la notification système programmée (pour l'annuler/la replanifier)
-  const notificationIdRef = useRef<string | null>(null);
 
   // Animation de pulsation et d'entrée
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -58,7 +60,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     if (hasEndedRef.current) return;
     hasEndedRef.current = true;
     if (intervalRef.current) clearInterval(intervalRef.current);
-    cancelRestEndNotification(notificationIdRef.current);
+    stopRestTimerService();
     triggerTimerEndHaptic();
     playRestTimerAlarm();
     onFinish();
@@ -71,15 +73,14 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
       useNativeDriver: true,
     }).start();
 
-    // Notification système programmée pour l'instant où le repos se termine : contrairement
-    // au son/vibration ci-dessus (qui dépendent du code JS en cours d'exécution), elle est
-    // gérée par le téléphone lui-même et sonne donc même écran verrouillé ou app en arrière-plan.
+    // Service au premier plan Android avec notification persistante : contrairement au
+    // son/vibration ci-dessus (qui dépendent du code JS en cours d'exécution), ça garde
+    // l'app active pendant tout le repos, donc l'alarme sonne fiablement même écran
+    // verrouillé ou app en arrière-plan.
     let isMounted = true;
-    scheduleRestEndNotification(initialSeconds, notificationBody).then((id) => {
-      if (isMounted) {
-        notificationIdRef.current = id;
-      } else if (id) {
-        cancelRestEndNotification(id);
+    requestRestTimerPermission().then((granted) => {
+      if (granted && isMounted) {
+        startRestTimerService(targetTimeRef.current, notificationBody);
       }
     });
 
@@ -128,7 +129,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
       isMounted = false;
       if (intervalRef.current) clearInterval(intervalRef.current);
       subscription.remove();
-      cancelRestEndNotification(notificationIdRef.current);
+      stopRestTimerService();
     };
   }, []);
 
@@ -143,14 +144,9 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
       setTotalSeconds((prev) => prev + secs);
     }
 
-    // Replanifie la notification système avec le nouveau temps restant
-    const previousNotificationId = notificationIdRef.current;
-    notificationIdRef.current = null;
-    cancelRestEndNotification(previousNotificationId);
+    // Met à jour le décompte affiché dans la notification persistante
     if (newRemaining > 0) {
-      scheduleRestEndNotification(newRemaining, notificationBody).then((id) => {
-        notificationIdRef.current = id;
-      });
+      startRestTimerService(targetTimeRef.current, notificationBody);
     }
   };
 
@@ -158,7 +154,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     if (hasEndedRef.current) return;
     hasEndedRef.current = true;
     if (intervalRef.current) clearInterval(intervalRef.current);
-    cancelRestEndNotification(notificationIdRef.current);
+    stopRestTimerService();
     triggerLightHaptic();
     onSkip();
   };
@@ -167,7 +163,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     if (hasEndedRef.current || !onUndo) return;
     hasEndedRef.current = true;
     if (intervalRef.current) clearInterval(intervalRef.current);
-    cancelRestEndNotification(notificationIdRef.current);
+    stopRestTimerService();
     onUndo();
   };
 

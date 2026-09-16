@@ -20,7 +20,13 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "package": "com.selyanykm.mooscles"
+      "package": "com.selyanykm.mooscles",
+      "permissions": [
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_SPECIAL_USE",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.WAKE_LOCK"
+      ]
     },
     "web": {
       "favicon": "./assets/icon.png"
@@ -31,14 +37,7 @@
       "expo-font",
       "expo-status-bar",
       "expo-splash-screen",
-      "expo-audio",
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/icon.png",
-          "color": "#09090B"
-        }
-      ]
+      "expo-audio"
     ]
   }
 }

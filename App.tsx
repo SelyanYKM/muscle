@@ -16,7 +16,7 @@ import { WorkoutSummaryScreen } from './src/screens/WorkoutSummaryScreen';
 import { THEME } from './src/theme';
 import { NextSessionPlan, SessionConfig, SetResult } from './src/types';
 import { configureAppAudio } from './src/utils/audio';
-import { configureNotifications } from './src/utils/notifications';
+import { configureRestTimerChannel } from './src/utils/restTimerService';
 
 type ScreenState =
   | 'SPLIT_SELECT'
@@ -60,7 +60,7 @@ export default function App() {
       try {
         await initDatabase();
         await configureAppAudio();
-        await configureNotifications();
+        await configureRestTimerChannel();
       } catch (e) {
         console.error('Erreur init database / audio:', e);
       } finally {
