@@ -10,6 +10,9 @@
     "runtimeVersion": {
       "policy": "appVersion"
     },
+    "updates": {
+      "url": "https://u.expo.dev/3eebfc25-59a2-45dd-9dc5-a9e84b573fd9"
+    },
     "ios": {
       "supportsTablet": true
     },
@@ -38,6 +41,11 @@
       "expo-status-bar",
       "expo-splash-screen",
       "expo-audio"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "3eebfc25-59a2-45dd-9dc5-a9e84b573fd9"
+      }
+    }
   }
 }
