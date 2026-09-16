@@ -7,29 +7,32 @@ interface PlateBreakdownProps {
   totalWeight: number;
   baseWeight?: number;
   category: 'HAMMER_STRENGTH' | 'FREE_WEIGHT';
+  /** Variante claire sur texte (carte de série violette, fond sombre). */
+  dark?: boolean;
 }
 
 export const PlateBreakdown: React.FC<PlateBreakdownProps> = ({
   totalWeight,
   baseWeight = 0,
   category,
+  dark = false,
 }) => {
   const plates = getPlateBreakdownPerSide(totalWeight, baseWeight);
   const weightToLoad = Math.max(0, totalWeight - baseWeight);
   const weightPerSide = weightToLoad / 2;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, dark && styles.containerDark]}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>CHARGEMENT PAR CÔTÉ</Text>
-        <Text style={styles.subtext}>
+        <Text style={[styles.title, dark && styles.titleDark]}>CHARGEMENT PAR CÔTÉ</Text>
+        <Text style={[styles.subtext, dark && styles.subtextDark]}>
           {category === 'FREE_WEIGHT' ? `Barre 20kg + ${weightPerSide}kg/côté` : `${weightPerSide}kg/côté`}
         </Text>
       </View>
 
       {plates.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyText, dark && styles.emptyTextDark]}>
             {category === 'FREE_WEIGHT' ? 'Barre à vide (20 kg)' : 'Machine à vide (0 kg)'}
           </Text>
         </View>
@@ -69,6 +72,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
   },
+  containerDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 16,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -83,11 +91,17 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary,
     letterSpacing: 0.8,
   },
+  titleDark: {
+    color: 'rgba(244, 237, 247, 0.6)',
+  },
   subtext: {
     fontSize: 11,
     fontWeight: '600',
     color: THEME.colors.textPrimary,
     flexShrink: 1,
+  },
+  subtextDark: {
+    color: THEME.colors.textOnDark,
   },
   platesRow: {
     flexDirection: 'row',
@@ -135,5 +149,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: THEME.colors.textMuted,
     fontStyle: 'italic',
+  },
+  emptyTextDark: {
+    color: 'rgba(244, 237, 247, 0.5)',
   },
 });

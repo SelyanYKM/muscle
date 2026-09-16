@@ -1,3 +1,4 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -99,15 +100,18 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
 
   return (
     <Animated.View
-      style={[
-        styles.cardContainer,
-        isFinisher && styles.cardContainerFinisher,
-        {
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }],
-        },
-      ]}
+      style={{
+        opacity: fadeAnim,
+        transform: [{ translateY: slideAnim }],
+      }}
     >
+      <LinearGradient
+        colors={[THEME.colors.seriesCardFrom, THEME.colors.seriesCardMid, THEME.colors.seriesCardTo]}
+        locations={[0, 0.55, 1]}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={styles.cardContainer}
+      >
       {/* En-tête : Catégorie & Numéro de série */}
       <View style={styles.topHeader}>
         <View style={[styles.badge, isFinisher ? styles.finisherBadge : styles.machineBadge]}>
@@ -130,12 +134,17 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
 
       {/* Zone Charge Cible & Répétitions */}
       <View style={styles.targetRow}>
-        <View style={styles.targetStatBox}>
-          <Text style={styles.targetStatLabel}>CHARGE</Text>
-          <Text style={styles.targetStatValue}>
-            {currentWeight} <Text style={styles.unitText}>kg</Text>
+        <LinearGradient
+          colors={[THEME.colors.restGradientViolet, THEME.colors.restGradientBlue]}
+          start={{ x: 0.1, y: 0 }}
+          end={{ x: 0.9, y: 1 }}
+          style={styles.targetStatBoxAccent}
+        >
+          <Text style={styles.targetStatLabelAccent}>CHARGE</Text>
+          <Text style={styles.targetStatValueAccent}>
+            {currentWeight} <Text style={styles.unitTextAccent}>kg</Text>
           </Text>
-        </View>
+        </LinearGradient>
 
         <View style={styles.targetStatBox}>
           <Text style={styles.targetStatLabel}>OBJECTIF</Text>
@@ -150,6 +159,7 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
         totalWeight={currentWeight}
         baseWeight={exercise.baseWeight}
         category={exercise.category}
+        dark
       />
 
       {/* Sélecteur de répétitions réalisées */}
@@ -178,43 +188,58 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
         <View style={styles.feelingButtonsGrid}>
           {/* Bouton Facile */}
           <Animated.View style={{ transform: [{ scale: easyScale }] }}>
-            <TouchableOpacity
-              style={[styles.feelingButton, styles.easyButton]}
-              onPress={() => handleFeelingSelect('EASY')}
-              activeOpacity={0.85}
-            >
-              <View style={styles.feelingTextWrapper}>
-                <Text style={styles.feelingTitle}>FACILE</Text>
-                <Text style={styles.feelingSubtitle}>2 reps ou + en réserve</Text>
-              </View>
+            <TouchableOpacity onPress={() => handleFeelingSelect('EASY')} activeOpacity={0.85}>
+              <LinearGradient
+                colors={THEME.colors.feelingEasyGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0.4 }}
+                style={styles.feelingButton}
+              >
+                <View style={styles.feelingTextWrapper}>
+                  <Text style={[styles.feelingTitle, { color: THEME.colors.feelingEasyText }]}>FACILE</Text>
+                  <Text style={[styles.feelingSubtitle, { color: THEME.colors.feelingEasyText }]}>
+                    2 reps ou + en réserve
+                  </Text>
+                </View>
+              </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
 
           {/* Bouton Juste */}
           <Animated.View style={{ transform: [{ scale: mediumScale }] }}>
-            <TouchableOpacity
-              style={[styles.feelingButton, styles.mediumButton]}
-              onPress={() => handleFeelingSelect('MEDIUM')}
-              activeOpacity={0.85}
-            >
-              <View style={styles.feelingTextWrapper}>
-                <Text style={styles.feelingTitle}>JUSTE</Text>
-                <Text style={styles.feelingSubtitle}>0 à 1 rep en réserve</Text>
-              </View>
+            <TouchableOpacity onPress={() => handleFeelingSelect('MEDIUM')} activeOpacity={0.85}>
+              <LinearGradient
+                colors={THEME.colors.feelingMediumGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0.4 }}
+                style={styles.feelingButton}
+              >
+                <View style={styles.feelingTextWrapper}>
+                  <Text style={[styles.feelingTitle, { color: THEME.colors.feelingMediumText }]}>JUSTE</Text>
+                  <Text style={[styles.feelingSubtitle, { color: THEME.colors.feelingMediumText }]}>
+                    0 à 1 rep en réserve
+                  </Text>
+                </View>
+              </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
 
           {/* Bouton Échec */}
           <Animated.View style={{ transform: [{ scale: hardScale }] }}>
-            <TouchableOpacity
-              style={[styles.feelingButton, styles.hardButton]}
-              onPress={() => handleFeelingSelect('HARD')}
-              activeOpacity={0.85}
-            >
-              <View style={styles.feelingTextWrapper}>
-                <Text style={styles.feelingTitle}>ÉCHEC</Text>
-                <Text style={styles.feelingSubtitle}>Reps non atteintes</Text>
-              </View>
+            <TouchableOpacity onPress={() => handleFeelingSelect('HARD')} activeOpacity={0.85}>
+              <LinearGradient
+                colors={THEME.colors.feelingHardGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0.4 }}
+                style={styles.feelingButton}
+              >
+                <View style={styles.feelingTextWrapper}>
+                  <Text style={[styles.feelingTitle, { color: THEME.colors.feelingHardText }]}>ÉCHEC</Text>
+                  <Text style={[styles.feelingSubtitle, { color: THEME.colors.feelingHardText }]}>
+                    Reps non atteintes
+                  </Text>
+                </View>
+              </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
         </View>
@@ -226,26 +251,20 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
           <Text style={styles.undoText}>↩️ Corriger la série précédente</Text>
         </TouchableOpacity>
       )}
+      </LinearGradient>
     </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   cardContainer: {
-    backgroundColor: THEME.colors.cardBg,
-    borderRadius: 22,
+    borderRadius: 26,
     padding: 18,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    shadowColor: '#8C7060',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    elevation: 3,
-  },
-  cardContainerFinisher: {
-    borderColor: THEME.colors.cardFinisherBorder,
-    backgroundColor: THEME.colors.cardFinisherBg,
+    shadowColor: '#2B1E38',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 6,
   },
   topHeader: {
     flexDirection: 'row',
@@ -259,20 +278,20 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   machineBadge: {
-    backgroundColor: THEME.colors.badgeBg,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
   },
   machineBadgeText: {
     fontFamily: THEME.fonts.sans,
-    color: THEME.colors.badgeText,
+    color: THEME.colors.textOnDark,
     fontSize: 9,
     fontWeight: '800',
   },
   finisherBadge: {
-    backgroundColor: THEME.colors.finisherBadgeBg,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
   },
   finisherBadgeText: {
     fontFamily: THEME.fonts.sans,
-    color: THEME.colors.finisherBadgeText,
+    color: THEME.colors.textOnDark,
     fontSize: 9,
     fontWeight: '800',
   },
@@ -280,25 +299,25 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   setIndicator: {
-    backgroundColor: THEME.colors.cardInner,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
   setIndicatorText: {
     fontFamily: THEME.fonts.sans,
-    color: THEME.colors.textSecondary,
+    color: 'rgba(244, 237, 247, 0.75)',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.8,
   },
   exerciseName: {
     fontFamily: THEME.fonts.serif,
-    fontSize: 22,
-    fontWeight: '700',
-    color: THEME.colors.textPrimary,
+    fontSize: 24,
+    fontWeight: '600',
+    color: THEME.colors.textOnDark,
     marginBottom: 12,
-    lineHeight: 28,
+    lineHeight: 30,
   },
   targetRow: {
     flexDirection: 'row',
@@ -307,8 +326,16 @@ const styles = StyleSheet.create({
   },
   targetStatBox: {
     flex: 1,
-    backgroundColor: THEME.colors.cardInner,
-    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 16,
+    padding: 10,
+    alignItems: 'center',
+  },
+  targetStatBoxAccent: {
+    flex: 1,
+    borderRadius: 16,
     padding: 10,
     alignItems: 'center',
   },
@@ -316,20 +343,39 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     fontSize: 9,
     fontWeight: '800',
-    color: THEME.colors.textSecondary,
+    color: 'rgba(244, 237, 247, 0.6)',
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  targetStatLabelAccent: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 9,
+    fontWeight: '800',
+    color: 'rgba(28, 28, 30, 0.55)',
     letterSpacing: 0.8,
     marginBottom: 2,
   },
   targetStatValue: {
     fontFamily: THEME.fonts.sans,
     fontSize: 24,
-    fontWeight: '900',
-    color: THEME.colors.textPrimary,
+    fontWeight: '700',
+    color: THEME.colors.textOnDark,
+  },
+  targetStatValueAccent: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1C1C1E',
   },
   unitText: {
     fontSize: 12,
     fontWeight: '600',
-    color: THEME.colors.textSecondary,
+    color: 'rgba(244, 237, 247, 0.6)',
+  },
+  unitTextAccent: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(28, 28, 30, 0.5)',
   },
   repsSelectorSection: {
     marginTop: 6,
@@ -340,7 +386,7 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     fontSize: 10,
     fontWeight: '800',
-    color: THEME.colors.textSecondary,
+    color: 'rgba(244, 237, 247, 0.55)',
     letterSpacing: 0.8,
     marginBottom: 6,
     textAlign: 'center',
@@ -348,24 +394,24 @@ const styles = StyleSheet.create({
   repsStepper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: THEME.colors.cardInner,
-    borderRadius: 12,
-    padding: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 999,
+    padding: 4,
     width: '100%',
-    maxWidth: 220,
+    maxWidth: 236,
   },
   stepButton: {
-    width: 44,
-    height: 40,
-    backgroundColor: THEME.colors.cardBg,
-    borderRadius: 8,
+    width: 48,
+    height: 44,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    borderRadius: 999,
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepButtonText: {
     fontSize: 20,
-    fontWeight: '700',
-    color: THEME.colors.textPrimary,
+    fontWeight: '600',
+    color: THEME.colors.textOnDark,
   },
   repsNumberContainer: {
     flex: 1,
@@ -373,14 +419,14 @@ const styles = StyleSheet.create({
   },
   repsNumberText: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 24,
-    fontWeight: '900',
-    color: THEME.colors.textPrimary,
+    fontSize: 26,
+    fontWeight: '700',
+    color: THEME.colors.textOnDark,
   },
   repsSublabel: {
     fontSize: 9,
     fontWeight: '600',
-    color: THEME.colors.textMuted,
+    color: 'rgba(244, 237, 247, 0.5)',
   },
   feelingSection: {
     marginTop: 4,
@@ -394,25 +440,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 14,
     paddingHorizontal: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    shadowColor: '#8C7060',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1,
-  },
-  easyButton: {
-    backgroundColor: THEME.colors.feelingEasyBg,
-    borderColor: THEME.colors.feelingEasyBorder,
-  },
-  mediumButton: {
-    backgroundColor: THEME.colors.feelingMediumBg,
-    borderColor: THEME.colors.feelingMediumBorder,
-  },
-  hardButton: {
-    backgroundColor: THEME.colors.feelingHardBg,
-    borderColor: THEME.colors.feelingHardBorder,
+    borderRadius: 999,
+    shadowColor: '#1C1200',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    elevation: 2,
   },
   feelingTextWrapper: {
     alignItems: 'center',
@@ -442,6 +475,6 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
     fontWeight: '600',
-    color: THEME.colors.textSecondary,
+    color: 'rgba(244, 237, 247, 0.55)',
   },
 });

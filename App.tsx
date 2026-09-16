@@ -1,5 +1,5 @@
-import { Manrope_800ExtraBold } from '@expo-google-fonts/manrope';
-import { Petrona_700Bold } from '@expo-google-fonts/petrona';
+import { Manrope_700Bold } from '@expo-google-fonts/manrope';
+import { Petrona_600SemiBold } from '@expo-google-fonts/petrona';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
@@ -41,8 +41,8 @@ interface WorkoutSummaryData {
 export default function App() {
   const [isDbReady, setIsDbReady] = useState(false);
   const [fontsLoaded] = useFonts({
-    Petrona_700Bold,
-    Manrope_800ExtraBold,
+    Petrona_600SemiBold,
+    Manrope_700Bold,
   });
   const [currentScreen, setCurrentScreen] = useState<ScreenState>('SPLIT_SELECT');
 

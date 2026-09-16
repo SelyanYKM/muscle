@@ -66,8 +66,9 @@ export const THEME_SOFT_STRENGTH = {
     // Duo typographique du moodboard : serif affirmé (Petrona) pour les titres,
     // sans-serif géométrique (Manrope) pour le reste. Chargées via useFonts dans App.tsx ;
     // avant que le chargement soit terminé, on retombe sur les polices système du téléphone.
-    serif: 'Petrona_700Bold',
-    sans: 'Manrope_800ExtraBold',
+    // Poids exacts recommandés par l'export de design (soft-strength-tokens.ts).
+    serif: 'Petrona_600SemiBold',
+    sans: 'Manrope_700Bold',
   },
   colors: {
     // Fonds & Cartes douces texturées "peluche"
@@ -78,20 +79,39 @@ export const THEME_SOFT_STRENGTH = {
     cardFinisherBg: '#FDF2F0',
     cardFinisherBorder: '#FBCBC5',
 
+    // Fond en dégradé radial (glow pêche/rose/sable) utilisé derrière les écrans "verre" —
+    // valeurs issues de l'export de design, à combiner via expo-linear-gradient.
+    bgGradientPeach: '#F4C3AE',
+    bgGradientPink: '#FEEBF6',
+    bgGradientSand: '#F0EAD6',
+
     // Typographie Deep Carbon & Muted
     textPrimary: '#1C1C1E',     // Noir mat profond
     textSecondary: '#6B6875',   // Gris ardoise chaleureux
     textMuted: '#9E9AA7',       // Légendes adoucies
+    textOnDark: '#F4EDF7',      // Texte clair sur fond sombre (carte de série violette)
 
     // Accents du moodboard — terracotta doux (remplace l'orange vif d'origine)
     accent: '#E28B72',
+    accentStrong: '#B3563A',    // texte/CTA sur fond clair
+    accentDark: '#A04A31',      // libellés sur fond terracotta
     accentMuted: 'rgba(226, 139, 114, 0.16)',
     accentTextDark: '#FFFFFF',
 
-    // Focus Card & Rest Timer — violet/bleu, inchangés
+    // Focus Card & Rest Timer — violet/bleu
     focusCardBg: '#C080E0',     // Focus Violet immersif
     focusCardBorder: '#AE6FD0',
     restOverlayBg: '#8FB9D0',   // Rest Blue ciel apaisant
+    restGradientViolet: '#C080E0',
+    restGradientBlue: '#8FB9D0',
+    restGradientMist: '#AEC6CF',
+    restCardBg: 'rgba(255,255,255,0.88)', // carte "verre" du minuteur
+    restNumber: '#1F3A57',                // couleur du décompte géant
+
+    // Carte de série active en violet sombre (variante "2c" retenue pour ExerciseCard)
+    seriesCardFrom: '#2B1E38',
+    seriesCardMid: '#3A2547',
+    seriesCardTo: '#22283A',
 
     // Badges
     badgeBg: '#F0EAD6',         // Lin / Maille naturelle
@@ -103,14 +123,17 @@ export const THEME_SOFT_STRENGTH = {
     feelingEasyBg: '#DCF0D4',   // Vert amande
     feelingEasyBorder: '#C3E4C0',
     feelingEasyText: '#2C5A35',
+    feelingEasyGradient: ['#DCF0D4', '#C3E4C0'] as [string, string],
 
     feelingMediumBg: '#FFEBD6', // Pêche clair
     feelingMediumBorder: '#FFDCC0',
     feelingMediumText: '#8A5321',
+    feelingMediumGradient: ['#FFEBD6', '#FFDCC0'] as [string, string],
 
     feelingHardBg: '#FBD9DC',   // Rose poudré
     feelingHardBorder: '#F6C3C8',
     feelingHardText: '#96404A',
+    feelingHardGradient: ['#FBD9DC', '#F6C3C8'] as [string, string],
   },
 };
 

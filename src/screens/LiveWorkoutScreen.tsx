@@ -1,4 +1,5 @@
 import { useKeepAwake } from 'expo-keep-awake';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -313,7 +314,15 @@ export const LiveWorkoutScreen: React.FC<LiveWorkoutScreenProps> = ({
   const totalExercises = exercisesList.length;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <View style={styles.root}>
+      <LinearGradient
+        colors={[THEME.colors.bgGradientPeach, THEME.colors.bgGradientPink, THEME.colors.bgGradientSand]}
+        locations={[0, 0.55, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
         {/* En-tête Live avec bouton Adapter */}
         <View style={styles.header}>
@@ -346,9 +355,21 @@ export const LiveWorkoutScreen: React.FC<LiveWorkoutScreenProps> = ({
 
             return (
               <View key={idx} style={styles.segmentTrack}>
-                {isPast && <View style={[styles.segmentFill, { width: '100%' }]} />}
+                {isPast && (
+                  <LinearGradient
+                    colors={[THEME.colors.restGradientViolet, THEME.colors.restGradientBlue]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={[styles.segmentFill, { width: '100%' }]}
+                  />
+                )}
                 {isCurrent && (
-                  <View style={[styles.segmentFill, { width: `${currentRatio * 100}%` }]} />
+                  <LinearGradient
+                    colors={[THEME.colors.restGradientViolet, THEME.colors.restGradientBlue]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={[styles.segmentFill, { width: `${currentRatio * 100}%` }]}
+                  />
                 )}
               </View>
             );
@@ -502,14 +523,18 @@ export const LiveWorkoutScreen: React.FC<LiveWorkoutScreenProps> = ({
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  root: {
     flex: 1,
     backgroundColor: THEME.colors.bg,
+  },
+  safeArea: {
+    flex: 1,
   },
   container: {
     paddingHorizontal: 16,
@@ -545,25 +570,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   adaptButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: THEME.colors.cardInner,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.62)',
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(255, 255, 255, 0.9)',
   },
   adaptButtonText: {
-    color: THEME.colors.accent,
+    color: THEME.colors.accentStrong,
     fontSize: 12,
     fontWeight: '700',
   },
   quitButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: THEME.colors.cardBg,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: 'rgba(28, 28, 30, 0.08)',
   },
   quitButtonText: {
     color: THEME.colors.textSecondary,
