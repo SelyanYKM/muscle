@@ -760,3 +760,26 @@ export function deleteExerciseFromSession(
     console.error('Erreur deleteExerciseFromSession:', error);
   }
 }
+
+/**
+ * Petit stockage clé/valeur pour des drapeaux simples (ex : "tel conseil déjà affiché ?"),
+ * sans créer une table dédiée pour chaque cas.
+ */
+export function getAppMetadata(key: string): string | null {
+  if (!db || Platform.OS === 'web') return null;
+  try {
+    const row = db.getFirstSync<{ value: string }>('SELECT value FROM app_metadata WHERE key = ?;', [key]);
+    return row?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function setAppMetadata(key: string, value: string): void {
+  if (!db || Platform.OS === 'web') return;
+  try {
+    db.runSync('INSERT OR REPLACE INTO app_metadata (key, value) VALUES (?, ?);', [key, value]);
+  } catch {
+    // Sans conséquence : le conseil réapparaîtra simplement au prochain lancement
+  }
+}

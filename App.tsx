@@ -3,9 +3,9 @@ import { Petrona_600SemiBold } from '@expo-google-fonts/petrona';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, BackHandler, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, BackHandler, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { initDatabase } from './src/database/db';
+import { getAppMetadata, initDatabase, setAppMetadata } from './src/database/db';
 import { FreeWorkoutScreen } from './src/screens/FreeWorkoutScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
 import { LiveWorkoutScreen } from './src/screens/LiveWorkoutScreen';
@@ -16,7 +16,13 @@ import { WorkoutSummaryScreen } from './src/screens/WorkoutSummaryScreen';
 import { THEME } from './src/theme';
 import { NextSessionPlan, SessionConfig, SetResult } from './src/types';
 import { configureAppAudio } from './src/utils/audio';
-import { configureRestTimerChannel, requestRestTimerPermission } from './src/utils/restTimerService';
+import {
+  configureRestTimerChannel,
+  openBatteryOptimizationSettings,
+  requestRestTimerPermission,
+} from './src/utils/restTimerService';
+
+const BATTERY_TIP_METADATA_KEY = 'battery_optimization_tip_shown';
 
 type ScreenState =
   | 'SPLIT_SELECT'
@@ -73,6 +79,25 @@ export default function App() {
     }
     setup();
   }, []);
+
+  // Conseil ponctuel (une seule fois, au tout premier lancement) : sur Android, si le système
+  // met l'app en veille profonde ("optimisation de la batterie"), le minuteur de repos peut ne
+  // pas sonner en arrière-plan. C'est un réglage Android standard, distinct des réglages
+  // batterie propres à MIUI/Xiaomi qu'on ne peut pas configurer depuis l'app.
+  useEffect(() => {
+    if (!isDbReady || Platform.OS !== 'android') return;
+    if (getAppMetadata(BATTERY_TIP_METADATA_KEY) === '1') return;
+    setAppMetadata(BATTERY_TIP_METADATA_KEY, '1');
+
+    Alert.alert(
+      'Minuteur fiable en arrière-plan',
+      "Pour que l'alerte de fin de repos sonne même écran verrouillé ou app fermée, autorise mooscles à ignorer l'optimisation de la batterie dans les réglages Android.",
+      [
+        { text: 'Plus tard', style: 'cancel' },
+        { text: 'Ouvrir les réglages', onPress: () => openBatteryOptimizationSettings() },
+      ]
+    );
+  }, [isDbReady]);
 
   // Gestion du bouton retour physique / geste Android pour naviguer entre les écrans
   useEffect(() => {

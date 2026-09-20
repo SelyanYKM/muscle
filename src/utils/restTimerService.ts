@@ -1,5 +1,5 @@
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 
 // Minuteur de repos fiable en arrière-plan (écran verrouillé, autre appli au premier plan) :
 // une notification programmée via expo-notifications, la librairie officielle de l'équipe
@@ -96,6 +96,28 @@ export async function startRestTimerService(endTimeMs: number, body: string): Pr
     // Mode dégradé : le minuteur reste utilisable au premier plan, juste moins robuste
     // une fois l'app quittée.
     return null;
+  }
+}
+
+/**
+ * Ouvre l'écran Android "Optimisation de la batterie" (liste de toutes les applis), pour que
+ * l'utilisateur puisse mettre mooscles en "Sans restriction" lui-même. C'est un réglage Android
+ * standard (pas spécifique à MIUI) qui met l'app en pause en veille profonde si on ne le fait
+ * pas — indépendant du réglage "Autostart/Batterie" propre à MIUI qui existe en plus sur les
+ * téléphones Xiaomi. Ne demande aucune permission particulière : on ne fait qu'ouvrir un écran
+ * de réglages, l'utilisateur choisit lui-même.
+ */
+export async function openBatteryOptimizationSettings(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  try {
+    await Linking.sendIntent('android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS');
+  } catch {
+    // Repli si l'action n'est pas supportée par ce téléphone/cette version d'Android
+    try {
+      await Linking.openSettings();
+    } catch {
+      // Rien à faire de plus : l'utilisateur peut toujours y aller manuellement
+    }
   }
 }
 
