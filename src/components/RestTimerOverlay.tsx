@@ -14,6 +14,8 @@ import { THEME } from '../theme';
 import { playRestTimerAlarm } from '../utils/audio';
 import { triggerLightHaptic, triggerTimerEndHaptic, triggerWarningHaptic } from '../utils/haptics';
 import {
+  armSystemBackupTimer,
+  disarmSystemBackupTimer,
   requestRestTimerPermission,
   startRestTimerService,
   stopRestTimerService,
@@ -62,6 +64,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     hasEndedRef.current = true;
     if (intervalRef.current) clearInterval(intervalRef.current);
     stopRestTimerService();
+    disarmSystemBackupTimer();
     triggerTimerEndHaptic();
     playRestTimerAlarm();
     onFinish();
@@ -85,14 +88,21 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
       }
     });
 
-    // Écouteur de retour au premier plan (depuis Spotify / écran verrouillé)
+    // Écouteur de changement de premier plan / arrière-plan (depuis Spotify / écran verrouillé).
+    // En plus de recalculer le temps restant au retour, on arme/désarme le filet de sécurité
+    // de l'appli Horloge du téléphone : seulement actif pendant qu'on est en arrière-plan, pour
+    // ne jamais dupliquer le son quand mooscles est ouvert au premier plan.
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      const remaining = Math.max(0, Math.ceil((targetTimeRef.current - Date.now()) / 1000));
+
       if (nextAppState === 'active') {
-        const remaining = Math.max(0, Math.ceil((targetTimeRef.current - Date.now()) / 1000));
         setSecondsRemaining(remaining);
+        disarmSystemBackupTimer();
         if (remaining <= 0) {
           finishNow();
         }
+      } else if (!hasEndedRef.current && remaining > 0) {
+        armSystemBackupTimer(remaining, notificationBody);
       }
     });
 
@@ -131,6 +141,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
       if (intervalRef.current) clearInterval(intervalRef.current);
       subscription.remove();
       stopRestTimerService();
+      disarmSystemBackupTimer();
     };
   }, []);
 
@@ -156,6 +167,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     hasEndedRef.current = true;
     if (intervalRef.current) clearInterval(intervalRef.current);
     stopRestTimerService();
+    disarmSystemBackupTimer();
     triggerLightHaptic();
     onSkip();
   };
@@ -165,6 +177,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     hasEndedRef.current = true;
     if (intervalRef.current) clearInterval(intervalRef.current);
     stopRestTimerService();
+    disarmSystemBackupTimer();
     onUndo();
   };
 

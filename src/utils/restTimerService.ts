@@ -121,6 +121,37 @@ export async function openBatteryOptimizationSettings(): Promise<void> {
   }
 }
 
+// Filet de sécurité en arrière-plan : au lieu de continuer à essayer de rendre NOTRE
+// notification fiable, on délègue directement à l'appli Horloge déjà installée sur le
+// téléphone (celle-là même que l'utilisateur a testée et confirmée fiable), via l'action
+// standard Android que n'importe quelle appli peut utiliser pour ça ("mets un minuteur pour
+// moi"), sans permission particulière. On ne l'arme que pendant que mooscles est en
+// arrière-plan (voir RestTimerOverlay), pour ne jamais dupliquer le son quand l'app est ouverte.
+const SYSTEM_TIMER_SET_ACTION = 'android.intent.action.SET_TIMER';
+const SYSTEM_TIMER_DISMISS_ACTION = 'android.intent.action.DISMISS_TIMER';
+
+export async function armSystemBackupTimer(remainingSeconds: number, message: string): Promise<void> {
+  if (Platform.OS !== 'android' || remainingSeconds <= 0) return;
+  try {
+    await Linking.sendIntent(SYSTEM_TIMER_SET_ACTION, [
+      { key: 'android.intent.extra.alarm.LENGTH', value: Math.ceil(remainingSeconds) },
+      { key: 'android.intent.extra.alarm.MESSAGE', value: message },
+      { key: 'android.intent.extra.alarm.SKIP_UI', value: true },
+    ]);
+  } catch {
+    // Pas grave : c'est un filet de sécurité en plus, pas le mécanisme principal
+  }
+}
+
+export async function disarmSystemBackupTimer(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  try {
+    await Linking.sendIntent(SYSTEM_TIMER_DISMISS_ACTION);
+  } catch {
+    // Sans conséquence
+  }
+}
+
 export async function stopRestTimerService(): Promise<void> {
   if (Platform.OS !== 'android') return;
 
