@@ -121,6 +121,28 @@ export async function openBatteryOptimizationSettings(): Promise<void> {
   }
 }
 
+/**
+ * Ouvre l'écran Android "Alarmes et rappels" pour que l'utilisateur autorise mooscles à
+ * programmer des alarmes exactes. Sans cette autorisation (Android 12+), le système ne
+ * refuse pas la notification programmée — il la retarde et la regroupe avec d'autres pour
+ * économiser la batterie ("Doze"), ce qui donne exactement le symptôme observé : ça sonne
+ * parfois hors écran, mais avec du retard, de façon irrégulière. Nécessite la permission
+ * SCHEDULE_EXACT_ALARM déclarée dans app.json (permission normale, pas besoin d'accord
+ * préalable de l'utilisateur pour la déclarer — seul l'usage réel demande son accord ici).
+ */
+export async function openExactAlarmSettings(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  try {
+    await Linking.sendIntent('android.settings.REQUEST_SCHEDULE_EXACT_ALARM');
+  } catch {
+    try {
+      await Linking.openSettings();
+    } catch {
+      // Rien à faire de plus : l'utilisateur peut toujours y aller manuellement
+    }
+  }
+}
+
 // Filet de sécurité en arrière-plan : au lieu de continuer à essayer de rendre NOTRE
 // notification fiable, on délègue directement à l'appli Horloge déjà installée sur le
 // téléphone (celle-là même que l'utilisateur a testée et confirmée fiable), via l'action

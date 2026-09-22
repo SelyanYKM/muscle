@@ -19,10 +19,15 @@ import { configureAppAudio } from './src/utils/audio';
 import {
   configureRestTimerChannel,
   openBatteryOptimizationSettings,
+  openExactAlarmSettings,
   requestRestTimerPermission,
 } from './src/utils/restTimerService';
 
 const BATTERY_TIP_METADATA_KEY = 'battery_optimization_tip_shown';
+// Clé distincte (et affichée même chez les personnes ayant déjà vu le conseil batterie) :
+// c'est un réglage Android différent, découvert après coup comme cause du "ça sonne parfois,
+// avec du retard" (throttling Doze faute d'alarme exacte autorisée).
+const EXACT_ALARM_TIP_METADATA_KEY = 'exact_alarm_tip_shown_v2';
 
 type ScreenState =
   | 'SPLIT_SELECT'
@@ -80,23 +85,51 @@ export default function App() {
     setup();
   }, []);
 
-  // Conseil ponctuel (une seule fois, au tout premier lancement) : sur Android, si le système
-  // met l'app en veille profonde ("optimisation de la batterie"), le minuteur de repos peut ne
-  // pas sonner en arrière-plan. C'est un réglage Android standard, distinct des réglages
-  // batterie propres à MIUI/Xiaomi qu'on ne peut pas configurer depuis l'app.
+  // Conseils ponctuels (une seule fois chacun, au premier lancement où ils n'ont pas encore
+  // été vus) : deux réglages Android distincts qui limitent la fiabilité du minuteur en
+  // arrière-plan. La batterie ("optimisation") peut carrément empêcher l'alerte de sonner ;
+  // les alarmes exactes, si non autorisées, ne l'empêchent pas mais la retardent et la
+  // regroupent avec d'autres alarmes (mode Doze) — exactement le "ça sonne parfois, avec du
+  // retard" observé. Affichés l'un après l'autre pour ne pas les superposer.
   useEffect(() => {
     if (!isDbReady || Platform.OS !== 'android') return;
-    if (getAppMetadata(BATTERY_TIP_METADATA_KEY) === '1') return;
-    setAppMetadata(BATTERY_TIP_METADATA_KEY, '1');
 
-    Alert.alert(
-      'Minuteur fiable en arrière-plan',
-      "Pour que l'alerte de fin de repos sonne même écran verrouillé ou app fermée, autorise mooscles à ignorer l'optimisation de la batterie dans les réglages Android.",
-      [
-        { text: 'Plus tard', style: 'cancel' },
-        { text: 'Ouvrir les réglages', onPress: () => openBatteryOptimizationSettings() },
-      ]
-    );
+    async function showReliabilityTips() {
+      if (getAppMetadata(BATTERY_TIP_METADATA_KEY) !== '1') {
+        setAppMetadata(BATTERY_TIP_METADATA_KEY, '1');
+        await new Promise<void>((resolve) => {
+          Alert.alert(
+            'Minuteur fiable en arrière-plan',
+            "Pour que l'alerte de fin de repos sonne même écran verrouillé ou app fermée, autorise mooscles à ignorer l'optimisation de la batterie dans les réglages Android.",
+            [
+              { text: 'Plus tard', style: 'cancel', onPress: () => resolve() },
+              {
+                text: 'Ouvrir les réglages',
+                onPress: () => {
+                  openBatteryOptimizationSettings();
+                  resolve();
+                },
+              },
+            ],
+            { onDismiss: () => resolve() }
+          );
+        });
+      }
+
+      if (getAppMetadata(EXACT_ALARM_TIP_METADATA_KEY) !== '1') {
+        setAppMetadata(EXACT_ALARM_TIP_METADATA_KEY, '1');
+        Alert.alert(
+          'Alarmes exactes',
+          "Pour que le minuteur sonne pile à l'heure (et pas avec quelques minutes de retard) une fois l'app quittée, autorise aussi mooscles à programmer des alarmes exactes.",
+          [
+            { text: 'Plus tard', style: 'cancel' },
+            { text: 'Ouvrir les réglages', onPress: () => openExactAlarmSettings() },
+          ]
+        );
+      }
+    }
+
+    showReliabilityTips();
   }, [isDbReady]);
 
   // Gestion du bouton retour physique / geste Android pour naviguer entre les écrans
