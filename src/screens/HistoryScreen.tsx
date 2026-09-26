@@ -19,11 +19,13 @@ import {
   updateWorkoutSessionType,
 } from '../database/db';
 import { THEME } from '../theme';
-import { WorkoutLogEntry } from '../types';
+import { SessionMode, WorkoutLogEntry } from '../types';
 import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
 
 interface HistoryScreenProps {
   onBack: () => void;
+  /** Relance une nouvelle séance dans le même mode que celle sélectionnée dans l'historique. */
+  onRelaunchSession: (workoutId: number, workoutName: string, mode: SessionMode) => void;
 }
 
 interface GroupedExerciseLogs {
@@ -38,9 +40,14 @@ interface GroupedSession {
   totalVolume: number;
   totalSets: number;
   exercises: GroupedExerciseLogs[];
+  /** Séances enregistrées avant le suivi du mode : Guidé par défaut (comportement historique). */
+  mode: SessionMode;
 }
 
-export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
+// Nom court du split, cohérent avec celui utilisé partout ailleurs dans l'app (Split/Prep/Mode).
+const SHORT_WORKOUT_NAMES: Record<number, string> = { 1: 'Push', 2: 'Pull', 3: 'Legs' };
+
+export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack, onRelaunchSession }) => {
   const [sessions, setSessions] = useState<GroupedSession[]>([]);
   const [expandedSessions, setExpandedSessions] = useState<{ [sessionKey: string]: boolean }>({});
 
@@ -79,6 +86,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
           totalVolume: 0,
           totalSets: 0,
           exercises: [],
+          mode: log.mode || 'GUIDED',
         });
       }
 
@@ -133,6 +141,12 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
         },
       ]
     );
+  };
+
+  const handleRelaunch = (session: GroupedSession) => {
+    triggerMediumHaptic();
+    const shortName = SHORT_WORKOUT_NAMES[session.workoutId] || session.workoutName;
+    onRelaunchSession(session.workoutId, shortName, session.mode);
   };
 
   const openEditSessionModal = (session: GroupedSession) => {
@@ -371,10 +385,19 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                     <Text style={styles.sessionMetricsSummary}>
                       {session.exercises.length} exos • {session.totalSets} séries •{' '}
                       <Text style={styles.volumeHighlight}>{Math.round(session.totalVolume)} kg vol.</Text>
+                      {' • '}
+                      {session.mode === 'FREE' ? 'Libre' : 'Guidé'}
                     </Text>
                   </View>
 
                   <View style={styles.sessionHeaderActions}>
+                    <TouchableOpacity
+                      style={styles.relaunchBtn}
+                      onPress={() => handleRelaunch(session)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.relaunchBtnText}>Relancer</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.editSessionBtn}
                       onPress={() => openEditSessionModal(session)}
@@ -709,7 +732,18 @@ const styles = StyleSheet.create({
   sessionHeaderActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+  },
+  relaunchBtn: {
+    backgroundColor: THEME.colors.accent,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  relaunchBtnText: {
+    color: THEME.colors.accentTextDark,
+    fontSize: 11,
+    fontWeight: '800',
   },
   editSessionBtn: {
     backgroundColor: THEME.colors.cardInner,

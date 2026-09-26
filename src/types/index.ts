@@ -48,6 +48,8 @@ export interface NextSessionPlan {
   message: string;
 }
 
+export type SessionMode = 'GUIDED' | 'FREE';
+
 export interface WorkoutLogEntry {
   id?: number;
   workoutId: number;
@@ -59,6 +61,8 @@ export interface WorkoutLogEntry {
   repsTarget: number;
   repsDone: number;
   feeling: Feeling;
+  /** Mode utilisé pour cette séance. Absent (null) sur les séances enregistrées avant son ajout. */
+  mode?: SessionMode | null;
 }
 
 export interface SessionConfig {

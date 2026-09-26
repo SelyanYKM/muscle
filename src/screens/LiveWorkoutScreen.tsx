@@ -250,6 +250,7 @@ export const LiveWorkoutScreen: React.FC<LiveWorkoutScreenProps> = ({
             repsTarget: res.targetReps,
             repsDone: res.repsDone,
             feeling: res.feeling,
+            mode: 'GUIDED',
           });
         }
 

@@ -14,7 +14,7 @@ import { SplitSelectScreen } from './src/screens/SplitSelectScreen';
 import { WorkoutModeSelectScreen } from './src/screens/WorkoutModeSelectScreen';
 import { WorkoutSummaryScreen } from './src/screens/WorkoutSummaryScreen';
 import { THEME } from './src/theme';
-import { NextSessionPlan, SessionConfig, SetResult } from './src/types';
+import { NextSessionPlan, SessionConfig, SessionMode, SetResult } from './src/types';
 import { configureAppAudio } from './src/utils/audio';
 import {
   configureRestTimerChannel,
@@ -182,12 +182,13 @@ export default function App() {
     setCurrentScreen('MODE_SELECT');
   };
 
-  // Reprise rapide depuis le bandeau "Reprendre" : va directement à la préparation
-  // de la séance guidée (mode le plus courant pour relancer un programme déjà fait),
-  // les charges proposées reflètent déjà la progression calculée après la dernière séance.
-  const handleResumeWorkout = (wId: number, wName: string) => {
+  // Reprise rapide depuis le bandeau "Reprendre" (accueil) ou "Relancer" (historique) :
+  // va directement dans le MÊME mode que la séance reprise (Guidé -> préparation, Libre ->
+  // direct en séance libre), pas systématiquement en Guidé. Les charges proposées reflètent
+  // déjà la progression calculée après la dernière séance sur ces exercices.
+  const handleResumeWorkout = (wId: number, wName: string, mode: SessionMode) => {
     setSelectedWorkout({ id: wId, name: wName });
-    setCurrentScreen('PREP');
+    setCurrentScreen(mode === 'FREE' ? 'LIVE_FREE' : 'PREP');
   };
 
   // Étape 2 : Sélection du Mode (Guidé vs Libre)
@@ -285,7 +286,7 @@ export default function App() {
 
         {/* HISTORIQUE */}
         {currentScreen === 'HISTORY' && (
-          <HistoryScreen onBack={handleResetToHome} />
+          <HistoryScreen onBack={handleResetToHome} onRelaunchSession={handleResumeWorkout} />
         )}
       </View>
     </SafeAreaProvider>

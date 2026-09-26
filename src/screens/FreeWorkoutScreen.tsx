@@ -269,6 +269,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           repsTarget: s.targetReps,
           repsDone: s.repsDone,
           feeling: s.feeling,
+          mode: 'FREE',
         });
       }
 

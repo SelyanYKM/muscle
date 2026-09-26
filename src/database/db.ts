@@ -65,6 +65,20 @@ export async function initDatabase(): Promise<void> {
       );
     `);
 
+    // Migration additive : la colonne "mode" (GUIDED/FREE) a été ajoutée après coup, pour
+    // savoir dans quel mode une séance passée a été faite (utile pour "Reprendre"/"Relancer").
+    // Sur une base déjà existante, ALTER TABLE échoue si la colonne existe déjà : on vérifie
+    // d'abord via PRAGMA table_info plutôt que de se fier à un try/catch qui masquerait
+    // d'autres erreurs réelles.
+    try {
+      const columns = db.getAllSync<{ name: string }>('PRAGMA table_info(workout_logs);');
+      if (!columns.some((c) => c.name === 'mode')) {
+        db.execSync('ALTER TABLE workout_logs ADD COLUMN mode TEXT;');
+      }
+    } catch (error) {
+      console.error('Erreur migration workout_logs.mode:', error);
+    }
+
     db.execSync(`
       CREATE TABLE IF NOT EXISTS app_metadata (
         key TEXT PRIMARY KEY,
@@ -526,9 +540,9 @@ export function saveWorkoutLogs(logs: WorkoutLogEntry[]): void {
   try {
     for (const log of logs) {
       db.runSync(
-        `INSERT INTO workout_logs 
-        (workout_id, exercise_id, exercise_name, date, set_number, weight, reps_target, reps_done, feeling)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        `INSERT INTO workout_logs
+        (workout_id, exercise_id, exercise_name, date, set_number, weight, reps_target, reps_done, feeling, mode)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
         [
           log.workoutId,
           log.exerciseId,
@@ -539,6 +553,7 @@ export function saveWorkoutLogs(logs: WorkoutLogEntry[]): void {
           log.repsTarget,
           log.repsDone,
           log.feeling,
+          log.mode || null,
         ]
       );
     }
@@ -593,6 +608,7 @@ export function getRecentLogs(limit: number = 200): WorkoutLogEntry[] {
       reps_target: number;
       reps_done: number;
       feeling: 'EASY' | 'MEDIUM' | 'HARD';
+      mode: 'GUIDED' | 'FREE' | null;
     }>(
       `SELECT * FROM workout_logs ORDER BY id DESC LIMIT ?;`,
       [limit]
@@ -609,6 +625,7 @@ export function getRecentLogs(limit: number = 200): WorkoutLogEntry[] {
       repsTarget: r.reps_target,
       repsDone: r.reps_done,
       feeling: r.feeling,
+      mode: r.mode,
     }));
   } catch (error) {
     console.error('Erreur getRecentLogs:', error);
