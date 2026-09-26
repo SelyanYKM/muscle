@@ -257,6 +257,20 @@ export function getExercisesForWorkout(workoutId: number): ConfiguredExercise[] 
   }
 }
 
+/**
+ * Reconstruit la liste d'exercices pour relancer une séance passée telle quelle : mêmes
+ * exercices, dans le même ordre, mais avec les charges ACTUELLES (déjà progressées via
+ * exercise_progression_state depuis cette séance) plutôt que celles utilisées ce jour-là.
+ * Un exercice supprimé depuis est simplement omis.
+ */
+export function getExercisesForRelaunch(workoutId: number, exerciseIds: number[]): ConfiguredExercise[] {
+  const all = getExercisesForWorkout(workoutId);
+  const byId = new Map(all.map((e) => [e.id, e]));
+  return exerciseIds
+    .map((id) => byId.get(id))
+    .filter((e): e is ConfiguredExercise => !!e);
+}
+
 export function getAllCatalogExercises(workoutId?: number): ConfiguredExercise[] {
   if (!db || Platform.OS === 'web') {
     const list = workoutId ? memoryExercises.filter((e) => e.workoutId === workoutId) : memoryExercises;

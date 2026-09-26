@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, BackHandler, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { getAppMetadata, initDatabase, setAppMetadata } from './src/database/db';
+import { getAppMetadata, getExercisesForRelaunch, initDatabase, setAppMetadata } from './src/database/db';
 import { FreeWorkoutScreen } from './src/screens/FreeWorkoutScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
 import { LiveWorkoutScreen } from './src/screens/LiveWorkoutScreen';
@@ -14,7 +14,7 @@ import { SplitSelectScreen } from './src/screens/SplitSelectScreen';
 import { WorkoutModeSelectScreen } from './src/screens/WorkoutModeSelectScreen';
 import { WorkoutSummaryScreen } from './src/screens/WorkoutSummaryScreen';
 import { THEME } from './src/theme';
-import { NextSessionPlan, SessionConfig, SessionMode, SetResult } from './src/types';
+import { NextSessionPlan, SessionConfig, SetResult } from './src/types';
 import { configureAppAudio } from './src/utils/audio';
 import {
   configureRestTimerChannel,
@@ -183,12 +183,28 @@ export default function App() {
   };
 
   // Reprise rapide depuis le bandeau "Reprendre" (accueil) ou "Relancer" (historique) :
-  // va directement dans le MÊME mode que la séance reprise (Guidé -> préparation, Libre ->
-  // direct en séance libre), pas systématiquement en Guidé. Les charges proposées reflètent
-  // déjà la progression calculée après la dernière séance sur ces exercices.
-  const handleResumeWorkout = (wId: number, wName: string, mode: SessionMode) => {
+  // reconstruit directement une séance guidée avec les MÊMES exercices que la séance reprise,
+  // mais avec les charges ACTUELLES (déjà progressées) — et saute directement dans la séance en
+  // direct, sans repasser par l'écran de préparation/reconfiguration.
+  const handleRelaunchWorkout = (wId: number, wName: string, exerciseIds: number[]) => {
+    const configuredExercises = getExercisesForRelaunch(wId, exerciseIds);
+
+    if (configuredExercises.length === 0) {
+      // Repli si aucun de ces exercices n'existe plus dans le catalogue : flux normal.
+      setSelectedWorkout({ id: wId, name: wName });
+      setCurrentScreen('MODE_SELECT');
+      return;
+    }
+
     setSelectedWorkout({ id: wId, name: wName });
-    setCurrentScreen(mode === 'FREE' ? 'LIVE_FREE' : 'PREP');
+    setActiveSessionConfig({
+      workoutId: wId,
+      workoutName: wName,
+      standardRestSeconds: 90,
+      finisherRestSeconds: 180,
+      configuredExercises,
+    });
+    setCurrentScreen('LIVE');
   };
 
   // Étape 2 : Sélection du Mode (Guidé vs Libre)
@@ -228,7 +244,7 @@ export default function App() {
         {currentScreen === 'SPLIT_SELECT' && (
           <SplitSelectScreen
             onSelectWorkout={handleSelectSplit}
-            onResumeWorkout={handleResumeWorkout}
+            onResumeWorkout={handleRelaunchWorkout}
             onOpenHistory={() => setCurrentScreen('HISTORY')}
           />
         )}
@@ -286,7 +302,7 @@ export default function App() {
 
         {/* HISTORIQUE */}
         {currentScreen === 'HISTORY' && (
-          <HistoryScreen onBack={handleResetToHome} onRelaunchSession={handleResumeWorkout} />
+          <HistoryScreen onBack={handleResetToHome} onRelaunchSession={handleRelaunchWorkout} />
         )}
       </View>
     </SafeAreaProvider>

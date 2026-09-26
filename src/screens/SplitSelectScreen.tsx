@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { clearAllWorkoutLogs, getRecentLogs, getWorkouts } from '../database/db';
 import { THEME } from '../theme';
-import { SessionMode, Workout } from '../types';
+import { Workout } from '../types';
 import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
 
 interface RecentSessionSummary {
@@ -21,8 +21,8 @@ interface RecentSessionSummary {
   workoutName: string;
   totalSets: number;
   totalVolume: number;
-  /** Mode de la séance d'origine, pour reprendre dans le même mode (Guidé -> Guidé, Libre -> Libre). */
-  mode: SessionMode;
+  /** Exercices de cette séance (ordre d'apparition), pour relancer avec les mêmes. */
+  exerciseIds: number[];
 }
 
 // Regroupe les logs récents par séance (date + programme) et ne garde que les 3 dernières.
@@ -41,14 +41,15 @@ function getRecentSessionSummaries(workouts: Workout[]): RecentSessionSummary[] 
         workoutName: workouts.find((w) => w.id === log.workoutId)?.name || 'Séance',
         totalSets: 0,
         totalVolume: 0,
-        // Séances enregistrées avant l'ajout du suivi de mode : on part sur Guidé par défaut
-        // (comportement historique de ce bandeau, inchangé pour ces anciennes séances).
-        mode: log.mode || 'GUIDED',
+        exerciseIds: [],
       });
     }
     const session = sessionMap.get(key)!;
     session.totalSets += 1;
     session.totalVolume += log.weight * log.repsDone;
+    if (!session.exerciseIds.includes(log.exerciseId)) {
+      session.exerciseIds.push(log.exerciseId);
+    }
   }
 
   return Array.from(sessionMap.values()).slice(0, 3);
@@ -66,7 +67,7 @@ function formatRecentSessionDate(dateStr: string): string {
 
 interface SplitSelectScreenProps {
   onSelectWorkout: (workoutId: number, workoutName: string) => void;
-  onResumeWorkout: (workoutId: number, workoutName: string, mode: SessionMode) => void;
+  onResumeWorkout: (workoutId: number, workoutName: string, exerciseIds: number[]) => void;
   onOpenHistory: () => void;
 }
 
@@ -78,9 +79,9 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
   const workouts = getWorkouts();
   const recentSessions = getRecentSessionSummaries(workouts);
 
-  const handleResume = (workoutId: number, workoutName: string, mode: SessionMode) => {
+  const handleResume = (workoutId: number, workoutName: string, exerciseIds: number[]) => {
     triggerMediumHaptic();
-    onResumeWorkout(workoutId, workoutName, mode);
+    onResumeWorkout(workoutId, workoutName, exerciseIds);
   };
 
   const handleSelect = (wId: number, wName: string) => {
@@ -188,12 +189,10 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
                   </Text>
                   <Text style={styles.resumeCardMeta}>
                     {session.totalSets} séries • {Math.round(session.totalVolume)} kg vol.
-                    {' • '}
-                    {session.mode === 'FREE' ? 'Libre' : 'Guidé'}
                   </Text>
                   <TouchableOpacity
                     style={styles.resumeCardBtn}
-                    onPress={() => handleResume(session.workoutId, session.workoutName, session.mode)}
+                    onPress={() => handleResume(session.workoutId, session.workoutName, session.exerciseIds)}
                     activeOpacity={0.85}
                   >
                     <Text style={styles.resumeCardBtnText}>Relancer</Text>

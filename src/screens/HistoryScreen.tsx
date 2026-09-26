@@ -19,13 +19,13 @@ import {
   updateWorkoutSessionType,
 } from '../database/db';
 import { THEME } from '../theme';
-import { SessionMode, WorkoutLogEntry } from '../types';
+import { WorkoutLogEntry } from '../types';
 import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
 
 interface HistoryScreenProps {
   onBack: () => void;
-  /** Relance une nouvelle séance dans le même mode que celle sélectionnée dans l'historique. */
-  onRelaunchSession: (workoutId: number, workoutName: string, mode: SessionMode) => void;
+  /** Relance une séance guidée directe avec les mêmes exercices que la séance sélectionnée. */
+  onRelaunchSession: (workoutId: number, workoutName: string, exerciseIds: number[]) => void;
 }
 
 interface GroupedExerciseLogs {
@@ -40,8 +40,6 @@ interface GroupedSession {
   totalVolume: number;
   totalSets: number;
   exercises: GroupedExerciseLogs[];
-  /** Séances enregistrées avant le suivi du mode : Guidé par défaut (comportement historique). */
-  mode: SessionMode;
 }
 
 // Nom court du split, cohérent avec celui utilisé partout ailleurs dans l'app (Split/Prep/Mode).
@@ -86,7 +84,6 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack, onRelaunch
           totalVolume: 0,
           totalSets: 0,
           exercises: [],
-          mode: log.mode || 'GUIDED',
         });
       }
 
@@ -146,7 +143,10 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack, onRelaunch
   const handleRelaunch = (session: GroupedSession) => {
     triggerMediumHaptic();
     const shortName = SHORT_WORKOUT_NAMES[session.workoutId] || session.workoutName;
-    onRelaunchSession(session.workoutId, shortName, session.mode);
+    const exerciseIds = session.exercises
+      .map((ex) => ex.sets[0]?.exerciseId)
+      .filter((id): id is number => id != null);
+    onRelaunchSession(session.workoutId, shortName, exerciseIds);
   };
 
   const openEditSessionModal = (session: GroupedSession) => {
@@ -385,8 +385,6 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack, onRelaunch
                     <Text style={styles.sessionMetricsSummary}>
                       {session.exercises.length} exos • {session.totalSets} séries •{' '}
                       <Text style={styles.volumeHighlight}>{Math.round(session.totalVolume)} kg vol.</Text>
-                      {' • '}
-                      {session.mode === 'FREE' ? 'Libre' : 'Guidé'}
                     </Text>
                   </View>
 
