@@ -24,8 +24,6 @@ import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '.
 
 interface HistoryScreenProps {
   onBack: () => void;
-  /** Relance une séance guidée directe avec les mêmes exercices que la séance sélectionnée. */
-  onRelaunchSession: (workoutId: number, workoutName: string, exerciseIds: number[]) => void;
 }
 
 interface GroupedExerciseLogs {
@@ -42,10 +40,7 @@ interface GroupedSession {
   exercises: GroupedExerciseLogs[];
 }
 
-// Nom court du split, cohérent avec celui utilisé partout ailleurs dans l'app (Split/Prep/Mode).
-const SHORT_WORKOUT_NAMES: Record<number, string> = { 1: 'Push', 2: 'Pull', 3: 'Legs' };
-
-export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack, onRelaunchSession }) => {
+export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
   const [sessions, setSessions] = useState<GroupedSession[]>([]);
   const [expandedSessions, setExpandedSessions] = useState<{ [sessionKey: string]: boolean }>({});
 
@@ -138,15 +133,6 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack, onRelaunch
         },
       ]
     );
-  };
-
-  const handleRelaunch = (session: GroupedSession) => {
-    triggerMediumHaptic();
-    const shortName = SHORT_WORKOUT_NAMES[session.workoutId] || session.workoutName;
-    const exerciseIds = session.exercises
-      .map((ex) => ex.sets[0]?.exerciseId)
-      .filter((id): id is number => id != null);
-    onRelaunchSession(session.workoutId, shortName, exerciseIds);
   };
 
   const openEditSessionModal = (session: GroupedSession) => {
@@ -389,13 +375,6 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack, onRelaunch
                   </View>
 
                   <View style={styles.sessionHeaderActions}>
-                    <TouchableOpacity
-                      style={styles.relaunchBtn}
-                      onPress={() => handleRelaunch(session)}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={styles.relaunchBtnText}>Relancer</Text>
-                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.editSessionBtn}
                       onPress={() => openEditSessionModal(session)}
@@ -731,17 +710,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  relaunchBtn: {
-    backgroundColor: THEME.colors.accent,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 8,
-  },
-  relaunchBtnText: {
-    color: THEME.colors.accentTextDark,
-    fontSize: 11,
-    fontWeight: '800',
   },
   editSessionBtn: {
     backgroundColor: THEME.colors.cardInner,

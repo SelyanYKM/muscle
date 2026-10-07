@@ -65,14 +65,6 @@ export interface WorkoutLogEntry {
   mode?: SessionMode | null;
 }
 
-export interface SessionConfig {
-  workoutId: number;
-  workoutName: string;
-  standardRestSeconds: number; // e.g. 90
-  finisherRestSeconds: number; // e.g. 180
-  configuredExercises: ConfiguredExercise[];
-}
-
 export interface PlateInfo {
   weight: number;
   count: number;

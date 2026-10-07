@@ -17,6 +17,8 @@ import { RestTimerOverlay } from '../components/RestTimerOverlay';
 import {
   addCustomExercise,
   getAllCatalogExercises,
+  getLastExercisePerformance,
+  LastExercisePerformance,
   saveWorkoutLogs,
   updateExerciseProgression,
 } from '../database/db';
@@ -70,6 +72,9 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   const [catalogExercises, setCatalogExercises] = useState<ConfiguredExercise[]>([]);
   const [currentExercise, setCurrentExercise] = useState<ConfiguredExercise | null>(null);
 
+  // Dernière performance connue par exercice (repère affiché pendant la séance), indexée par id.
+  const [lastPerfByExerciseId, setLastPerfByExerciseId] = useState<Record<number, LastExercisePerformance | null>>({});
+
   // État de la série en cours
   const [currentWeight, setCurrentWeight] = useState<number>(40);
   const [currentReps, setCurrentReps] = useState<number>(8);
@@ -96,7 +101,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     return () => clearInterval(timer);
   }, [startTime]);
 
-  // Chargement du catalogue
+  // Chargement du catalogue, et de la dernière performance connue pour chacun de ses exercices
+  // (repère affiché pendant la séance, en plus du poids déjà conseillé par la progression).
   useEffect(() => {
     const list = getAllCatalogExercises(workoutId);
     setCatalogExercises(list);
@@ -105,12 +111,35 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       setCurrentWeight(list[0].plannedWeights?.[0] || 40);
       setCurrentReps(list[0].targetReps || 8);
     }
+
+    const perfMap: Record<number, LastExercisePerformance | null> = {};
+    for (const ex of list) {
+      perfMap[ex.id] = getLastExercisePerformance(ex.id);
+    }
+    setLastPerfByExerciseId(perfMap);
   }, [workoutId]);
 
   const formatElapsedTime = (totalSecs: number) => {
     const mins = Math.floor(totalSecs / 60);
     const secs = totalSecs % 60;
     return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  const formatLastPerfDate = (dateStr: string) => {
+    try {
+      const [year, month, day] = dateStr.split('-');
+      const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const formatLastPerfSets = (perf: LastExercisePerformance | null | undefined) => {
+    if (!perf || perf.sets.length === 0) return null;
+    return perf.sets
+      .map((s) => `${s.weight}kg×${s.repsDone} ${s.feeling === 'EASY' ? '🟢' : s.feeling === 'MEDIUM' ? '🟠' : '🔴'}`)
+      .join('  ·  ');
   };
 
   const handleSelectExercise = (ex: ConfiguredExercise) => {
@@ -300,7 +329,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     saveWorkoutLogs(logsToSave);
 
     onFinishSession({
-      workoutName: `${workoutName} (Libre)`,
+      workoutName,
       durationMinutes,
       totalVolume,
       exerciseSummaries,
@@ -320,6 +349,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
   const isFinisher = currentExercise?.category === 'FREE_WEIGHT';
   const currentSetNum = getCurrentSetNumber();
+  const currentLastPerf = currentExercise ? lastPerfByExerciseId[currentExercise.id] : null;
+  const currentLastPerfText = formatLastPerfSets(currentLastPerf);
 
   // Volume total accumulé en direct
   const liveVolume = completedExercises.reduce((total, ex) => {
@@ -337,12 +368,9 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       />
       <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        {/* En-tête de la séance libre */}
+        {/* En-tête de la séance */}
         <View style={styles.topHeader}>
           <View style={styles.titleCol}>
-            <View style={styles.freeModeBadge}>
-              <Text style={styles.freeModeBadgeText}>⚡ MODE LIBRE</Text>
-            </View>
             <Text style={styles.sessionTitle}>{workoutName}</Text>
           </View>
 
@@ -392,6 +420,15 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
             <Text style={styles.currentExName} numberOfLines={2}>
               {currentExercise?.name || 'Sélectionner un exercice'}
             </Text>
+
+            {currentLastPerfText && currentLastPerf && (
+              <View style={styles.lastPerfRow}>
+                <Text style={styles.lastPerfLabel}>
+                  DERNIÈRE FOIS ({formatLastPerfDate(currentLastPerf.date)})
+                </Text>
+                <Text style={styles.lastPerfText}>{currentLastPerfText}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -555,6 +592,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
             <ScrollView style={styles.catalogScroll} showsVerticalScrollIndicator={false}>
               {catalogExercises.map((catEx) => {
                 const isSelected = currentExercise?.id === catEx.id;
+                const lastPerf = lastPerfByExerciseId[catEx.id];
+                const lastPerfText = formatLastPerfSets(lastPerf);
                 return (
                   <TouchableOpacity
                     key={catEx.id}
@@ -567,8 +606,13 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                         {catEx.name}
                       </Text>
                       <Text style={styles.catalogItemSub}>
-                        {catEx.category === 'FREE_WEIGHT' ? 'Barre Libre' : 'Machine Hammer'} • {catEx.plannedWeights?.[0] || 40} kg
+                        {catEx.category === 'FREE_WEIGHT' ? 'Barre Libre' : 'Machine Hammer'} • Conseillé : {catEx.plannedWeights?.[0] || 40} kg
                       </Text>
+                      {lastPerfText && (
+                        <Text style={styles.catalogItemLastPerf} numberOfLines={1}>
+                          Dernière fois : {lastPerfText}
+                        </Text>
+                      )}
                     </View>
                     <Text style={[styles.catalogItemAction, isSelected && styles.catalogItemActionActive]}>
                       {isSelected ? '✓ Actuel' : 'Choisir'}
@@ -692,22 +736,6 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 10,
   },
-  freeModeBadge: {
-    backgroundColor: 'rgba(204, 255, 0, 0.15)',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
-    marginBottom: 3,
-    borderWidth: 1,
-    borderColor: 'rgba(204, 255, 0, 0.3)',
-  },
-  freeModeBadgeText: {
-    color: THEME.colors.accent,
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
   sessionTitle: {
     fontFamily: THEME.fonts.serif,
     fontSize: 22,
@@ -828,6 +856,26 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: THEME.colors.textPrimary,
+  },
+  lastPerfRow: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(28, 28, 30, 0.08)',
+  },
+  lastPerfLabel: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 8,
+    fontWeight: '800',
+    color: THEME.colors.textMuted,
+    letterSpacing: 0.6,
+    marginBottom: 3,
+  },
+  lastPerfText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
+    fontWeight: '700',
+    color: THEME.colors.textSecondary,
   },
   setEntrySection: {
     backgroundColor: 'rgba(255, 255, 255, 0.72)',
@@ -1076,6 +1124,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: THEME.colors.textSecondary,
     marginTop: 2,
+  },
+  catalogItemLastPerf: {
+    fontSize: 10,
+    color: THEME.colors.textMuted,
+    marginTop: 2,
+    fontWeight: '600',
   },
   catalogItemAction: {
     fontSize: 11,

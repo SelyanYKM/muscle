@@ -5,16 +5,13 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, BackHandler, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { getAppMetadata, getExercisesForRelaunch, initDatabase, setAppMetadata } from './src/database/db';
+import { getAppMetadata, initDatabase, setAppMetadata } from './src/database/db';
 import { FreeWorkoutScreen } from './src/screens/FreeWorkoutScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
-import { LiveWorkoutScreen } from './src/screens/LiveWorkoutScreen';
-import { SessionPrepScreen } from './src/screens/SessionPrepScreen';
 import { SplitSelectScreen } from './src/screens/SplitSelectScreen';
-import { WorkoutModeSelectScreen } from './src/screens/WorkoutModeSelectScreen';
 import { WorkoutSummaryScreen } from './src/screens/WorkoutSummaryScreen';
 import { THEME } from './src/theme';
-import { NextSessionPlan, SessionConfig, SetResult } from './src/types';
+import { NextSessionPlan, SetResult } from './src/types';
 import { configureAppAudio } from './src/utils/audio';
 import {
   configureRestTimerChannel,
@@ -29,14 +26,9 @@ const BATTERY_TIP_METADATA_KEY = 'battery_optimization_tip_shown';
 // avec du retard" (throttling Doze faute d'alarme exacte autorisée).
 const EXACT_ALARM_TIP_METADATA_KEY = 'exact_alarm_tip_shown_v2';
 
-type ScreenState =
-  | 'SPLIT_SELECT'
-  | 'MODE_SELECT'
-  | 'PREP'
-  | 'LIVE'
-  | 'LIVE_FREE'
-  | 'SUMMARY'
-  | 'HISTORY';
+// Un seul flux de séance (plus de distinction Guidé/Libre) : choisir le split lance
+// directement la séance, avec les charges conseillées déjà calculées.
+type ScreenState = 'SPLIT_SELECT' | 'LIVE' | 'SUMMARY' | 'HISTORY';
 
 interface WorkoutSummaryData {
   workoutName: string;
@@ -57,11 +49,8 @@ export default function App() {
   });
   const [currentScreen, setCurrentScreen] = useState<ScreenState>('SPLIT_SELECT');
 
-  // Split choisi (Étape 1)
+  // Split choisi
   const [selectedWorkout, setSelectedWorkout] = useState<{ id: number; name: string } | null>(null);
-
-  // Configuration de la séance guidée
-  const [activeSessionConfig, setActiveSessionConfig] = useState<SessionConfig | null>(null);
 
   // Données du bilan
   const [lastSummaryData, setLastSummaryData] = useState<WorkoutSummaryData | null>(null);
@@ -135,15 +124,7 @@ export default function App() {
   // Gestion du bouton retour physique / geste Android pour naviguer entre les écrans
   useEffect(() => {
     const onBackPress = () => {
-      if (currentScreen === 'MODE_SELECT') {
-        setCurrentScreen('SPLIT_SELECT');
-        return true;
-      }
-      if (currentScreen === 'PREP') {
-        setCurrentScreen('MODE_SELECT');
-        return true;
-      }
-      if (currentScreen === 'LIVE' || currentScreen === 'LIVE_FREE') {
+      if (currentScreen === 'LIVE') {
         Alert.alert(
           'Quitter la séance ?',
           'La séance en cours sera interrompue.',
@@ -176,53 +157,13 @@ export default function App() {
     );
   }
 
-  // Étape 1 : Sélection du Split (Push / Pull / Legs)
+  // Choix du split (Push / Pull / Legs) : lance directement la séance.
   const handleSelectSplit = (wId: number, wName: string) => {
     setSelectedWorkout({ id: wId, name: wName });
-    setCurrentScreen('MODE_SELECT');
-  };
-
-  // Reprise rapide depuis le bandeau "Reprendre" (accueil) ou "Relancer" (historique) :
-  // reconstruit directement une séance guidée avec les MÊMES exercices que la séance reprise,
-  // mais avec les charges ACTUELLES (déjà progressées) — et saute directement dans la séance en
-  // direct, sans repasser par l'écran de préparation/reconfiguration.
-  const handleRelaunchWorkout = (wId: number, wName: string, exerciseIds: number[]) => {
-    const configuredExercises = getExercisesForRelaunch(wId, exerciseIds);
-
-    if (configuredExercises.length === 0) {
-      // Repli si aucun de ces exercices n'existe plus dans le catalogue : flux normal.
-      setSelectedWorkout({ id: wId, name: wName });
-      setCurrentScreen('MODE_SELECT');
-      return;
-    }
-
-    setSelectedWorkout({ id: wId, name: wName });
-    setActiveSessionConfig({
-      workoutId: wId,
-      workoutName: wName,
-      standardRestSeconds: 90,
-      finisherRestSeconds: 180,
-      configuredExercises,
-    });
     setCurrentScreen('LIVE');
   };
 
-  // Étape 2 : Sélection du Mode (Guidé vs Libre)
-  const handleSelectMode = (mode: 'GUIDED' | 'FREE') => {
-    if (mode === 'GUIDED') {
-      setCurrentScreen('PREP');
-    } else {
-      setCurrentScreen('LIVE_FREE');
-    }
-  };
-
-  // Démarrage séance guidée
-  const handleStartGuidedSession = (config: SessionConfig) => {
-    setActiveSessionConfig(config);
-    setCurrentScreen('LIVE');
-  };
-
-  // Fin de séance (Guidée ou Libre)
+  // Fin de séance
   const handleFinishSession = (summary: WorkoutSummaryData) => {
     setLastSummaryData(summary);
     setCurrentScreen('SUMMARY');
@@ -230,7 +171,6 @@ export default function App() {
 
   // Quitter ou réinitialiser
   const handleResetToHome = () => {
-    setActiveSessionConfig(null);
     setSelectedWorkout(null);
     setCurrentScreen('SPLIT_SELECT');
   };
@@ -240,47 +180,16 @@ export default function App() {
       <View style={styles.appContainer}>
         <StatusBar style={THEME.statusBarStyle} />
 
-        {/* ÉTAPE 1 : CHOIX DU SPLIT (PUSH / PULL / LEGS) */}
+        {/* CHOIX DU SPLIT (PUSH / PULL / LEGS) */}
         {currentScreen === 'SPLIT_SELECT' && (
           <SplitSelectScreen
             onSelectWorkout={handleSelectSplit}
-            onResumeWorkout={handleRelaunchWorkout}
             onOpenHistory={() => setCurrentScreen('HISTORY')}
           />
         )}
 
-        {/* ÉTAPE 2 : CHOIX DU MODE (GUIDÉ VS LIBRE) */}
-        {currentScreen === 'MODE_SELECT' && selectedWorkout && (
-          <WorkoutModeSelectScreen
-            workoutId={selectedWorkout.id}
-            workoutName={selectedWorkout.name}
-            onSelectMode={handleSelectMode}
-            onBack={() => setCurrentScreen('SPLIT_SELECT')}
-          />
-        )}
-
-        {/* ÉTAPE 3A : PRÉPARATION SÉANCE GUIDÉE */}
-        {currentScreen === 'PREP' && selectedWorkout && (
-          <SessionPrepScreen
-            workoutId={selectedWorkout.id}
-            workoutName={selectedWorkout.name}
-            onStartSession={handleStartGuidedSession}
-            onOpenHistory={() => setCurrentScreen('HISTORY')}
-            onBack={() => setCurrentScreen('MODE_SELECT')}
-          />
-        )}
-
-        {/* SÉANCE GUIDÉE EN DIRECT */}
-        {currentScreen === 'LIVE' && activeSessionConfig && (
-          <LiveWorkoutScreen
-            sessionConfig={activeSessionConfig}
-            onFinishSession={handleFinishSession}
-            onQuitSession={handleResetToHome}
-          />
-        )}
-
-        {/* ÉTAPE 3B : SÉANCE LIBRE EN DIRECT */}
-        {currentScreen === 'LIVE_FREE' && selectedWorkout && (
+        {/* SÉANCE EN DIRECT */}
+        {currentScreen === 'LIVE' && selectedWorkout && (
           <FreeWorkoutScreen
             workoutId={selectedWorkout.id}
             workoutName={selectedWorkout.name}
@@ -302,7 +211,7 @@ export default function App() {
 
         {/* HISTORIQUE */}
         {currentScreen === 'HISTORY' && (
-          <HistoryScreen onBack={handleResetToHome} onRelaunchSession={handleRelaunchWorkout} />
+          <HistoryScreen onBack={handleResetToHome} />
         )}
       </View>
     </SafeAreaProvider>

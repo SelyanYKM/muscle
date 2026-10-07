@@ -257,18 +257,58 @@ export function getExercisesForWorkout(workoutId: number): ConfiguredExercise[] 
   }
 }
 
+export interface LastExercisePerformance {
+  date: string;
+  sets: { setNumber: number; weight: number; repsDone: number; feeling: 'EASY' | 'MEDIUM' | 'HARD' }[];
+}
+
 /**
- * Reconstruit la liste d'exercices pour relancer une séance passée telle quelle : mêmes
- * exercices, dans le même ordre, mais avec les charges ACTUELLES (déjà progressées via
- * exercise_progression_state depuis cette séance) plutôt que celles utilisées ce jour-là.
- * Un exercice supprimé depuis est simplement omis.
+ * Dernière performance connue sur un exercice donné (toutes séances confondues), pour
+ * l'afficher comme repère pendant la séance en cours ("la dernière fois tu avais fait...").
  */
-export function getExercisesForRelaunch(workoutId: number, exerciseIds: number[]): ConfiguredExercise[] {
-  const all = getExercisesForWorkout(workoutId);
-  const byId = new Map(all.map((e) => [e.id, e]));
-  return exerciseIds
-    .map((id) => byId.get(id))
-    .filter((e): e is ConfiguredExercise => !!e);
+export function getLastExercisePerformance(exerciseId: number): LastExercisePerformance | null {
+  if (!db || Platform.OS === 'web') {
+    const logs = memoryLogs.filter((l) => l.exerciseId === exerciseId).sort((a, b) => (a.date < b.date ? 1 : -1));
+    if (logs.length === 0) return null;
+    const lastDate = logs[0].date;
+    const sets = logs
+      .filter((l) => l.date === lastDate)
+      .sort((a, b) => a.setNumber - b.setNumber)
+      .map((l) => ({ setNumber: l.setNumber, weight: l.weight, repsDone: l.repsDone, feeling: l.feeling }));
+    return { date: lastDate, sets };
+  }
+
+  try {
+    const lastDateRow = db.getFirstSync<{ date: string }>(
+      `SELECT date FROM workout_logs WHERE exercise_id = ? ORDER BY id DESC LIMIT 1;`,
+      [exerciseId]
+    );
+    if (!lastDateRow) return null;
+
+    const rows = db.getAllSync<{
+      set_number: number;
+      weight: number;
+      reps_done: number;
+      feeling: 'EASY' | 'MEDIUM' | 'HARD';
+    }>(
+      `SELECT set_number, weight, reps_done, feeling FROM workout_logs
+       WHERE exercise_id = ? AND date = ? ORDER BY set_number ASC;`,
+      [exerciseId, lastDateRow.date]
+    );
+
+    return {
+      date: lastDateRow.date,
+      sets: rows.map((r) => ({
+        setNumber: r.set_number,
+        weight: r.weight,
+        repsDone: r.reps_done,
+        feeling: r.feeling,
+      })),
+    };
+  } catch (error) {
+    console.error('Erreur getLastExercisePerformance:', error);
+    return null;
+  }
 }
 
 export function getAllCatalogExercises(workoutId?: number): ConfiguredExercise[] {
