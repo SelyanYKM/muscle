@@ -4,7 +4,6 @@ import {
   Alert,
   Image,
   SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -70,7 +69,7 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
         style={StyleSheet.absoluteFill}
       />
       <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      <View style={styles.container}>
         {/* En-tête officiel mooscles */}
         <View style={styles.headerRow}>
           <View style={styles.brandRow}>
@@ -121,7 +120,7 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
           <Text style={styles.stepSubheading}>Quelle séance attaques-tu aujourd'hui ?</Text>
         </View>
 
-        {/* 3 Cartes de Split P/P/L */}
+        {/* 3 Cartes de Split P/P/L, qui se partagent tout l'espace restant jusqu'au tiroir */}
         <View style={styles.cardsContainer}>
           {workouts.map((w) => {
             const details = getSplitDetails(w.id);
@@ -153,12 +152,19 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
                   <Text style={styles.cardSubtitle} numberOfLines={1}>
                     {details.subtitle}
                   </Text>
+
+                  <View style={styles.metaRow}>
+                    <View style={styles.metaTag}>
+                      <Text style={styles.metaTagText}>{details.focus}</Text>
+                    </View>
+                    <Text style={styles.metaCount}>{details.exercisesCount}</Text>
+                  </View>
                 </View>
               </TouchableOpacity>
             );
           })}
         </View>
-      </ScrollView>
+      </View>
       </SafeAreaView>
 
       <DashboardSheet summary={dashboardSummary} />
@@ -175,11 +181,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   container: {
+    flex: 1,
     paddingHorizontal: 16,
     paddingTop: 24,
-    // Marge basse suffisante pour que la dernière carte ne soit jamais cachée par la
+    // Marge basse suffisante pour que les cartes ne soient jamais cachées par la
     // feuille "Ton progrès" repliée (voir PEEK_HEIGHT dans DashboardSheet.tsx).
-    paddingBottom: 160,
+    paddingBottom: 150,
   },
   headerRow: {
     flexDirection: 'row',
@@ -252,32 +259,34 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   cardsContainer: {
-    gap: 10,
+    flex: 1,
+    gap: 12,
   },
   splitCard: {
+    flex: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.72)',
-    borderRadius: 20,
-    padding: 13,
+    borderRadius: 24,
+    paddingHorizontal: 20,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.95)',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 16,
     shadowColor: '#8C7060',
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.1,
-    shadowRadius: 14,
+    shadowRadius: 16,
   },
   letterBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 13,
+    width: 56,
+    height: 56,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
   },
   letterBadgeText: {
     fontFamily: THEME.fonts.serif,
-    fontSize: 19,
+    fontSize: 26,
     fontWeight: '700',
     color: '#1C1C1E',
   },
@@ -288,22 +297,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 2,
+    marginBottom: 3,
   },
   cardTitle: {
     fontFamily: THEME.fonts.serif,
-    fontSize: 17,
+    fontSize: 21,
     fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
   chevron: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '900',
     color: THEME.colors.accent,
   },
   cardSubtitle: {
-    fontSize: 11,
+    fontSize: 12,
     color: THEME.colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: 10,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  metaTag: {
+    backgroundColor: THEME.colors.cardInner,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  metaTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: THEME.colors.textSecondary,
+  },
+  metaCount: {
+    fontSize: 11,
+    color: THEME.colors.textMuted,
     fontWeight: '600',
   },
 });

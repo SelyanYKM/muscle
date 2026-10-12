@@ -16,6 +16,7 @@ import { PlateBreakdown } from '../components/PlateBreakdown';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
 import {
   addCustomExercise,
+  formatLocalDate,
   getAllCatalogExercises,
   getLastExercisePerformance,
   LastExercisePerformance,
@@ -274,7 +275,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
     triggerSuccessHaptic();
     const durationMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = formatLocalDate(new Date());
 
     const logsToSave: WorkoutLogEntry[] = [];
     const exerciseSummaries: {

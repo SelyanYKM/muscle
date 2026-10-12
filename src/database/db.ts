@@ -882,13 +882,25 @@ export interface DashboardSummary {
   insightText: string;
 }
 
-/** Lundi de la semaine ISO contenant la date donnée (format 'YYYY-MM-DD'). */
+// Formate une date en 'YYYY-MM-DD' à partir de ses composantes LOCALES (jamais toISOString,
+// qui convertit en UTC : sur un fuseau horaire en avance sur UTC (ex. Europe/Paris), minuit
+// local round-trippé par toISOString() retombe sur la veille — et comme cette conversion était
+// appelée deux fois de suite (une fois dans getWeekStartISO, une fois de plus dans la boucle
+// des ancres), le décalage s'accumulait et empêchait toute correspondance entre les semaines.
+export function formatLocalDate(d: Date): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/** Lundi de la semaine contenant la date donnée (format 'YYYY-MM-DD'), en heure locale. */
 function getWeekStartISO(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00');
   const day = d.getDay(); // 0 = dimanche .. 6 = samedi
   const diffToMonday = day === 0 ? -6 : 1 - day;
   d.setDate(d.getDate() + diffToMonday);
-  return d.toISOString().split('T')[0];
+  return formatLocalDate(d);
 }
 
 function buildWeeklyStats(
@@ -909,12 +921,12 @@ function buildWeeklyStats(
 
   // Génère les N dernières semaines (y compris celles sans séance, à 0), de la plus
   // ancienne à la plus récente, pour un axe continu sur le graphique.
-  const currentWeekStart = getWeekStartISO(new Date().toISOString().split('T')[0]);
+  const currentWeekStart = getWeekStartISO(formatLocalDate(new Date()));
   const weeks: WeeklyStat[] = [];
   for (let i = weeksCount - 1; i >= 0; i--) {
     const d = new Date(currentWeekStart + 'T00:00:00');
     d.setDate(d.getDate() - i * 7);
-    const weekStart = d.toISOString().split('T')[0];
+    const weekStart = formatLocalDate(d);
     const bucket = byWeek.get(weekStart);
     weeks.push({
       weekStart,
