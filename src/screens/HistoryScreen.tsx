@@ -20,6 +20,7 @@ import {
 } from '../database/db';
 import { THEME } from '../theme';
 import { WorkoutLogEntry } from '../types';
+import { exportHistoryAsText } from '../utils/exportHistory';
 import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
 
 interface HistoryScreenProps {
@@ -43,6 +44,7 @@ interface GroupedSession {
 export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
   const [sessions, setSessions] = useState<GroupedSession[]>([]);
   const [expandedSessions, setExpandedSessions] = useState<{ [sessionKey: string]: boolean }>({});
+  const [isExporting, setIsExporting] = useState(false);
 
   // Modal 1 : Édition globale de la séance (Programme Push / Pull / Legs)
   const [editingSession, setEditingSession] = useState<GroupedSession | null>(null);
@@ -133,6 +135,17 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
         },
       ]
     );
+  };
+
+  const handleExport = async () => {
+    if (isExporting) return;
+    triggerLightHaptic();
+    setIsExporting(true);
+    try {
+      await exportHistoryAsText();
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const openEditSessionModal = (session: GroupedSession) => {
@@ -336,6 +349,15 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
           activeOpacity={0.8}
         >
           <Text style={styles.title}>Historique</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.exportButton}
+          onPress={handleExport}
+          disabled={isExporting || sessions.length === 0}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.exportButtonText}>{isExporting ? '...' : '⇧ Exporter'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -662,6 +684,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
     color: THEME.colors.textPrimary,
+  },
+  exportButton: {
+    backgroundColor: THEME.colors.cardBg,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+  },
+  exportButtonText: {
+    color: THEME.colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '700',
   },
   emptyContainer: {
     alignItems: 'center',

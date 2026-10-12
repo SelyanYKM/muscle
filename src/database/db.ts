@@ -1018,3 +1018,83 @@ export function getDashboardSummary(weeksCount: number = 10): DashboardSummary {
     insightText: buildInsightText(weeklyStats),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Export de l'historique (fichier texte à partager/sauvegarder).
+// ---------------------------------------------------------------------------
+
+export interface ExportSessionSet {
+  weight: number;
+  repsDone: number;
+  feeling: 'EASY' | 'MEDIUM' | 'HARD';
+}
+
+export interface ExportSessionExercise {
+  exerciseName: string;
+  sets: ExportSessionSet[];
+}
+
+export interface ExportSession {
+  date: string;
+  workoutId: number;
+  exercises: ExportSessionExercise[];
+}
+
+/**
+ * Toutes les séances, triées de la plus récente à la plus ancienne, avec pour chaque
+ * séance ses exercices DANS L'ORDRE où ils ont été faits (ordre d'insertion des logs),
+ * chacun avec la liste de ses séries. Sert de base à l'export texte de l'historique.
+ */
+export function getAllSessionsForExport(): ExportSession[] {
+  let rows: {
+    id: number;
+    date: string;
+    workout_id: number;
+    exercise_name: string;
+    weight: number;
+    reps_done: number;
+    feeling: 'EASY' | 'MEDIUM' | 'HARD';
+  }[];
+
+  if (!db || Platform.OS === 'web') {
+    rows = memoryLogs.map((l, idx) => ({
+      id: idx,
+      date: l.date,
+      workout_id: l.workoutId,
+      exercise_name: l.exerciseName,
+      weight: l.weight,
+      reps_done: l.repsDone,
+      feeling: l.feeling,
+    }));
+  } else {
+    try {
+      rows = db.getAllSync(
+        'SELECT id, date, workout_id, exercise_name, weight, reps_done, feeling FROM workout_logs ORDER BY date DESC, id ASC;'
+      );
+    } catch (error) {
+      console.error('Erreur getAllSessionsForExport:', error);
+      rows = [];
+    }
+  }
+
+  const sessionMap = new Map<string, ExportSession>();
+  const sessionOrder: string[] = [];
+
+  for (const r of rows) {
+    const key = `${r.date}_${r.workout_id}`;
+    if (!sessionMap.has(key)) {
+      sessionMap.set(key, { date: r.date, workoutId: r.workout_id, exercises: [] });
+      sessionOrder.push(key);
+    }
+    const session = sessionMap.get(key)!;
+
+    let ex = session.exercises.find((e) => e.exerciseName === r.exercise_name);
+    if (!ex) {
+      ex = { exerciseName: r.exercise_name, sets: [] };
+      session.exercises.push(ex);
+    }
+    ex.sets.push({ weight: r.weight, repsDone: r.reps_done, feeling: r.feeling });
+  }
+
+  return sessionOrder.map((k) => sessionMap.get(k)!);
+}

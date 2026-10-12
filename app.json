@@ -36,7 +36,8 @@
       "expo-status-bar",
       "expo-splash-screen",
       "expo-audio",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-file-system"
     ],
     "extra": {
       "eas": {
