@@ -854,3 +854,155 @@ export function setAppMetadata(key: string, value: string): void {
     // Sans conséquence : le conseil réapparaîtra simplement au prochain lancement
   }
 }
+
+// ---------------------------------------------------------------------------
+// Dashboard motivation : stats agrégées, records personnels, mini analyse.
+// ---------------------------------------------------------------------------
+
+export interface WeeklyStat {
+  /** Lundi de la semaine, au format ISO 'YYYY-MM-DD'. */
+  weekStart: string;
+  totalVolume: number;
+  sessionCount: number;
+}
+
+export interface PersonalRecord {
+  exerciseName: string;
+  maxWeight: number;
+}
+
+export interface DashboardSummary {
+  totalVolumeAllTime: number;
+  totalSessions: number;
+  /** Nombre de semaines consécutives (en comptant la semaine en cours) avec au moins 1 séance. */
+  streakWeeks: number;
+  weeklyStats: WeeklyStat[];
+  personalRecords: PersonalRecord[];
+  /** Phrase courte calculée (pas d'IA, juste une comparaison de volume) pour motiver. */
+  insightText: string;
+}
+
+/** Lundi de la semaine ISO contenant la date donnée (format 'YYYY-MM-DD'). */
+function getWeekStartISO(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay(); // 0 = dimanche .. 6 = samedi
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diffToMonday);
+  return d.toISOString().split('T')[0];
+}
+
+function buildWeeklyStats(
+  rawLogs: { date: string; workoutId: number; weight: number; repsDone: number }[],
+  weeksCount: number
+): WeeklyStat[] {
+  const byWeek = new Map<string, { totalVolume: number; sessionKeys: Set<string> }>();
+
+  for (const log of rawLogs) {
+    const weekStart = getWeekStartISO(log.date);
+    if (!byWeek.has(weekStart)) {
+      byWeek.set(weekStart, { totalVolume: 0, sessionKeys: new Set() });
+    }
+    const bucket = byWeek.get(weekStart)!;
+    bucket.totalVolume += log.weight * log.repsDone;
+    bucket.sessionKeys.add(`${log.date}_${log.workoutId}`);
+  }
+
+  // Génère les N dernières semaines (y compris celles sans séance, à 0), de la plus
+  // ancienne à la plus récente, pour un axe continu sur le graphique.
+  const currentWeekStart = getWeekStartISO(new Date().toISOString().split('T')[0]);
+  const weeks: WeeklyStat[] = [];
+  for (let i = weeksCount - 1; i >= 0; i--) {
+    const d = new Date(currentWeekStart + 'T00:00:00');
+    d.setDate(d.getDate() - i * 7);
+    const weekStart = d.toISOString().split('T')[0];
+    const bucket = byWeek.get(weekStart);
+    weeks.push({
+      weekStart,
+      totalVolume: bucket ? Math.round(bucket.totalVolume) : 0,
+      sessionCount: bucket ? bucket.sessionKeys.size : 0,
+    });
+  }
+  return weeks;
+}
+
+function computeStreakWeeks(weeklyStats: WeeklyStat[]): number {
+  if (weeklyStats.length === 0) return 0;
+  const weeks = [...weeklyStats];
+  // La semaine en cours n'est peut-être pas terminée : si elle est vide, elle ne casse pas
+  // une série déjà entamée, elle est juste ignorée du décompte.
+  if (weeks[weeks.length - 1].sessionCount === 0) weeks.pop();
+
+  let streak = 0;
+  for (let i = weeks.length - 1; i >= 0; i--) {
+    if (weeks[i].sessionCount > 0) streak++;
+    else break;
+  }
+  return streak;
+}
+
+function buildInsightText(weeklyStats: WeeklyStat[]): string {
+  if (weeklyStats.length < 4) {
+    return 'Continue à enregistrer tes séances pour voir ta progression apparaître ici !';
+  }
+
+  const last2 = weeklyStats.slice(-2);
+  const prev2 = weeklyStats.slice(-4, -2);
+  const lastVolume = last2.reduce((sum, w) => sum + w.totalVolume, 0);
+  const prevVolume = prev2.reduce((sum, w) => sum + w.totalVolume, 0);
+
+  if (prevVolume === 0) {
+    return lastVolume > 0
+      ? 'Belle reprise ! Continue sur cette lancée.'
+      : 'Continue à enregistrer tes séances pour voir ta progression apparaître ici !';
+  }
+
+  const changePercent = Math.round(((lastVolume - prevVolume) / prevVolume) * 100);
+  if (changePercent >= 10) return `🔥 Volume en hausse de ${changePercent}% sur les 2 dernières semaines !`;
+  if (changePercent <= -15) return `Volume en baisse de ${Math.abs(changePercent)}% sur 2 semaines — une séance de plus cette semaine ?`;
+  return 'Volume stable sur les 2 dernières semaines — régularité au rendez-vous.';
+}
+
+export function getDashboardSummary(weeksCount: number = 10): DashboardSummary {
+  let rawLogs: { date: string; workoutId: number; weight: number; repsDone: number }[];
+  let prRows: { exercise_name: string; max_weight: number }[];
+
+  if (!db || Platform.OS === 'web') {
+    rawLogs = memoryLogs.map((l) => ({ date: l.date, workoutId: l.workoutId, weight: l.weight, repsDone: l.repsDone }));
+    const maxByExercise = new Map<string, number>();
+    for (const l of memoryLogs) {
+      maxByExercise.set(l.exerciseName, Math.max(maxByExercise.get(l.exerciseName) || 0, l.weight));
+    }
+    prRows = Array.from(maxByExercise.entries()).map(([exercise_name, max_weight]) => ({ exercise_name, max_weight }));
+  } else {
+    try {
+      rawLogs = db
+        .getAllSync<{ date: string; workout_id: number; weight: number; reps_done: number }>(
+          'SELECT date, workout_id, weight, reps_done FROM workout_logs;'
+        )
+        .map((r) => ({ date: r.date, workoutId: r.workout_id, weight: r.weight, repsDone: r.reps_done }));
+
+      prRows = db.getAllSync<{ exercise_name: string; max_weight: number }>(
+        'SELECT exercise_name, MAX(weight) as max_weight FROM workout_logs GROUP BY exercise_name ORDER BY max_weight DESC LIMIT 5;'
+      );
+    } catch (error) {
+      console.error('Erreur getDashboardSummary:', error);
+      rawLogs = [];
+      prRows = [];
+    }
+  }
+
+  const weeklyStats = buildWeeklyStats(rawLogs, weeksCount);
+  const sessionKeys = new Set(rawLogs.map((l) => `${l.date}_${l.workoutId}`));
+  const totalVolumeAllTime = Math.round(rawLogs.reduce((sum, l) => sum + l.weight * l.repsDone, 0));
+
+  prRows.sort((a, b) => b.max_weight - a.max_weight);
+
+  return {
+    totalVolumeAllTime,
+    totalSessions: sessionKeys.size,
+    streakWeeks: computeStreakWeeks(weeklyStats),
+    weeklyStats,
+    personalRecords: prRows.slice(0, 5).map((r) => ({ exerciseName: r.exercise_name, maxWeight: r.max_weight })),
+    insightText: buildInsightText(weeklyStats),
+  };
+}

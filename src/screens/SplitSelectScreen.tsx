@@ -10,7 +10,8 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { clearAllWorkoutLogs, getWorkouts } from '../database/db';
+import { DashboardSheet } from '../components/DashboardSheet';
+import { clearAllWorkoutLogs, getDashboardSummary, getWorkouts } from '../database/db';
 import { THEME } from '../theme';
 import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
 
@@ -24,6 +25,7 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
   onOpenHistory,
 }) => {
   const workouts = getWorkouts();
+  const dashboardSummary = getDashboardSummary();
 
   const handleSelect = (wId: number, wName: string) => {
     triggerMediumHaptic();
@@ -148,14 +150,9 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
                     <Text style={styles.chevron}>→</Text>
                   </View>
 
-                  <Text style={styles.cardSubtitle}>{details.subtitle}</Text>
-
-                  <View style={styles.metaRow}>
-                    <View style={styles.metaTag}>
-                      <Text style={styles.metaTagText}>{details.focus}</Text>
-                    </View>
-                    <Text style={styles.metaCount}>{details.exercisesCount}</Text>
-                  </View>
+                  <Text style={styles.cardSubtitle} numberOfLines={1}>
+                    {details.subtitle}
+                  </Text>
                 </View>
               </TouchableOpacity>
             );
@@ -163,6 +160,8 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
         </View>
       </ScrollView>
       </SafeAreaView>
+
+      <DashboardSheet summary={dashboardSummary} />
     </View>
   );
 };
@@ -178,13 +177,15 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
     paddingTop: 24,
-    paddingBottom: 40,
+    // Marge basse suffisante pour que la dernière carte ne soit jamais cachée par la
+    // feuille "Ton progrès" repliée (voir PEEK_HEIGHT dans DashboardSheet.tsx).
+    paddingBottom: 160,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: 20,
   },
   brandRow: {
     flexDirection: 'row',
@@ -234,11 +235,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   stepTitleBox: {
-    marginBottom: 20,
+    marginBottom: 14,
   },
   stepHeading: {
     fontFamily: THEME.fonts.serif,
-    fontSize: 27,
+    fontSize: 23,
     fontWeight: '700',
     color: THEME.colors.textPrimary,
     letterSpacing: -0.3,
@@ -251,32 +252,32 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   cardsContainer: {
-    gap: 14,
+    gap: 10,
   },
   splitCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.72)',
-    borderRadius: 24,
-    padding: 18,
+    borderRadius: 20,
+    padding: 13,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.95)',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
     shadowColor: '#8C7060',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
   },
   letterBadge: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 13,
     justifyContent: 'center',
     alignItems: 'center',
   },
   letterBadgeText: {
     fontFamily: THEME.fonts.serif,
-    fontSize: 24,
+    fontSize: 19,
     fontWeight: '700',
     color: '#1C1C1E',
   },
@@ -287,44 +288,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   cardTitle: {
     fontFamily: THEME.fonts.serif,
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
   chevron: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '900',
     color: THEME.colors.accent,
   },
   cardSubtitle: {
-    fontSize: 12,
-    color: THEME.colors.textSecondary,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  metaTag: {
-    backgroundColor: THEME.colors.cardInner,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 5,
-  },
-  metaTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: THEME.colors.textSecondary,
-  },
-  metaCount: {
     fontSize: 11,
-    color: THEME.colors.textMuted,
+    color: THEME.colors.textSecondary,
     fontWeight: '600',
   },
 });
