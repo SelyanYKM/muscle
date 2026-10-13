@@ -7,6 +7,7 @@ import {
 import { Petrona_600SemiBold } from '@expo-google-fonts/petrona';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
+import * as Updates from 'expo-updates';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, BackHandler, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -67,6 +68,26 @@ export default function App() {
   useEffect(() => {
     async function setup() {
       try {
+        // Vérifie et applique une éventuelle mise à jour OTA avant d'afficher l'app : par
+        // défaut, expo-updates télécharge en arrière-plan mais n'applique qu'au PROCHAIN
+        // lancement, ce qui donne l'impression que "rien ne change" après une mise à jour.
+        // Un timeout évite de bloquer l'appli si le réseau est absent ou lent.
+        if (!__DEV__ && Updates.isEnabled) {
+          try {
+            const result = await Promise.race([
+              Updates.checkForUpdateAsync(),
+              new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000)),
+            ]);
+            if (result && result.isAvailable) {
+              await Updates.fetchUpdateAsync();
+              await Updates.reloadAsync();
+              return;
+            }
+          } catch (updateError) {
+            console.error('Vérification de mise à jour OTA impossible:', updateError);
+          }
+        }
+
         await initDatabase();
         await configureAppAudio();
         await configureRestTimerChannel();
