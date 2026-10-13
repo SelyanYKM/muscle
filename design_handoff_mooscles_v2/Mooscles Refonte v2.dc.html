@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Petrona:wght@500;600;700&display=swap" rel="stylesheet">
+<style>body{margin:0;background:#E4E9F1;font-family:Manrope,system-ui,sans-serif;color:#00296B;-webkit-font-smoothing:antialiased}a{color:#00509D;text-decoration:underline;text-underline-offset:2px}a:hover{color:#003F88}input{font-family:Manrope,sans-serif}</style>
+</helmet>
+<div style="min-height:100vh;display:flex;flex-wrap:wrap;gap:56px;align-items:center;justify-content:center;padding:40px 32px;box-sizing:border-box;">
+
+<div style="max-width:300px;display:flex;flex-direction:column;gap:28px;">
+<div style="display:flex;flex-direction:column;gap:8px;">
+<div style="display:flex;align-items:center;gap:10px;"><img src="assets/mooscles_logo.jpg" style="width:36px;height:36px;border-radius:11px;object-fit:cover;"><span style="font:600 26px Petrona,serif;letter-spacing:-.5px;">mooscles<span style="color:#FDC500;">.</span></span></div>
+<div style="font:700 12px Manrope;letter-spacing:1px;color:#55617A;">REFONTE V2 · BLEU IMPÉRIAL &amp; OR</div>
+<div style="display:flex;align-items:center;gap:8px;margin-top:4px;"><span style="font:800 12px Manrope;padding:5px 10px;border-radius:999px;background:#00296B;color:#fff;">{{ pisteLabel }}</span><span style="font:600 12px Manrope;color:#55617A;">changer dans Tweaks</span></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;">
+<div style="font:800 11px Manrope;letter-spacing:1px;color:#55617A;">PARCOURS</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px;">
+<div onClick="{{ goHome }}" style="font:700 13px Manrope;padding:8px 12px;border-radius:999px;background:#fff;cursor:pointer;" style-hover="background:#EEF2F8">Accueil</div>
+<div onClick="{{ goProgress }}" style="font:700 13px Manrope;padding:8px 12px;border-radius:999px;background:#fff;cursor:pointer;" style-hover="background:#EEF2F8">Ton progrès</div>
+<div onClick="{{ goLive }}" style="font:700 13px Manrope;padding:8px 12px;border-radius:999px;background:#fff;cursor:pointer;" style-hover="background:#EEF2F8">Séance</div>
+<div onClick="{{ goRest }}" style="font:700 13px Manrope;padding:8px 12px;border-radius:999px;background:#fff;cursor:pointer;" style-hover="background:#EEF2F8">Repos</div>
+<div onClick="{{ goSummary }}" style="font:700 13px Manrope;padding:8px 12px;border-radius:999px;background:#fff;cursor:pointer;" style-hover="background:#EEF2F8">Bilan</div>
+<div onClick="{{ goHistory }}" style="font:700 13px Manrope;padding:8px 12px;border-radius:999px;background:#fff;cursor:pointer;" style-hover="background:#EEF2F8">Historique</div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;">
+<div style="font:800 11px Manrope;letter-spacing:1px;color:#55617A;">CE QUI CHANGE</div>
+<div style="display:flex;flex-direction:column;gap:10px;font:500 13px/1.5 Manrope;color:#2A3A5C;text-wrap:pretty;">
+<div>Une seule surface forte par écran, le reste en listes à filets : fini les cartes blanches toutes pareilles.</div>
+<div>La couleur du split (terracotta, lilas, bleu) te suit pendant toute la séance.</div>
+<div>Des pastilles à la place des 🟢🟠🔴. Des boutons de ressenti plus grands, avec un repère chiffré (2+, 0–1, ×).</div>
+<div>Une seule échelle de rayons (28 / 20 / 14 / pilule), des feuilles du bas claires partout, du texte à 11 px minimum.</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px;"><a href="Mooscles Refonte.dc.html" style="font:700 13px Manrope;display:inline-flex;align-items:center;gap:6px;">Voir la v1 (terracotta)<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex:none;"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></a><a href="Mooscles actuel.dc.html" style="font:700 13px Manrope;display:inline-flex;align-items:center;gap:6px;">Voir l'état actuel<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex:none;"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></a></div>
+</div>
+</div>
+
+<div data-screen-label="Téléphone" style="width:412px;height:892px;border-radius:40px;border:8px solid #1A1A1C;box-sizing:border-box;overflow:hidden;position:relative;background:#F5F7FB;box-shadow:0 40px 80px rgba(60,40,30,.22),0 0 0 1px rgba(0,0,0,.06);flex:none;">
+
+<sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+<div data-screen-label="01 Accueil" style="position:absolute;inset:0;background:linear-gradient(155deg,#D3E0F2 0%,#F5F7FB 52%,#FFF2BF 100%);">
+<div style="height:100%;box-sizing:border-box;padding:52px 20px 120px;display:flex;flex-direction:column;gap:22px;">
+<div style="display:flex;justify-content:space-between;align-items:center;">
+<div style="display:flex;align-items:center;gap:12px;"><img src="assets/mooscles_logo.jpg" style="width:42px;height:42px;border-radius:13px;object-fit:cover;box-shadow:0 4px 10px rgba(0,41,107,.18);"><div><div style="font:600 26px/1 Petrona,serif;letter-spacing:-.5px;">mooscles<span style="color:#FDC500;">.</span></div><div style="font:600 12px Manrope;color:#55617A;margin-top:4px;">Surcharge progressive PPL</div></div></div>
+<div onClick="{{ goHistory }}" style="height:40px;padding:0 16px;border-radius:999px;background:rgba(255,255,255,.75);border:1px solid #fff;display:flex;align-items:center;font:700 13px Manrope;cursor:pointer;box-shadow:0 2px 8px rgba(0,41,107,.08);">Historique</div>
+</div>
+<div><div style="font:600 32px/1.05 Petrona,serif;letter-spacing:-.6px;">Choisis ton split</div><div style="font:500 14px Manrope;color:#55617A;margin-top:6px;">Quelle séance attaques-tu aujourd'hui ?</div></div>
+
+<sc-if value="{{ isA }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column;gap:12px;">
+<sc-for list="{{ splitCards }}" as="c" hint-placeholder-count="3">
+<div onClick="{{ c.onPick }}" style="flex:1;min-height:0;border-radius:28px;background:rgba(255,255,255,.8);border:1.5px solid {{ c.ring }};box-shadow:0 10px 24px rgba(0,41,107,.12);display:flex;align-items:center;gap:16px;padding:0 18px;cursor:pointer;transition:transform .15s;" style-active="transform:scale(.98)">
+<div style="width:60px;height:60px;border-radius:20px;background:{{ c.grad }};color:{{ c.fg }};display:flex;align-items:center;justify-content:center;font:600 28px Petrona,serif;flex:none;">{{ c.letter }}</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">
+<div style="display:flex;align-items:center;gap:8px;"><span style="font:600 24px/1.1 Petrona,serif;">{{ c.name }}</span><sc-if value="{{ c.isNext }}"><span style="font:800 11px Manrope;letter-spacing:.4px;padding:3px 8px;border-radius:999px;background:#00296B;color:#fff;">À suivre</span></sc-if></div>
+<div style="font:600 13px Manrope;color:#55617A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.muscles }}</div>
+<div style="font:600 12px Manrope;color:#55617A;margin-top:4px;">{{ c.meta }}</div>
+</div>
+<div style="width:38px;height:38px;border-radius:50%;background:{{ c.tint }};color:{{ c.ink }};display:flex;align-items:center;justify-content:center;flex:none;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex:none;"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ isB }}">
+<div style="flex:1;min-height:0;display:flex;flex-direction:column;gap:12px;">
+<sc-for list="{{ splitCards }}" as="c" hint-placeholder-count="3">
+<div onClick="{{ c.onPick }}" style="flex:1;min-height:0;border-radius:28px;background:{{ c.grad }};color:{{ c.fg }};position:relative;overflow:hidden;padding:20px 22px;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;box-shadow:0 12px 26px rgba(0,41,107,.16);" style-active="transform:scale(.98)">
+<div style="position:absolute;right:-6px;bottom:-46px;font:700 190px/1 Petrona,serif;color:rgba(255,255,255,.32);pointer-events:none;">{{ c.letter }}</div>
+<div style="position:relative;display:flex;justify-content:space-between;align-items:flex-start;">
+<div><div style="font:600 32px/1 Petrona,serif;letter-spacing:-.5px;">{{ c.name }}</div><div style="font:700 13px Manrope;margin-top:6px;">{{ c.muscles }}</div></div>
+<sc-if value="{{ c.isNext }}"><span style="font:800 11px Manrope;padding:4px 9px;border-radius:999px;background:#00296B;color:#fff;">À suivre</span></sc-if>
+</div>
+<div style="position:relative;display:flex;justify-content:space-between;align-items:center;">
+<span style="font:700 12px Manrope;padding:6px 10px;border-radius:999px;background:{{ c.chipBg }};">{{ c.meta }}</span>
+<div style="width:44px;height:44px;border-radius:50%;background:{{ c.btnBg }};color:{{ c.btnFg }};display:flex;align-items:center;justify-content:center;flex:none;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex:none;"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></div>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+
+<div onClick="{{ openProgress }}" style="position:absolute;left:0;right:0;bottom:0;height:108px;background:rgba(255,255,255,.97);border-radius:28px 28px 0 0;box-shadow:0 -8px 24px rgba(0,41,107,.12);padding:10px 22px 0;box-sizing:border-box;cursor:pointer;">
+<div style="width:40px;height:4px;border-radius:2px;background:rgba(0,41,107,.15);margin:0 auto 14px;"></div>
+<div style="display:flex;align-items:center;gap:14px;">
+<div style="flex:1;min-width:0;"><div style="font:800 11px Manrope;letter-spacing:1px;color:#00509D;">TON PROGRÈS</div><div style="font:600 18px/1.2 Petrona,serif;margin-top:3px;">{{ insight }}</div></div>
+<div style="display:flex;align-items:flex-end;gap:3px;height:34px;">
+<sc-for list="{{ miniBars }}" as="b" hint-placeholder-count="6"><div style="width:6px;height:{{ b.h }};border-radius:2px;background:#FDC500;opacity:{{ b.op }};"></div></sc-for>
+</div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isLive }}">
+<div data-screen-label="02 Séance" style="position:absolute;inset:0;background:linear-gradient(170deg,{{ splitG1 }} 0%,#F5F7FB 42%);">
+<div style="height:100%;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;padding:48px 18px 36px;display:flex;flex-direction:column;gap:18px;">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+<div style="display:flex;align-items:center;gap:12px;min-width:0;">
+<div style="width:40px;height:40px;border-radius:14px;background:{{ splitGrad }};color:{{ splitFg }};display:flex;align-items:center;justify-content:center;font:600 20px Petrona,serif;flex:none;">{{ splitLetter }}</div>
+<div style="min-width:0;"><div style="font:600 24px/1 Petrona,serif;">{{ splitName }}</div><div style="font:600 12px Manrope;color:#55617A;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ splitMuscles }}</div></div>
+</div>
+<div style="display:flex;gap:8px;flex:none;">
+<div style="height:40px;padding:0 14px;border-radius:999px;background:rgba(255,255,255,.8);display:flex;align-items:center;gap:8px;font:800 14px Manrope;font-variant-numeric:tabular-nums;"><span style="width:7px;height:7px;border-radius:50%;background:#FDC500;"></span>{{ elapsedLabel }}</div>
+<div onClick="{{ askQuit }}" style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.8);display:flex;align-items:center;justify-content:center;color:#55617A;cursor:pointer;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex:none;"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></div>
+</div>
+</div>
+
+<div onClick="{{ openPicker }}" style="display:flex;flex-direction:column;gap:8px;cursor:pointer;">
+<div style="display:flex;gap:4px;"><sc-for list="{{ exStrip }}" as="e" hint-placeholder-count="5"><div style="flex:1;height:4px;border-radius:2px;background:{{ e.bg }};"></div></sc-for></div>
+<div style="display:flex;justify-content:space-between;font:700 12px Manrope;"><span style="color:#55617A;">Exercice {{ exPos }} sur {{ exCount }}</span><span style="color:#00509D;display:flex;align-items:center;gap:4px;">Changer d'exercice<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex:none;"><path d="m6 9 6 6 6-6"></path></svg></span></div>
+</div>
+
+<div style="position:relative;border-radius:28px;overflow:hidden;color:{{ heroInk }};box-shadow:{{ heroShadow }};flex:none;">
+<sc-if value="{{ isA }}" hint-placeholder-val="{{ true }}"><div style="position:absolute;inset:0;background:rgba(255,255,255,.88);border:1px solid #fff;border-radius:28px;"></div></sc-if>
+<sc-if value="{{ isB }}"><div style="position:absolute;inset:0;background:linear-gradient(160deg,#00296B 0%,#003F88 60%,#00509D 100%);"></div></sc-if>
+<div style="position:relative;padding:20px;display:flex;flex-direction:column;gap:16px;">
+<div style="display:flex;justify-content:space-between;align-items:center;">
+<span style="font:800 11px Manrope;letter-spacing:.8px;padding:5px 9px;border-radius:999px;background:color-mix(in srgb,currentColor 9%,transparent);">{{ catLabel }}</span>
+<span style="font:800 12px Manrope;">Série {{ setNum }}</span>
+</div>
+<div onClick="{{ openPicker }}" style="font:600 26px/1.15 Petrona,serif;letter-spacing:-.3px;cursor:pointer;text-wrap:pretty;">{{ exName }}</div>
+<sc-if value="{{ hasLast }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:8px;">
+<div style="font:700 11px Manrope;letter-spacing:.8px;opacity:.7;">DERNIÈRE FOIS · {{ lastDate }}</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px;"><sc-for list="{{ lastSets }}" as="l" hint-placeholder-count="3"><span style="display:flex;align-items:center;gap:6px;font:700 12px Manrope;padding:5px 10px 5px 8px;border-radius:999px;background:color-mix(in srgb,currentColor 7%,transparent);"><span style="width:8px;height:8px;border-radius:50%;background:{{ l.dot }};"></span>{{ l.label }}</span></sc-for></div>
+</div>
+</sc-if>
+<div style="display:flex;flex-direction:column;gap:8px;">
+<div style="display:flex;align-items:center;gap:8px;background:color-mix(in srgb,currentColor 6%,transparent);border-radius:20px;padding:8px;">
+<div onClick="{{ wMinus }}" style="width:64px;height:56px;border-radius:14px;background:color-mix(in srgb,currentColor 10%,transparent);display:flex;align-items:center;justify-content:center;font:800 15px Manrope;cursor:pointer;user-select:none;" style-active="transform:scale(.94)">−2,5</div>
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;"><div style="font:700 11px Manrope;letter-spacing:1px;opacity:.7;">CHARGE</div><div style="display:flex;align-items:baseline;gap:4px;"><span style="font:800 40px/1.05 Manrope;letter-spacing:-1px;font-variant-numeric:tabular-nums;">{{ weightLabel }}</span><span style="font:700 15px Manrope;opacity:.7;">kg</span></div></div>
+<div onClick="{{ wPlus }}" style="width:64px;height:56px;border-radius:14px;background:color-mix(in srgb,currentColor 10%,transparent);display:flex;align-items:center;justify-content:center;font:800 15px Manrope;cursor:pointer;user-select:none;" style-active="transform:scale(.94)">+2,5</div>
+</div>
+<div style="display:flex;align-items:center;gap:8px;background:color-mix(in srgb,currentColor 6%,transparent);border-radius:20px;padding:8px;">
+<div onClick="{{ rMinus }}" style="width:64px;height:56px;border-radius:14px;background:color-mix(in srgb,currentColor 10%,transparent);display:flex;align-items:center;justify-content:center;font:800 15px Manrope;cursor:pointer;user-select:none;" style-active="transform:scale(.94)">−1</div>
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;"><div style="font:700 11px Manrope;letter-spacing:1px;opacity:.7;">RÉPÉTITIONS</div><div style="display:flex;align-items:baseline;gap:4px;"><span style="font:800 40px/1.05 Manrope;letter-spacing:-1px;font-variant-numeric:tabular-nums;">{{ reps }}</span><span style="font:700 15px Manrope;opacity:.7;">reps</span></div></div>
+<div onClick="{{ rPlus }}" style="width:64px;height:56px;border-radius:14px;background:color-mix(in srgb,currentColor 10%,transparent);display:flex;align-items:center;justify-content:center;font:800 15px Manrope;cursor:pointer;user-select:none;" style-active="transform:scale(.94)">+1</div>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:16px;padding-top:16px;border-top:1px solid color-mix(in srgb,currentColor 12%,transparent);">
+<div style="display:flex;align-items:center;height:72px;min-width:64px;flex:none;">
+<div style="width:12px;height:12px;border-radius:3px 0 0 3px;background:#B7B4BD;"></div>
+<sc-for list="{{ plateRects }}" as="p" hint-placeholder-count="2"><div style="width:{{ p.w }};height:{{ p.h }};background:{{ p.bg }};border-radius:4px;margin-left:3px;box-shadow:inset 0 0 0 1px {{ p.bd }};"></div></sc-for>
+<div style="width:24px;height:12px;border-radius:0 3px 3px 0;background:#B7B4BD;margin-left:3px;"></div>
+</div>
+<div style="flex:1;min-width:0;"><div style="font:700 11px Manrope;letter-spacing:1px;opacity:.7;">PAR CÔTÉ</div><div style="font:600 22px/1.2 Petrona,serif;">{{ perSideLabel }}</div><div style="font:600 12px Manrope;opacity:.72;">{{ plateDetail }}</div></div>
+</div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:10px;">
+<div style="font:800 11px Manrope;letter-spacing:1px;color:#55617A;">VALIDER LA SÉRIE {{ setNum }}</div>
+<sc-if value="{{ isA }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;gap:8px;">
+<sc-for list="{{ feelBtns }}" as="f" hint-placeholder-count="3">
+<div onClick="{{ f.on }}" style="flex:1;height:108px;border-radius:22px;background:linear-gradient(160deg,{{ f.bg }},{{ f.bd }});color:{{ f.ink }};padding:14px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;box-shadow:0 8px 18px rgba(60,40,20,.08);user-select:none;" style-active="transform:scale(.95)">
+<div style="display:flex;justify-content:space-between;align-items:center;"><span style="font:800 24px Manrope;letter-spacing:-.5px;">{{ f.glyph }}</span><span style="width:10px;height:10px;border-radius:50%;background:{{ f.ink }};"></span></div>
+<div><div style="font:800 16px Manrope;">{{ f.label }}</div><div style="font:600 11px/1.3 Manrope;">{{ f.sub }}</div></div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ isB }}">
+<div style="display:flex;flex-direction:column;gap:8px;">
+<sc-for list="{{ feelBtns }}" as="f" hint-placeholder-count="3">
+<div onClick="{{ f.on }}" style="height:66px;border-radius:20px;background:{{ f.bg }};border:1px solid {{ f.bd }};color:{{ f.ink }};display:flex;align-items:center;gap:14px;padding:0 18px 0 11px;cursor:pointer;user-select:none;" style-active="transform:scale(.98)">
+<div style="width:44px;height:44px;border-radius:14px;background:{{ f.bd }};display:flex;align-items:center;justify-content:center;font:800 17px Manrope;flex:none;">{{ f.glyph }}</div>
+<div style="flex:1;"><div style="font:800 16px Manrope;">{{ f.label }}</div><div style="font:600 12px Manrope;">{{ f.sub }}</div></div>
+<span style="display:flex;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex:none;"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg></span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:10px;">
+<div style="display:flex;justify-content:space-between;align-items:baseline;"><span style="font:800 11px Manrope;letter-spacing:1px;color:#55617A;">SÉRIES EFFECTUÉES · {{ totalSets }}</span><span style="font:800 13px Manrope;color:#00509D;">{{ liveVolLabel }}</span></div>
+<sc-if value="{{ noSets }}" hint-placeholder-val="{{ true }}">
+<div style="border-radius:20px;border:1.5px dashed rgba(0,41,107,.14);padding:18px;text-align:center;"><div style="font:700 14px Manrope;">Aucune série validée pour l'instant</div><div style="font:500 12px Manrope;color:#55617A;margin-top:4px;">Règle ta charge, puis valide ta première série.</div></div>
+</sc-if>
+<sc-if value="{{ hasSets }}">
+<div style="border-radius:20px;background:rgba(255,255,255,.6);overflow:hidden;">
+<sc-for list="{{ doneRows }}" as="d" hint-placeholder-count="1">
+<div style="padding:14px 16px;border-top:{{ d.top }};display:flex;flex-direction:column;gap:8px;">
+<div style="font:700 14px Manrope;">{{ d.name }}</div>
+<div style="display:flex;flex-wrap:wrap;gap:6px;"><sc-for list="{{ d.sets }}" as="x"><span style="display:flex;align-items:center;gap:6px;font:700 12px Manrope;padding:4px 10px 4px 8px;border-radius:999px;background:{{ x.bg }};color:{{ x.dot }};"><span style="width:7px;height:7px;border-radius:50%;background:{{ x.dot }};"></span>{{ x.label }}</span></sc-for></div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+
+<div onClick="{{ finish }}" style="height:56px;border-radius:999px;background:#FDC500;color:#00296B;display:flex;align-items:center;justify-content:center;font:800 15px Manrope;letter-spacing:.3px;cursor:pointer;flex:none;box-shadow:0 10px 24px rgba(253,197,0,.45);" style-active="transform:scale(.98)">Terminer la séance</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isRest }}">
+<div data-screen-label="03 Repos" style="position:absolute;inset:0;background:linear-gradient(165deg,#00296B 0%,#003F88 55%,#00509D 100%);color:#FFFFFF;">
+<div style="height:100%;box-sizing:border-box;padding:60px 24px 34px;display:flex;flex-direction:column;align-items:center;gap:22px;">
+<div style="font:800 12px Manrope;letter-spacing:2.4px;color:#FFD500;">RÉCUPÉRATION</div>
+<div style="width:264px;height:264px;border-radius:50%;background:conic-gradient(#FDC500 {{ restDeg }}deg,rgba(255,255,255,.14) 0);display:flex;align-items:center;justify-content:center;box-shadow:0 24px 60px rgba(0,0,0,.25);">
+<div style="width:238px;height:238px;border-radius:50%;background:#00296B;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;">
+<div style="font:600 80px/1 Petrona,serif;color:#FFFFFF;letter-spacing:-2px;font-variant-numeric:tabular-nums;">{{ restLabel }}</div>
+<div style="font:700 13px Manrope;color:rgba(255,255,255,.72);">sur {{ restTotalLabel }}</div>
+</div>
+</div>
+<div style="display:flex;gap:8px;"><div onClick="{{ restMinus15 }}" style="height:44px;padding:0 18px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);display:flex;align-items:center;font:800 14px Manrope;color:#FFFFFF;cursor:pointer;">−15 s</div><div onClick="{{ restPlus30 }}" style="height:44px;padding:0 18px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);display:flex;align-items:center;font:800 14px Manrope;color:#FFFFFF;cursor:pointer;">+30 s</div><div onClick="{{ restPlus60 }}" style="height:44px;padding:0 18px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);display:flex;align-items:center;font:800 14px Manrope;color:#FFFFFF;cursor:pointer;">+60 s</div></div>
+<div style="width:100%;border-radius:24px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);padding:18px 20px;box-sizing:border-box;display:flex;flex-direction:column;gap:4px;">
+<div style="font:800 11px Manrope;letter-spacing:1px;color:#FFD500;">PROCHAINE SÉRIE</div>
+<div style="font:600 21px/1.2 Petrona,serif;color:#FFFFFF;">{{ exName }}</div>
+<div style="font:700 14px Manrope;color:rgba(255,255,255,.85);">Série {{ setNum }} · <span style="color:#FFD500;font-weight:800;">{{ weightLabel }} kg</span> × {{ reps }}</div>
+</div>
+<div style="flex:1;"></div>
+<div onClick="{{ skipRest }}" style="width:100%;height:56px;border-radius:999px;background:#FDC500;color:#00296B;display:flex;align-items:center;justify-content:center;font:800 15px Manrope;cursor:pointer;box-shadow:0 10px 24px rgba(253,197,0,.3);" style-active="transform:scale(.98)">Je suis prêt</div>
+<div onClick="{{ undo }}" style="font:700 13px Manrope;color:rgba(255,255,255,.85);text-decoration:underline;text-underline-offset:3px;cursor:pointer;">Erreur ? Corriger la dernière série</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isSummary }}">
+<div data-screen-label="04 Bilan" style="position:absolute;inset:0;background:linear-gradient(200deg,#FFF2BF 0%,#F5F7FB 45%,#F5F7FB 100%);">
+<div style="height:100%;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;padding:56px 18px 32px;display:flex;flex-direction:column;gap:20px;">
+<div style="display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;">
+<div style="width:64px;height:64px;border-radius:50%;background:{{ smGrad }};color:{{ smFg }};display:flex;align-items:center;justify-content:center;margin-bottom:6px;box-shadow:0 14px 28px rgba(0,41,107,.25);"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex:none;"><path d="M20 6 9 17l-5-5"></path></svg></div>
+<div style="font:600 32px/1.05 Petrona,serif;letter-spacing:-.5px;">Séance terminée</div>
+<div style="font:600 14px Manrope;color:#55617A;">{{ smName }} · mar. 13 oct.</div>
+</div>
+<div style="display:flex;border-radius:24px;background:rgba(255,255,255,.8);border:1px solid #fff;padding:16px 0;">
+<div style="flex:1;text-align:center;"><div style="font:600 26px/1.1 Petrona,serif;">{{ smMin }}<span style="font:700 13px Manrope;color:#55617A;"> min</span></div><div style="font:800 11px Manrope;letter-spacing:.8px;color:#55617A;margin-top:4px;">DURÉE</div></div>
+<div style="width:1px;background:rgba(0,41,107,.08);"></div>
+<div style="flex:1;text-align:center;"><div style="font:600 26px/1.1 Petrona,serif;">{{ smVol }}<span style="font:700 13px Manrope;color:#55617A;"> kg</span></div><div style="font:800 11px Manrope;letter-spacing:.8px;color:#55617A;margin-top:4px;">VOLUME</div></div>
+<div style="width:1px;background:rgba(0,41,107,.08);"></div>
+<div style="flex:1;text-align:center;"><div style="font:600 26px/1.1 Petrona,serif;">{{ smSets }}</div><div style="font:800 11px Manrope;letter-spacing:.8px;color:#55617A;margin-top:4px;">SÉRIES</div></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;">
+<div style="font:800 11px Manrope;letter-spacing:1px;color:#55617A;">BILAN DE SURCHARGE</div>
+<sc-for list="{{ sumRows }}" as="r" hint-placeholder-count="3">
+<div style="border-radius:20px;background:rgba(255,255,255,.85);padding:16px;display:flex;flex-direction:column;gap:12px;">
+<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;"><span style="font:700 15px/1.3 Manrope;">{{ r.name }}</span><span style="font:800 11px Manrope;letter-spacing:.4px;padding:4px 9px;border-radius:999px;background:{{ r.tagBg }};color:{{ r.tagInk }};flex:none;">{{ r.tag }}</span></div>
+<div style="display:flex;flex-wrap:wrap;gap:6px;"><sc-for list="{{ r.sets }}" as="x"><span style="display:flex;align-items:center;gap:6px;font:700 12px Manrope;color:#2A3A5C;padding:4px 10px 4px 8px;border-radius:999px;background:#EEF2F8;"><span style="width:7px;height:7px;border-radius:50%;background:{{ x.dot }};"></span>{{ x.label }}</span></sc-for></div>
+<div style="display:flex;flex-direction:column;gap:2px;padding-top:12px;border-top:1px solid rgba(0,41,107,.07);">
+<div style="font:800 11px Manrope;letter-spacing:.8px;color:#55617A;">PROCHAINE SÉANCE</div>
+<div style="font:800 20px Manrope;color:{{ r.tagInk }};letter-spacing:-.3px;">{{ r.next }}</div>
+<div style="font:500 13px/1.4 Manrope;color:#55617A;">{{ r.msg }}</div>
+</div>
+</div>
+</sc-for>
+</div>
+<div onClick="{{ save }}" style="height:56px;border-radius:999px;background:#00296B;color:#fff;display:flex;align-items:center;justify-content:center;font:800 15px Manrope;cursor:pointer;flex:none;" style-active="transform:scale(.98)">Enregistrer &amp; revenir</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isHistory }}">
+<div data-screen-label="05 Historique" style="position:absolute;inset:0;background:linear-gradient(200deg,#D3E0F2 0%,#F5F7FB 42%,#F5F7FB 100%);">
+<div style="height:100%;overflow-y:auto;scrollbar-width:none;box-sizing:border-box;padding:48px 18px 32px;display:flex;flex-direction:column;gap:20px;">
+<div style="display:flex;align-items:center;gap:12px;">
+<div onClick="{{ goHome }}" style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.8);display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex:none;"><path d="M19 12H5"></path><path d="m12 19-7-7 7-7"></path></svg></div>
+<div style="flex:1;font:600 28px Petrona,serif;letter-spacing:-.4px;">Historique</div>
+<div onClick="{{ exportHist }}" style="height:40px;padding:0 16px;border-radius:999px;background:rgba(255,255,255,.8);display:flex;align-items:center;font:700 13px Manrope;cursor:pointer;">Exporter</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;">
+<div style="display:flex;justify-content:space-between;align-items:baseline;"><span style="font:800 11px Manrope;letter-spacing:1px;color:#55617A;">OCTOBRE 2026</span><span style="font:700 12px Manrope;color:#55617A;">{{ histSummary }}</span></div>
+<div style="border-radius:24px;background:rgba(255,255,255,.82);overflow:hidden;">
+<sc-for list="{{ histRows }}" as="h" hint-placeholder-count="4">
+<div style="border-top:{{ h.top }};">
+<div onClick="{{ h.toggle }}" style="display:flex;align-items:center;gap:14px;padding:14px 16px;cursor:pointer;">
+<div style="width:46px;height:46px;border-radius:15px;background:{{ h.grad }};color:{{ h.fg }};display:flex;align-items:center;justify-content:center;font:600 22px Petrona,serif;flex:none;">{{ h.letter }}</div>
+<div style="flex:1;min-width:0;">
+<div style="font:700 12px Manrope;color:#55617A;">{{ h.date }}</div>
+<div style="font:600 20px/1.2 Petrona,serif;">{{ h.name }}</div>
+<div style="font:600 12px Manrope;color:#55617A;">{{ h.meta }} · <span style="color:#00296B;font-weight:800;">{{ h.vol }}</span></div>
+</div>
+<div style="width:32px;height:32px;border-radius:50%;background:#EEF2F8;display:flex;align-items:center;justify-content:center;color:#55617A;transform:{{ h.chev }};transition:transform .2s;flex:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block;flex:none;"><path d="m6 9 6 6 6-6"></path></svg></div>
+</div>
+<sc-if value="{{ h.open }}">
+<div style="margin:0 12px 12px;border-radius:16px;background:#F2F5FA;">
+<sc-for list="{{ h.exercises }}" as="e">
+<div style="padding:12px 14px;border-top:{{ e.top }};display:flex;flex-direction:column;gap:8px;">
+<div style="display:flex;justify-content:space-between;gap:10px;"><span style="font:700 13px/1.3 Manrope;">{{ e.name }}</span><span style="font:800 12px Manrope;color:#00509D;flex:none;cursor:pointer;">Modifier</span></div>
+<div style="display:flex;flex-wrap:wrap;gap:6px;"><sc-for list="{{ e.sets }}" as="x"><span style="display:flex;align-items:center;gap:6px;font:700 12px Manrope;color:#2A3A5C;padding:4px 10px 4px 8px;border-radius:999px;background:#fff;"><span style="width:7px;height:7px;border-radius:50%;background:{{ x.dot }};"></span>{{ x.label }}</span></sc-for></div>
+</div>
+</sc-for>
+<div style="padding:10px 14px 12px;border-top:1px solid rgba(0,41,107,.07);font:700 12px Manrope;color:#55617A;cursor:pointer;">Modifier la séance</div>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+<div style="display:flex;align-items:center;justify-content:center;gap:8px;font:600 12px Manrope;color:#55617A;"><span style="display:flex;align-items:center;gap:5px;"><span style="width:7px;height:7px;border-radius:50%;background:#2C5A35;"></span>Facile</span><span style="display:flex;align-items:center;gap:5px;"><span style="width:7px;height:7px;border-radius:50%;background:#8A5321;"></span>Juste</span><span style="display:flex;align-items:center;gap:5px;"><span style="width:7px;height:7px;border-radius:50%;background:#96404A;"></span>Échec</span></div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ sheetProgress }}">
+<div onClick="{{ closeSheet }}" style="position:absolute;inset:0;background:rgba(0,41,107,.4);z-index:30;"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;height:82%;background:#fff;border-radius:28px 28px 0 0;z-index:31;display:flex;flex-direction:column;">
+<div style="padding:10px 22px 14px;"><div onClick="{{ closeSheet }}" style="width:40px;height:4px;border-radius:2px;background:rgba(0,41,107,.15);margin:0 auto 16px;cursor:pointer;"></div>
+<div style="display:flex;justify-content:space-between;align-items:center;"><span style="font:600 26px Petrona,serif;">Ton progrès</span><span onClick="{{ closeSheet }}" style="font:700 13px Manrope;color:#55617A;padding:8px 12px;border-radius:999px;background:#EEF2F8;cursor:pointer;">Réduire</span></div>
+<div style="font:500 14px Manrope;color:#55617A;margin-top:4px;">{{ insight }}</div></div>
+<div style="flex:1;overflow-y:auto;scrollbar-width:none;padding:0 22px 30px;display:flex;flex-direction:column;gap:22px;">
+<div style="display:flex;border-radius:20px;background:#EEF2F8;padding:14px 0;">
+<div style="flex:1;text-align:center;"><div style="font:600 24px Petrona,serif;">98 400</div><div style="font:800 11px Manrope;color:#55617A;letter-spacing:.6px;margin-top:2px;">KG SOULEVÉS</div></div>
+<div style="width:1px;background:rgba(0,41,107,.08);"></div>
+<div style="flex:1;text-align:center;"><div style="font:600 24px Petrona,serif;">31</div><div style="font:800 11px Manrope;color:#55617A;letter-spacing:.6px;margin-top:2px;">SÉANCES</div></div>
+<div style="width:1px;background:rgba(0,41,107,.08);"></div>
+<div style="flex:1;text-align:center;"><div style="font:600 24px Petrona,serif;">6</div><div style="font:800 11px Manrope;color:#55617A;letter-spacing:.6px;margin-top:2px;">SEM. DE SUITE</div></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;">
+<div style="display:flex;justify-content:space-between;"><span style="font:800 11px Manrope;letter-spacing:1px;color:#55617A;">VOLUME PAR SEMAINE</span><span style="font:800 12px Manrope;color:#00509D;">12 300 kg</span></div>
+<div style="display:flex;align-items:flex-end;gap:8px;height:110px;border-bottom:1px solid rgba(0,41,107,.1);"><sc-for list="{{ volBars }}" as="b" hint-placeholder-count="8"><div style="flex:1;height:{{ b.h }};border-radius:6px 6px 2px 2px;background:#FDC500;opacity:{{ b.op }};"></div></sc-for></div>
+<div style="display:flex;gap:8px;"><sc-for list="{{ volBars }}" as="b"><div style="flex:1;text-align:center;font:600 11px Manrope;color:#55617A;white-space:nowrap;">{{ b.label }}</div></sc-for></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;">
+<div style="display:flex;justify-content:space-between;"><span style="font:800 11px Manrope;letter-spacing:1px;color:#55617A;">SÉANCES PAR SEMAINE</span><span style="font:800 12px Manrope;color:#00509D;">4 cette semaine</span></div>
+<div style="display:flex;align-items:flex-end;gap:8px;height:60px;border-bottom:1px solid rgba(0,41,107,.1);"><sc-for list="{{ sesBars }}" as="b" hint-placeholder-count="8"><div style="flex:1;height:{{ b.h }};border-radius:6px 6px 2px 2px;background:#00509D;opacity:{{ b.op }};"></div></sc-for></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:4px;">
+<div style="font:800 11px Manrope;letter-spacing:1px;color:#55617A;margin-bottom:4px;">RECORDS PERSONNELS</div>
+<sc-for list="{{ prs }}" as="p" hint-placeholder-count="4"><div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:{{ p.top }};"><span style="font:700 14px Manrope;">{{ p.name }}</span><span style="font:800 15px Manrope;color:#00509D;">{{ p.w }}</span></div></sc-for>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ sheetPicker }}">
+<div onClick="{{ closeSheet }}" style="position:absolute;inset:0;background:rgba(0,41,107,.4);z-index:30;"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;max-height:84%;background:#fff;border-radius:28px 28px 0 0;z-index:31;display:flex;flex-direction:column;padding:10px 20px 28px;box-sizing:border-box;">
+<div onClick="{{ closeSheet }}" style="width:40px;height:4px;border-radius:2px;background:rgba(0,41,107,.15);margin:0 auto 16px;cursor:pointer;flex:none;"></div>
+<sc-if value="{{ notCreating }}" hint-placeholder-val="{{ true }}">
+<div style="font:600 26px Petrona,serif;">Choisir un exercice</div>
+<div style="font:500 14px Manrope;color:#55617A;margin:4px 0 14px;">{{ splitName }} · {{ exCount }} exercices</div>
+<div style="overflow-y:auto;scrollbar-width:none;display:flex;flex-direction:column;gap:2px;margin:0 -8px;">
+<sc-for list="{{ pickRows }}" as="r" hint-placeholder-count="5">
+<div onClick="{{ r.onPick }}" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:18px;background:{{ r.bg }};cursor:pointer;" style-hover="background:#F5F7FB">
+<div style="width:32px;height:32px;border-radius:50%;background:{{ r.numBg }};color:{{ r.numInk }};display:flex;align-items:center;justify-content:center;font:800 13px Manrope;flex:none;">{{ r.num }}</div>
+<div style="flex:1;min-width:0;"><div style="font:700 14px/1.3 Manrope;">{{ r.name }}</div><div style="font:500 12px Manrope;color:#55617A;margin-top:2px;">{{ r.sub }}</div></div>
+<div style="display:flex;gap:3px;flex:none;"><sc-for list="{{ r.dots }}" as="d"><span style="width:8px;height:8px;border-radius:50%;background:{{ d.c }};"></span></sc-for></div>
+</div>
+</sc-for>
+</div>
+<div style="display:flex;gap:8px;margin-top:16px;flex:none;">
+<div onClick="{{ startCreate }}" style="flex:1;height:52px;border-radius:999px;background:#EEF2F8;display:flex;align-items:center;justify-content:center;font:800 14px Manrope;cursor:pointer;">+ Nouvel exercice</div>
+<div onClick="{{ closeSheet }}" style="height:52px;padding:0 22px;border-radius:999px;border:1px solid #E1E7F0;display:flex;align-items:center;justify-content:center;font:700 14px Manrope;color:#55617A;cursor:pointer;">Fermer</div>
+</div>
+</sc-if>
+<sc-if value="{{ creating }}">
+<div style="font:600 26px Petrona,serif;">Nouvel exercice</div>
+<div style="font:500 14px Manrope;color:#55617A;margin:4px 0 18px;">Ajouté au catalogue {{ splitName }}</div>
+<div style="display:flex;flex-direction:column;gap:16px;">
+<div style="display:flex;flex-direction:column;gap:6px;"><span style="font:800 11px Manrope;letter-spacing:1px;color:#55617A;">NOM DE LA MACHINE</span><input value="{{ newName }}" onChange="{{ onNewName }}" placeholder="ex. HS Lateral Raise" style="height:52px;border-radius:16px;border:1px solid #E1E7F0;background:#F5F7FB;padding:0 16px;font:700 15px Manrope;color:#00296B;outline:none;"></div>
+<div style="display:flex;flex-direction:column;gap:6px;"><span style="font:800 11px Manrope;letter-spacing:1px;color:#55617A;">ÉQUIPEMENT</span>
+<div style="display:flex;padding:4px;border-radius:999px;background:#EEF2F8;">
+<div onClick="{{ catMachine }}" style="flex:1;height:44px;border-radius:999px;background:{{ catMBg }};display:flex;align-items:center;justify-content:center;font:700 13px Manrope;cursor:pointer;box-shadow:{{ catMSh }};">Machine · 0 kg</div>
+<div onClick="{{ catBarre }}" style="flex:1;height:44px;border-radius:999px;background:{{ catBBg }};display:flex;align-items:center;justify-content:center;font:700 13px Manrope;cursor:pointer;box-shadow:{{ catBSh }};">Barre libre · 20 kg</div>
+</div></div>
+<div style="display:flex;flex-direction:column;gap:6px;"><span style="font:800 11px Manrope;letter-spacing:1px;color:#55617A;">CHARGE DE DÉPART (KG)</span><input value="{{ newW }}" onChange="{{ onNewW }}" inputmode="decimal" style="height:52px;border-radius:16px;border:1px solid #E1E7F0;background:#F5F7FB;padding:0 16px;font:700 15px Manrope;color:#00296B;outline:none;"></div>
+</div>
+<div style="display:flex;gap:8px;margin-top:22px;">
+<div onClick="{{ createEx }}" style="flex:1;height:52px;border-radius:999px;background:#00296B;color:#fff;display:flex;align-items:center;justify-content:center;font:800 14px Manrope;cursor:pointer;">Créer &amp; sélectionner</div>
+<div onClick="{{ cancelCreate }}" style="height:52px;padding:0 22px;border-radius:999px;border:1px solid #E1E7F0;display:flex;align-items:center;justify-content:center;font:700 14px Manrope;color:#55617A;cursor:pointer;">Annuler</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ sheetQuit }}">
+<div onClick="{{ closeSheet }}" style="position:absolute;inset:0;background:rgba(0,41,107,.4);z-index:30;"></div>
+<div style="position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:28px 28px 0 0;z-index:31;padding:10px 20px 28px;">
+<div style="width:40px;height:4px;border-radius:2px;background:rgba(0,41,107,.15);margin:0 auto 18px;"></div>
+<div style="font:600 26px Petrona,serif;">Quitter la séance ?</div>
+<div style="font:500 14px/1.45 Manrope;color:#55617A;margin:6px 0 20px;">Les séries de cette séance ne seront pas enregistrées.</div>
+<div style="display:flex;gap:8px;">
+<div onClick="{{ closeSheet }}" style="flex:1;height:52px;border-radius:999px;background:#00296B;color:#fff;display:flex;align-items:center;justify-content:center;font:800 14px Manrope;cursor:pointer;">Continuer</div>
+<div onClick="{{ quit }}" style="flex:1;height:52px;border-radius:999px;background:#FBD9DC;color:#96404A;display:flex;align-items:center;justify-content:center;font:800 14px Manrope;cursor:pointer;">Quitter</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasToast }}">
+<div style="position:absolute;left:24px;right:24px;bottom:96px;z-index:40;background:#00296B;color:#fff;border-radius:16px;padding:14px 16px;font:700 13px Manrope;text-align:center;box-shadow:0 12px 30px rgba(0,0,0,.25);">{{ toast }}</div>
+</sc-if>
+
+<div style="position:absolute;top:0;left:0;right:0;height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font:700 13px Manrope;color:{{ statusInk }};z-index:50;pointer-events:none;"><span>9:30</span><div style="position:absolute;left:50%;top:10px;width:14px;height:14px;margin-left:-7px;border-radius:50%;background:#111;"></div><div style="display:flex;gap:5px;align-items:center;"><div style="width:14px;height:10px;border-radius:2px;background:currentColor;opacity:.85;"></div><div style="width:20px;height:10px;border-radius:3px;border:1.5px solid currentColor;box-sizing:border-box;padding:1px;"><div style="width:70%;height:100%;background:currentColor;border-radius:1px;"></div></div></div></div>
+<div style="position:absolute;bottom:8px;left:50%;width:108px;height:4px;margin-left:-54px;border-radius:2px;background:{{ pillBg }};z-index:50;pointer-events:none;"></div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;piste&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;A — Clair&quot;,&quot;B — Contraste&quot;],&quot;default&quot;:&quot;A — Clair&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;restSeconds&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:90,&quot;min&quot;:30,&quot;max&quot;:240,&quot;step&quot;:15,&quot;unit&quot;:&quot;s&quot;,&quot;tsType&quot;:&quot;number&quot;}}">
+const SPLITS = {
+  1: { id: 1, name: 'Push', letter: 'P', muscles: 'Pectoraux · Épaules · Triceps', g1: '#FFD500', g2: '#FDC500', fg: '#00296B', ink: '#00296B', tint: '#FFF4C2', chipBg: 'rgba(255,255,255,.55)', btnBg: '#00296B', btnFg: '#FFFFFF', last: 'il y a 5 j' },
+  2: { id: 2, name: 'Pull', letter: 'P', muscles: 'Dos · Arrière d’épaules · Biceps', g1: '#00509D', g2: '#003F88', fg: '#FFFFFF', ink: '#00509D', tint: '#DCE8F5', chipBg: 'rgba(255,255,255,.16)', btnBg: '#FDC500', btnFg: '#00296B', last: 'il y a 3 j' },
+  3: { id: 3, name: 'Legs', letter: 'L', muscles: 'Quadriceps · Ischios · Mollets', g1: '#003F88', g2: '#00296B', fg: '#FFFFFF', ink: '#00296B', tint: '#D9E1EF', chipBg: 'rgba(255,255,255,.16)', btnBg: '#FDC500', btnFg: '#00296B', last: 'hier' },
+};
+const H = 'HAMMER_STRENGTH', F = 'FREE_WEIGHT';
+const RAW = {
+  1: [
+    { id: 1, name: 'HS Iso-Lateral Super Incline Press', cat: H, base: 0, w: 40, reps: 8 },
+    { id: 2, name: 'HS Iso-Lateral Bench Press', cat: H, base: 0, w: 45, reps: 8 },
+    { id: 3, name: 'HS Iso-Lateral Decline Press', cat: H, base: 0, w: 40, reps: 8 },
+    { id: 4, name: 'HS Iso-Lateral Shoulder Press', cat: H, base: 0, w: 30, reps: 8 },
+    { id: 5, name: 'Développé couché barre libre', cat: F, base: 20, w: 60, reps: 6 },
+  ],
+  2: [
+    { id: 6, name: 'HS Iso-Lateral Wide Pulldown', cat: H, base: 0, w: 45, reps: 8 },
+    { id: 7, name: 'HS Iso-Lateral Low Row', cat: H, base: 0, w: 45, reps: 8 },
+    { id: 8, name: 'HS Iso-Lateral High Row', cat: H, base: 0, w: 45, reps: 8 },
+    { id: 9, name: 'Deadlift soulevé de terre', cat: F, base: 20, w: 80, reps: 5 },
+  ],
+  3: [
+    { id: 10, name: 'HS Plate-Loaded Linear Leg Press', cat: H, base: 0, w: 100, reps: 8 },
+    { id: 11, name: 'HS Iso-Lateral Leg Extension', cat: H, base: 0, w: 40, reps: 8 },
+    { id: 12, name: 'HS Iso-Lateral Leg Curl', cat: H, base: 0, w: 35, reps: 8 },
+    { id: 13, name: 'HS Plate-Loaded Seated Calf Raise', cat: H, base: 0, w: 30, reps: 10 },
+    { id: 14, name: 'Squat barre libre', cat: F, base: 20, w: 70, reps: 6 },
+  ],
+};
+const LAST_DATE = { 1: '8 OCT.', 2: '10 OCT.', 3: '12 OCT.' };
+const FEEL = {
+  EASY: { label: 'Facile', sub: '2+ reps en réserve', glyph: '2+', bg: '#DCF0D4', bd: '#C3E4C0', ink: '#2C5A35' },
+  MEDIUM: { label: 'Juste', sub: '0–1 rep en réserve', glyph: '0–1', bg: '#FFEBD6', bd: '#FFDCC0', ink: '#8A5321' },
+  HARD: { label: 'Échec', sub: 'Reps non atteintes', glyph: '×', bg: '#FBD9DC', bd: '#F6C3C8', ink: '#96404A' },
+};
+const VERD = {
+  FULL: { label: 'Augmentation', bg: '#DCF0D4', ink: '#2C5A35' },
+  PARTIAL: { label: 'Intermédiaire', bg: '#FFEBD6', ink: '#8A5321' },
+  MAINTAIN: { label: 'Maintien', bg: '#EEF2F8', ink: '#3A4A66' },
+  DELOAD: { label: 'Deload', bg: '#FBD9DC', ink: '#96404A' },
+};
+const PLATES = [20, 10, 5, 2.5, 1.25];
+const PC = {
+  20: { bg: '#3B7AC4', bd: 'transparent', h: 72, w: 14 },
+  10: { bg: '#349A5A', bd: 'transparent', h: 60, w: 12 },
+  5: { bg: '#D45454', bd: 'transparent', h: 46, w: 10 },
+  2.5: { bg: '#F1F3F5', bd: '#D0D5DD', h: 36, w: 8 },
+  1.25: { bg: '#9CA3AF', bd: 'transparent', h: 28, w: 7 },
+};
+const WEEKS = [
+  { l: '18/08', v: 8200, s: 3 }, { l: '25/08', v: 9100, s: 3 }, { l: '01/09', v: 7600, s: 2 }, { l: '08/09', v: 10400, s: 4 },
+  { l: '15/09', v: 9800, s: 3 }, { l: '22/09', v: 11200, s: 4 }, { l: '29/09', v: 10900, s: 3 }, { l: '06/10', v: 12300, s: 4 },
+];
+const PRS = [
+  { name: 'Leg Press', w: '140 kg' }, { name: 'Deadlift', w: '110 kg' }, { name: 'Développé couché', w: '80 kg' }, { name: 'Low Row', w: '70 kg' },
+];
+const fmt = (n) => String(Math.round(n * 100) / 100).replace('.', ',');
+const fmtInt = (n) => Math.round(n).toLocaleString('fr-FR');
+const mmss = (s) => { const m = Math.floor(s / 60), r = s % 60; return m + ':' + (r < 10 ? '0' : '') + r; };
+const mm2 = (s) => { const m = Math.floor(s / 60), r = s % 60; return (m < 10 ? '0' : '') + m + ':' + (r < 10 ? '0' : '') + r; };
+function lastPerf(ex) {
+  const p = ex.id % 3;
+  const f = p === 0 ? ['EASY', 'EASY', 'EASY'] : p === 1 ? ['EASY', 'EASY', 'MEDIUM'] : ['EASY', 'MEDIUM', 'HARD'];
+  return f.map((x) => ({ w: ex.w, r: x === 'HARD' ? ex.reps - 1 : ex.reps, f: x }));
+}
+function breakdown(total, base) {
+  let side = Math.round((Math.max(0, total - base) / 2) * 100) / 100;
+  const out = [];
+  for (const p of PLATES) {
+    const c = Math.floor((side + 0.001) / p);
+    if (c > 0) { out.push({ p, c }); side = Math.round((side - c * p) * 100) / 100; }
+  }
+  return out;
+}
+function verdict(sets, inc) {
+  const hard = sets.filter((x) => x.f === 'HARD').length;
+  const easy = sets.every((x) => x.f === 'EASY');
+  let key, w;
+  if (hard >= 2) { key = 'DELOAD'; w = sets.map((x) => Math.floor((x.w * 0.9) / 2.5) * 2.5); }
+  else if (hard === 1) { key = 'MAINTAIN'; w = sets.map((x) => x.w); }
+  else if (easy) { key = 'FULL'; w = sets.map((x) => x.w + inc); }
+  else { key = 'PARTIAL'; w = sets.map((x, i) => (i === 0 ? x.w + inc : x.w)); }
+  const msg = {
+    FULL: 'Toutes les séries faciles : +' + fmt(inc) + ' kg partout.',
+    PARTIAL: 'Augmente la 1re série, garde les suivantes.',
+    MAINTAIN: 'Un échec : on consolide à la même charge.',
+    DELOAD: 'Plusieurs échecs : −10 % pour repartir propre.',
+  }[key];
+  return { key, w, msg };
+}
+const mkHist = (key, splitId, date) => ({ key, splitId, date, exercises: RAW[splitId].map((ex) => ({ name: ex.name, sets: lastPerf(ex) })) });
+const HIST0 = [mkHist('h1', 3, 'Lun. 12 oct.'), mkHist('h2', 2, 'Sam. 10 oct.'), mkHist('h3', 1, 'Jeu. 8 oct.'), mkHist('h4', 3, 'Mar. 6 oct.')];
+
+class Component extends DCLogic {
+  state = {
+    screen: 'home', splitId: 1, exIdx: 0, weight: 40, reps: 8, done: {}, elapsed: 0,
+    restLeft: 90, restTotal: 90, sheet: null, creating: false, newName: '', newCat: H, newW: '40',
+    custom: { 1: [], 2: [], 3: [] }, toast: null, summary: null, history: HIST0, open: { h1: true }, nextId: 100,
+  };
+  componentDidMount() { this.t = setInterval(() => this.tick(), 1000); }
+  componentWillUnmount() { clearInterval(this.t); clearTimeout(this.tt); }
+  tick() {
+    this.setState((s) => {
+      const n = {};
+      if (s.screen === 'live' || s.screen === 'rest') n.elapsed = s.elapsed + 1;
+      if (s.screen === 'rest') { if (s.restLeft <= 1) { n.screen = 'live'; n.restLeft = 0; } else n.restLeft = s.restLeft - 1; }
+      return n;
+    });
+  }
+  exos(s = this.state) { return RAW[s.splitId].concat(s.custom[s.splitId] || []); }
+  restFor(ex) { return ex.cat === F ? 150 : (this.props.restSeconds ?? 90); }
+  start(id) { const ex = RAW[id][0]; this.setState({ screen: 'live', splitId: id, exIdx: 0, weight: ex.w, reps: ex.reps, done: {}, elapsed: 0, sheet: null, summary: null }); }
+  pick(i) {
+    const s = this.state, ex = this.exos()[i], d = s.done[ex.id];
+    if (d && d.length) { const l = d[d.length - 1]; this.setState({ exIdx: i, weight: l.w, reps: l.r, sheet: null }); }
+    else this.setState({ exIdx: i, weight: ex.w, reps: ex.reps, sheet: null });
+  }
+  feel(f) {
+    const s = this.state, ex = this.exos()[s.exIdx];
+    const arr = (s.done[ex.id] || []).concat([{ w: s.weight, r: s.reps, f }]);
+    const rest = this.restFor(ex);
+    this.setState({ done: { ...s.done, [ex.id]: arr }, screen: 'rest', restLeft: rest, restTotal: rest });
+  }
+  undo() {
+    const s = this.state, ex = this.exos()[s.exIdx];
+    const arr = (s.done[ex.id] || []).slice(0, -1); const done = { ...s.done };
+    if (arr.length) done[ex.id] = arr; else delete done[ex.id];
+    this.setState({ done, screen: 'live' });
+  }
+  addRest(d) { this.setState((s) => ({ restLeft: Math.max(1, s.restLeft + d), restTotal: d > 0 ? s.restTotal + d : s.restTotal })); }
+  showToast(msg) { clearTimeout(this.tt); this.setState({ toast: msg }); this.tt = setTimeout(() => this.setState({ toast: null }), 2400); }
+  finish(st) {
+    const s = st || this.state; const rows = []; let vol = 0, n = 0;
+    this.exos(s).forEach((ex) => {
+      const d = s.done[ex.id]; if (!d || !d.length) return;
+      d.forEach((x) => { vol += x.w * x.r; n++; });
+      rows.push({ name: ex.name, sets: d, v: verdict(d, 2.5) });
+    });
+    if (!rows.length) { this.showToast('Valide au moins une série avant de terminer.'); return; }
+    this.setState({ screen: 'summary', sheet: null, summary: { splitId: s.splitId, minutes: Math.max(1, Math.round(s.elapsed / 60)), vol, n, rows } });
+  }
+  save() {
+    const s = this.state, sm = s.summary;
+    if (!sm) { this.setState({ screen: 'home' }); return; }
+    const h = { key: 'n' + s.nextId, splitId: sm.splitId, date: 'Mar. 13 oct.', exercises: sm.rows.map((r) => ({ name: r.name, sets: r.sets })) };
+    this.setState({ history: [h].concat(s.history), open: { [h.key]: true }, nextId: s.nextId + 1, screen: 'home', summary: null, done: {} });
+  }
+  demoDone() {
+    const pats = [['EASY', 'EASY', 'EASY'], ['EASY', 'MEDIUM', 'MEDIUM'], ['EASY', 'MEDIUM', 'HARD'], ['MEDIUM', 'HARD', 'HARD']];
+    const done = {};
+    RAW[this.state.splitId].slice(0, 4).forEach((ex, i) => { done[ex.id] = pats[i].map((f) => ({ w: ex.w, r: f === 'HARD' ? ex.reps - 1 : ex.reps, f })); });
+    return done;
+  }
+  ensureSession() {
+    const s = this.state;
+    if (s.screen === 'live' || s.screen === 'rest') return {};
+    const ex = RAW[s.splitId][0];
+    return { exIdx: 0, weight: ex.w, reps: ex.reps };
+  }
+  createEx() {
+    const s = this.state; const name = s.newName.trim();
+    if (!name) { this.showToast('Donne un nom à l’exercice.'); return; }
+    const w = parseFloat(String(s.newW).replace(',', '.')) || 40;
+    const ex = { id: s.nextId, name, cat: s.newCat, base: s.newCat === F ? 20 : 0, w, reps: 8, custom: true };
+    const list = (s.custom[s.splitId] || []).concat([ex]);
+    const idx = RAW[s.splitId].length + list.length - 1;
+    this.setState({ custom: { ...s.custom, [s.splitId]: list }, exIdx: idx, weight: w, reps: 8, sheet: null, creating: false, newName: '', newW: '40', nextId: s.nextId + 1 });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const piste = this.props.piste ?? 'A — Clair';
+    const isB = String(piste).startsWith('B'), isA = !isB;
+    const sp = SPLITS[s.splitId];
+    const grad = (x) => `linear-gradient(150deg,${x.g1},${x.g2})`;
+    const exos = this.exos(); const ex = exos[s.exIdx] || exos[0];
+    const dEx = s.done[ex.id] || []; const setNum = dEx.length + 1;
+    const heroDot = (f) => (isB ? FEEL[f].bd : FEEL[f].ink);
+
+    const splitCards = [1, 2, 3].map((id) => {
+      const x = SPLITS[id]; const isNext = id === 1;
+      return { ...x, grad: grad(x), isNext, ring: isNext ? x.g2 : 'rgba(255,255,255,.95)', meta: RAW[id].length + ' exercices · ' + x.last, onPick: () => this.start(id) };
+    });
+
+    const last = ex.custom ? null : lastPerf(ex);
+    const bd = breakdown(s.weight, ex.base || 0); const plateRects = [];
+    bd.forEach((b) => { for (let i = 0; i < b.c; i++) { const c = PC[b.p]; plateRects.push({ w: c.w + 'px', h: c.h + 'px', bg: c.bg, bd: c.bd }); } });
+    const side = Math.round((Math.max(0, s.weight - (ex.base || 0)) / 2) * 100) / 100;
+
+    let vol = 0, total = 0;
+    const doneRows = exos.filter((e) => (s.done[e.id] || []).length).map((e, i) => {
+      const d = s.done[e.id]; d.forEach((x) => { vol += x.w * x.r; total++; });
+      return { name: e.name, top: i === 0 ? 'none' : '1px solid rgba(0,41,107,.07)', sets: d.map((x) => ({ label: fmt(x.w) + ' × ' + x.r, dot: FEEL[x.f].ink, bg: FEEL[x.f].bg })) };
+    });
+
+    const sm = s.summary; const smSp = sm ? SPLITS[sm.splitId] : sp;
+    const sumRows = sm ? sm.rows.map((r) => {
+      const V = VERD[r.v.key];
+      return { name: r.name, tag: V.label, tagBg: V.bg, tagInk: V.ink, next: r.v.w.map(fmt).join(' / ') + ' kg', msg: r.v.msg, sets: r.sets.map((x) => ({ label: fmt(x.w) + ' × ' + x.r, dot: FEEL[x.f].ink })) };
+    }) : [];
+
+    let hv = 0;
+    const histRows = s.history.map((h, hi) => {
+      const x = SPLITS[h.splitId]; let v = 0, n = 0;
+      h.exercises.forEach((e) => e.sets.forEach((z) => { v += z.w * z.r; n++; })); hv += v;
+      const open = !!s.open[h.key];
+      return {
+        key: h.key, fg: x.fg, letter: x.letter, grad: grad(x), name: x.name, date: h.date, top: hi === 0 ? 'none' : '1px solid rgba(0,41,107,.07)',
+        meta: h.exercises.length + ' exos · ' + n + ' séries', vol: fmtInt(v) + ' kg', open, chev: open ? 'rotate(180deg)' : 'none',
+        toggle: () => this.setState((st) => ({ open: { ...st.open, [h.key]: !st.open[h.key] } })),
+        exercises: h.exercises.map((e, i) => ({ name: e.name, top: i === 0 ? 'none' : '1px solid rgba(0,41,107,.07)', sets: e.sets.map((z) => ({ label: fmt(z.w) + ' × ' + z.r, dot: FEEL[z.f].ink })) })),
+      };
+    });
+
+    const maxV = Math.max(...WEEKS.map((w) => w.v));
+    const lastI = WEEKS.length - 1;
+    const isCatF = s.newCat === F;
+
+    return {
+      statusInk: s.screen === 'rest' ? '#FFFFFF' : '#00296B', pillBg: s.screen === 'rest' ? 'rgba(255,255,255,.5)' : 'rgba(0,41,107,.35)',
+      pisteLabel: isB ? 'Piste B · Contraste' : 'Piste A · Clair', isA, isB,
+      isHome: s.screen === 'home', isLive: s.screen === 'live', isRest: s.screen === 'rest', isSummary: s.screen === 'summary', isHistory: s.screen === 'history',
+      sheetProgress: s.sheet === 'progress', sheetPicker: s.sheet === 'picker', sheetQuit: s.sheet === 'quit',
+      creating: s.creating, notCreating: !s.creating,
+      hasToast: !!s.toast, toast: s.toast,
+      splitCards, insight: 'Volume en hausse de 13 % cette semaine',
+      miniBars: WEEKS.slice(2).map((w, i, a) => ({ h: Math.round((w.v / maxV) * 34) + 'px', op: i === a.length - 1 ? '1' : '.4' })),
+      splitG1: sp.tint, splitFg: sp.fg, splitGrad: grad(sp), splitLetter: sp.letter, splitName: sp.name, splitMuscles: sp.muscles,
+      elapsedLabel: mm2(s.elapsed),
+      exStrip: exos.map((e, i) => ({ bg: i === s.exIdx ? '#00296B' : (s.done[e.id] || []).length ? sp.g2 : 'rgba(0,41,107,.12)' })),
+      exPos: s.exIdx + 1, exCount: exos.length,
+      heroInk: isB ? '#F2F6FC' : '#00296B',
+      heroShadow: isB ? '0 18px 36px rgba(0,41,107,.35)' : '0 14px 30px rgba(0,41,107,.14)',
+      catLabel: ex.cat === F ? 'BARRE LIBRE · FINISHER' : 'HAMMER STRENGTH',
+      setNum, exName: ex.name,
+      hasLast: !!last, lastDate: LAST_DATE[s.splitId],
+      lastSets: last ? last.map((x) => ({ label: fmt(x.w) + ' × ' + x.r, dot: heroDot(x.f) })) : [],
+      weightLabel: fmt(s.weight), reps: s.reps,
+      wMinus: () => this.setState((st) => ({ weight: Math.max(0, st.weight - 2.5) })),
+      wPlus: () => this.setState((st) => ({ weight: st.weight + 2.5 })),
+      rMinus: () => this.setState((st) => ({ reps: Math.max(1, st.reps - 1) })),
+      rPlus: () => this.setState((st) => ({ reps: st.reps + 1 })),
+      plateRects,
+      perSideLabel: side > 0 ? fmt(side) + ' kg' : 'À vide',
+      plateDetail: bd.length ? bd.map((b) => b.c + ' × ' + fmt(b.p)).join(' + ') + (ex.cat === F ? ' · barre 20 kg' : '') : (ex.cat === F ? 'Barre seule (20 kg)' : 'Machine à vide (0 kg)'),
+      feelBtns: ['EASY', 'MEDIUM', 'HARD'].map((f) => ({ ...FEEL[f], on: () => this.feel(f) })),
+      totalSets: total, liveVolLabel: fmtInt(vol) + ' kg', noSets: total === 0, hasSets: total > 0, doneRows,
+      finish: () => this.finish(),
+      askQuit: () => this.setState({ sheet: 'quit' }),
+      quit: () => this.setState({ screen: 'home', sheet: null, done: {} }),
+      openPicker: () => this.setState({ sheet: 'picker', creating: false }),
+      pickRows: exos.map((e, i) => {
+        const d = s.done[e.id] || []; const cur = i === s.exIdx;
+        return { name: e.name, num: String(i + 1), sub: (e.cat === F ? 'Barre libre' : 'Hammer Strength') + ' · conseillé ' + fmt(e.w) + ' kg', bg: cur ? sp.tint : 'transparent', numBg: cur ? '#00296B' : '#EEF2F8', numInk: cur ? '#FFFFFF' : '#55617A', dots: d.map((x) => ({ c: FEEL[x.f].ink })), onPick: () => this.pick(i) };
+      }),
+      startCreate: () => this.setState({ creating: true }),
+      cancelCreate: () => this.setState({ creating: false }),
+      newName: s.newName, newW: s.newW,
+      onNewName: (e) => this.setState({ newName: e.target.value }),
+      onNewW: (e) => this.setState({ newW: e.target.value }),
+      catMachine: () => this.setState({ newCat: H }), catBarre: () => this.setState({ newCat: F }),
+      catMBg: isCatF ? 'transparent' : '#FFFFFF', catBBg: isCatF ? '#FFFFFF' : 'transparent',
+      catMSh: isCatF ? 'none' : '0 2px 6px rgba(0,41,107,.15)', catBSh: isCatF ? '0 2px 6px rgba(0,41,107,.15)' : 'none',
+      createEx: () => this.createEx(),
+      restDeg: Math.round((360 * s.restLeft) / Math.max(1, s.restTotal)), restLabel: mmss(s.restLeft), restTotalLabel: mmss(s.restTotal),
+      restMinus15: () => this.addRest(-15), restPlus30: () => this.addRest(30), restPlus60: () => this.addRest(60),
+      skipRest: () => this.setState({ screen: 'live' }), undo: () => this.undo(),
+      smGrad: grad(smSp), smFg: smSp.fg, smName: smSp.name, smMin: sm ? sm.minutes : 0, smVol: sm ? fmtInt(sm.vol) : 0, smSets: sm ? sm.n : 0, sumRows,
+      save: () => this.save(),
+      histRows, histSummary: s.history.length + ' séances · ' + fmtInt(hv) + ' kg',
+      exportHist: () => this.showToast('Historique exporté en texte.'),
+      volBars: WEEKS.map((w, i) => ({ h: Math.round((w.v / maxV) * 104) + 'px', label: w.l, op: i === lastI ? '1' : '.45' })),
+      sesBars: WEEKS.map((w, i) => ({ h: Math.round((w.s / 4) * 56) + 'px', op: i === lastI ? '1' : '.45' })),
+      prs: PRS.map((p, i) => ({ ...p, top: i === 0 ? 'none' : '1px solid rgba(0,41,107,.07)' })),
+      openProgress: () => this.setState({ sheet: 'progress' }),
+      closeSheet: () => this.setState({ sheet: null, creating: false }),
+      goHome: () => this.setState({ screen: 'home', sheet: null }),
+      goProgress: () => this.setState({ screen: 'home', sheet: 'progress' }),
+      goLive: () => this.setState({ ...this.ensureSession(), screen: 'live', sheet: null }),
+      goRest: () => { const st = this.ensureSession(); const e = this.exos()[st.exIdx ?? s.exIdx]; const r = this.restFor(e); this.setState({ ...st, screen: 'rest', sheet: null, restLeft: r, restTotal: r }); },
+      goSummary: () => {
+        const done = Object.keys(s.done).length ? s.done : this.demoDone();
+        const elapsed = s.elapsed > 60 ? s.elapsed : 3120;
+        this.setState({ done, elapsed }, () => this.finish());
+      },
+      goHistory: () => this.setState({ screen: 'history', sheet: null }),
+    };
+  }
+}
+</script>
+</body>
+</html>
