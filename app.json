@@ -18,8 +18,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#09090B",
-        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#00296B",
+        "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
@@ -27,14 +27,14 @@
       "permissions": ["android.permission.POST_NOTIFICATIONS", "android.permission.SCHEDULE_EXACT_ALARM"]
     },
     "web": {
-      "favicon": "./assets/icon.png"
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-sqlite",
       "expo-asset",
       "expo-font",
       "expo-status-bar",
-      "expo-splash-screen",
+      ["expo-splash-screen", { "image": "./assets/splash-icon.png", "imageWidth": 200, "backgroundColor": "#00296B" }],
       "expo-audio",
       "expo-notifications",
       "expo-file-system"

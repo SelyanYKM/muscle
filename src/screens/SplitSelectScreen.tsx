@@ -108,7 +108,7 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
         <View style={styles.headerRow}>
           <View style={styles.brandRow}>
             <Image
-              source={require('../../assets/mooscles_logo.jpg')}
+              source={require('../../assets/icon.png')}
               style={styles.brandLogo}
             />
             <View>
