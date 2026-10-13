@@ -56,7 +56,7 @@ export function calculateNextSession(
     return {
       weightsPerSet: nextWeights,
       progressionVerdict: 'FULL_INCREASE',
-      message: `🔥 Validation totale ! Augmentation de +${minIncrement} kg sur toutes les séries (${nextWeights.join(' / ')} kg).`,
+      message: `Validation totale ! Augmentation de +${minIncrement} kg sur toutes les séries (${nextWeights.join(' / ')} kg).`,
     };
   }
 
@@ -67,7 +67,7 @@ export function calculateNextSession(
     return {
       weightsPerSet: nextWeights,
       progressionVerdict: 'PARTIAL_INCREASE',
-      message: `⚡ Progression intermédiaire : Série 1 augmentée à ${nextWeights[0]} kg (+${minIncrement} kg), autres séries maintenues (${nextWeights.slice(1).join(' / ')} kg).`,
+      message: `Progression intermédiaire : Série 1 augmentée à ${nextWeights[0]} kg (+${minIncrement} kg), autres séries maintenues (${nextWeights.slice(1).join(' / ')} kg).`,
     };
   }
 
@@ -75,6 +75,6 @@ export function calculateNextSession(
   return {
     weightsPerSet: currentWeights,
     progressionVerdict: 'MAINTAIN',
-    message: `💪 Maintien à ${currentWeights.join(' / ')} kg. Objectif prochaine séance : valider toutes les séries en Facile (🟢).`,
+    message: `Maintien à ${currentWeights.join(' / ')} kg. Objectif prochaine séance : valider toutes les séries en Facile.`,
   };
 }

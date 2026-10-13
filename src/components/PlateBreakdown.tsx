@@ -7,150 +7,133 @@ interface PlateBreakdownProps {
   totalWeight: number;
   baseWeight?: number;
   category: 'HAMMER_STRENGTH' | 'FREE_WEIGHT';
-  /** Variante claire sur texte (carte de série violette, fond sombre). */
-  dark?: boolean;
 }
 
-export const PlateBreakdown: React.FC<PlateBreakdownProps> = ({
-  totalWeight,
-  baseWeight = 0,
-  category,
-  dark = false,
-}) => {
+// Taille fixe par type de disque (pas une formule : des valeurs de design figées), plus
+// grand = plus lourd. Rayon 4, couleurs olympiques reprises de plateCalculator.ts.
+const PLATE_DIMENSIONS: Record<number, { width: number; height: number; border?: string }> = {
+  20: { width: 72, height: 14 },
+  10: { width: 60, height: 12 },
+  5: { width: 46, height: 10 },
+  2.5: { width: 36, height: 8, border: '#D0D5DD' },
+  1.25: { width: 28, height: 7 },
+};
+
+function formatWeightFr(w: number): string {
+  return w % 1 === 0 ? String(w) : String(w).replace('.', ',');
+}
+
+export const PlateBreakdown: React.FC<PlateBreakdownProps> = ({ totalWeight, baseWeight = 0, category }) => {
   const plates = getPlateBreakdownPerSide(totalWeight, baseWeight);
   const weightToLoad = Math.max(0, totalWeight - baseWeight);
-  const weightPerSide = weightToLoad / 2;
+  const weightPerSide = Math.round((weightToLoad / 2) * 100) / 100;
+  const isFreeWeight = category === 'FREE_WEIGHT';
+
+  const summaryText = plates.map((p) => `${p.count} × ${formatWeightFr(p.weight)}`).join(' + ');
 
   return (
-    <View style={[styles.container, dark && styles.containerDark]}>
-      <View style={styles.headerRow}>
-        <Text style={[styles.title, dark && styles.titleDark]}>CHARGEMENT PAR CÔTÉ</Text>
-        <Text style={[styles.subtext, dark && styles.subtextDark]}>
-          {category === 'FREE_WEIGHT' ? `Barre 20kg + ${weightPerSide}kg/côté` : `${weightPerSide}kg/côté`}
-        </Text>
-      </View>
+    <View style={styles.container}>
+      <View style={styles.hairline} />
 
-      {plates.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={[styles.emptyText, dark && styles.emptyTextDark]}>
-            {category === 'FREE_WEIGHT' ? 'Barre à vide (20 kg)' : 'Machine à vide (0 kg)'}
-          </Text>
+      <View style={styles.row}>
+        {plates.length === 0 ? (
+          <Text style={styles.emptyText}>{isFreeWeight ? 'Barre à vide (20 kg)' : 'Machine à vide (0 kg)'}</Text>
+        ) : (
+          <View style={styles.platesRow}>
+            <View style={styles.sleeve} />
+            {plates.map((p) => {
+              const dim = PLATE_DIMENSIONS[p.weight] || { width: 28, height: 7 };
+              return (
+                <View
+                  key={p.weight}
+                  style={[
+                    styles.plateBar,
+                    {
+                      width: dim.width,
+                      height: dim.height,
+                      backgroundColor: p.color,
+                      borderWidth: dim.border ? 1 : 0,
+                      borderColor: dim.border,
+                    },
+                  ]}
+                />
+              );
+            })}
+          </View>
+        )}
+
+        <View style={styles.valueCol}>
+          <Text style={styles.valueLabel}>PAR CÔTÉ</Text>
+          <Text style={styles.valueText}>{formatWeightFr(weightPerSide)} kg</Text>
+          {plates.length > 0 && (
+            <Text style={styles.summaryText} numberOfLines={1}>
+              {summaryText}
+              {isFreeWeight && ' · barre 20 kg'}
+            </Text>
+          )}
         </View>
-      ) : (
-        <View style={styles.platesRow}>
-          {plates.map((p, idx) => (
-            <View
-              key={`${p.weight}-${idx}`}
-              style={[
-                styles.plateBadge,
-                { backgroundColor: p.color },
-                p.textColor === '#0F172A' ? styles.lightPlateBorder : null,
-              ]}
-            >
-              {p.count > 1 && (
-                <View style={styles.multiplierBadge}>
-                  <Text style={styles.multiplierText}>{p.count}×</Text>
-                </View>
-              )}
-              <Text style={[styles.plateWeightText, { color: p.textColor }]}>
-                {p.weight} <Text style={styles.unitText}>kg</Text>
-              </Text>
-            </View>
-          ))}
-        </View>
-      )}
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: THEME.colors.cardInner,
-    borderRadius: 12,
-    padding: 12,
     marginVertical: 8,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
   },
-  containerDark: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 16,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+  hairline: {
+    height: 1,
+    backgroundColor: THEME.colors.hairline,
+    marginBottom: 12,
   },
-  headerRow: {
+  row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 8,
-  },
-  title: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: THEME.colors.textSecondary,
-    letterSpacing: 0.8,
-  },
-  titleDark: {
-    color: 'rgba(244, 237, 247, 0.6)',
-  },
-  subtext: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: THEME.colors.textPrimary,
-    flexShrink: 1,
-  },
-  subtextDark: {
-    color: THEME.colors.textOnDark,
+    justifyContent: 'space-between',
+    gap: 12,
   },
   platesRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    alignItems: 'center',
+    alignItems: 'flex-end',
+    gap: 3,
+    flexShrink: 1,
   },
-  plateBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 56,
-  },
-  lightPlateBorder: {
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-  },
-  multiplierBadge: {
-    backgroundColor: 'rgba(0,0,0,0.3)',
+  sleeve: {
+    width: 12,
+    height: 12,
     borderRadius: 4,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    marginRight: 4,
+    backgroundColor: '#B7B4BD',
   },
-  multiplierText: {
-    fontSize: 10,
+  plateBar: {
+    borderRadius: 4,
+  },
+  valueCol: {
+    alignItems: 'flex-end',
+  },
+  valueLabel: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 9,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: THEME.colors.textSecondary,
+    letterSpacing: 0.6,
   },
-  plateWeightText: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  unitText: {
-    fontSize: 10,
+  valueText: {
+    fontFamily: THEME.fonts.serif,
+    fontSize: 22,
     fontWeight: '600',
+    color: THEME.colors.textPrimary,
   },
-  emptyContainer: {
-    paddingVertical: 4,
+  summaryText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
+    fontWeight: '600',
+    color: THEME.colors.textSecondary,
+    marginTop: 1,
   },
   emptyText: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 12,
     color: THEME.colors.textMuted,
     fontStyle: 'italic',
-  },
-  emptyTextDark: {
-    color: 'rgba(244, 237, 247, 0.5)',
   },
 });

@@ -1,9 +1,8 @@
 import { useKeepAwake } from 'expo-keep-awake';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
-  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,8 +11,12 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { BottomSheet } from '../components/BottomSheet';
+import { Dot } from '../components/Dot';
+import { Icon } from '../components/Icon';
 import { PlateBreakdown } from '../components/PlateBreakdown';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
+import { SPLIT_SUBTITLES } from '../constants/splits';
 import {
   addCustomExercise,
   formatLocalDate,
@@ -39,6 +42,7 @@ interface FreeWorkoutScreenProps {
   workoutId: number;
   workoutName: string;
   onFinishSession: (summary: {
+    workoutId: number;
     workoutName: string;
     durationMinutes: number;
     totalVolume: number;
@@ -56,6 +60,37 @@ interface CompletedExerciseLog {
   exerciseName: string;
   category: EquipmentCategory;
   sets: SetResult[];
+}
+
+const FEELING_CONFIG: Record<
+  Feeling,
+  { label: string; sub: string; mark: string }
+> = {
+  EASY: { label: 'Facile', sub: '2+ reps en réserve', mark: '2+' },
+  MEDIUM: { label: 'Juste', sub: '0–1 rep en réserve', mark: '0–1' },
+  HARD: { label: 'Échec', sub: 'Reps non atteintes', mark: '×' },
+};
+
+const FEELING_GRADIENT: Record<Feeling, [string, string]> = {
+  EASY: THEME.colors.feelingEasyGradient,
+  MEDIUM: THEME.colors.feelingMediumGradient,
+  HARD: THEME.colors.feelingHardGradient,
+};
+const FEELING_INK: Record<Feeling, string> = {
+  EASY: THEME.colors.feelingEasyText,
+  MEDIUM: THEME.colors.feelingMediumText,
+  HARD: THEME.colors.feelingHardText,
+};
+const FEELING_BG: Record<Feeling, string> = {
+  EASY: THEME.colors.feelingEasyBg,
+  MEDIUM: THEME.colors.feelingMediumBg,
+  HARD: THEME.colors.feelingHardBg,
+};
+
+const INK_SURFACE = 'rgba(0, 41, 107, 0.07)';
+
+function fmtKg(w: number): string {
+  return w % 1 === 0 ? String(w) : String(w).replace('.', ',');
 }
 
 export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
@@ -87,12 +122,19 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   // Logs déjà effectués dans la séance
   const [completedExercises, setCompletedExercises] = useState<CompletedExerciseLog[]>([]);
 
-  // Modals
-  const [isPickerModalOpen, setIsPickerModalOpen] = useState<boolean>(false);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
+  // Feuilles basses
+  const [isPickerSheetOpen, setIsPickerSheetOpen] = useState<boolean>(false);
+  const [isCreateSheetOpen, setIsCreateSheetOpen] = useState<boolean>(false);
+  const [isQuitSheetOpen, setIsQuitSheetOpen] = useState<boolean>(false);
   const [newExName, setNewExName] = useState<string>('');
   const [newExCategory, setNewExCategory] = useState<EquipmentCategory>('HAMMER_STRENGTH');
   const [newExWeight, setNewExWeight] = useState<string>('40');
+
+  // Toast "séance vide" (remplace Alert.alert)
+  const [emptyToastVisible, setEmptyToastVisible] = useState<boolean>(false);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const split = THEME.splits[workoutId];
 
   // Chronomètre global de séance
   useEffect(() => {
@@ -120,6 +162,12 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     setLastPerfByExerciseId(perfMap);
   }, [workoutId]);
 
+  useEffect(() => {
+    return () => {
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    };
+  }, []);
+
   const formatElapsedTime = (totalSecs: number) => {
     const mins = Math.floor(totalSecs / 60);
     const secs = totalSecs % 60;
@@ -130,17 +178,10 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     try {
       const [year, month, day] = dateStr.split('-');
       const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+      return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }).toUpperCase();
     } catch {
       return dateStr;
     }
-  };
-
-  const formatLastPerfSets = (perf: LastExercisePerformance | null | undefined) => {
-    if (!perf || perf.sets.length === 0) return null;
-    return perf.sets
-      .map((s) => `${s.weight}kg×${s.repsDone} ${s.feeling === 'EASY' ? '🟢' : s.feeling === 'MEDIUM' ? '🟠' : '🔴'}`)
-      .join('  ·  ');
   };
 
   const handleSelectExercise = (ex: ConfiguredExercise) => {
@@ -156,12 +197,11 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       setCurrentWeight(ex.plannedWeights?.[0] || 40);
       setCurrentReps(ex.targetReps || 8);
     }
-    setIsPickerModalOpen(false);
+    setIsPickerSheetOpen(false);
   };
 
   const handleCreateCustomExercise = () => {
     if (!newExName.trim()) {
-      Alert.alert('Nom requis', 'Merci de renseigner un nom pour l’exercice.');
       return;
     }
     triggerMediumHaptic();
@@ -179,8 +219,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     setCurrentExercise(created);
     setCurrentWeight(weightNum);
     setCurrentReps(8);
-    setIsCreateModalOpen(false);
-    setIsPickerModalOpen(false);
+    setIsCreateSheetOpen(false);
+    setIsPickerSheetOpen(false);
     setNewExName('');
     setNewExWeight('40');
   };
@@ -242,8 +282,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       }
     });
 
-    const isFinisher = currentExercise.category === 'FREE_WEIGHT';
-    setRestDuration(isFinisher ? 150 : 90);
+    const isFinisherSet = currentExercise.category === 'FREE_WEIGHT';
+    setRestDuration(isFinisherSet ? 150 : 90);
     setIsResting(true);
   };
 
@@ -266,10 +306,17 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     });
   };
 
+  const showEmptyToast = () => {
+    setEmptyToastVisible(true);
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setEmptyToastVisible(false), 2200);
+  };
+
   // Finaliser la séance libre
   const handleFinalizeSession = () => {
     if (completedExercises.length === 0) {
-      Alert.alert('Séance vide', 'Renseigne au moins une série avant de terminer.');
+      triggerWarningHaptic();
+      showEmptyToast();
       return;
     }
 
@@ -304,7 +351,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       }
 
       // Applique le même moteur de surcharge progressive qu'en mode guidé, pour que les
-      // charges proposées la prochaine fois (guidée ou libre) tiennent compte de cette séance.
+      // charges proposées la prochaine fois tiennent compte de cette séance.
       const catalogEx = catalogExercises.find((c) => c.id === exLog.exerciseId);
       const plan = calculateNextSession(
         exLog.sets,
@@ -330,6 +377,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     saveWorkoutLogs(logsToSave);
 
     onFinishSession({
+      workoutId,
       workoutName,
       durationMinutes,
       totalVolume,
@@ -337,147 +385,159 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     });
   };
 
-  const confirmQuit = () => {
-    Alert.alert(
-      'Quitter la séance ?',
-      'Les séries effectuées pendant cette séance ne seront pas enregistrées.',
-      [
-        { text: 'Continuer', style: 'cancel' },
-        { text: 'Quitter', style: 'destructive', onPress: onQuitSession },
-      ]
-    );
-  };
-
   const isFinisher = currentExercise?.category === 'FREE_WEIGHT';
   const currentSetNum = getCurrentSetNumber();
   const currentLastPerf = currentExercise ? lastPerfByExerciseId[currentExercise.id] : null;
-  const currentLastPerfText = formatLastPerfSets(currentLastPerf);
+  const activeIndex = currentExercise ? catalogExercises.findIndex((e) => e.id === currentExercise.id) : -1;
 
   // Volume total accumulé en direct
   const liveVolume = completedExercises.reduce((total, ex) => {
     return total + ex.sets.reduce((exVol, s) => exVol + s.weight * s.repsDone, 0);
   }, 0);
+  const liveSetCount = completedExercises.reduce((acc, e) => acc + e.sets.length, 0);
 
   return (
     <View style={styles.root}>
       <LinearGradient
-        colors={[THEME.colors.bgGradientPeach, THEME.colors.bgGradientPink]}
-        locations={[0, 0.6]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+        colors={[split.tint, THEME.colors.bg]}
+        locations={[0, 0.42]}
+        start={{ x: 0.15, y: 0 }}
+        end={{ x: 0.85, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
       <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         {/* En-tête de la séance */}
         <View style={styles.topHeader}>
-          <View style={styles.titleCol}>
-            <Text style={styles.sessionTitle}>{workoutName}</Text>
+          <View style={styles.headerLeft}>
+            <LinearGradient colors={split.gradient} style={styles.headerBadge} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}>
+              <Text style={[styles.headerBadgeText, { color: split.fg }]}>{workoutName.charAt(0)}</Text>
+            </LinearGradient>
+            <View>
+              <Text style={styles.sessionTitle}>{workoutName}</Text>
+              <Text style={styles.sessionSubtitle} numberOfLines={1}>{SPLIT_SUBTITLES[workoutId]}</Text>
+            </View>
           </View>
 
           <View style={styles.headerRightBox}>
             <View style={styles.timerBox}>
+              <Dot color={THEME.colors.accent} size={7} />
               <Text style={styles.timerText}>{formatElapsedTime(elapsedSeconds)}</Text>
             </View>
-            <TouchableOpacity style={styles.quitBtn} onPress={confirmQuit} activeOpacity={0.8}>
-              <Text style={styles.quitBtnText}>Quitter</Text>
+            <TouchableOpacity
+              style={styles.quitBtn}
+              onPress={() => setIsQuitSheetOpen(true)}
+              activeOpacity={0.8}
+            >
+              <Icon name="x" size={18} color={THEME.colors.textPrimary} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* 1. Sélecteur d'exercice actif */}
-        <View style={styles.exerciseSelectorBox}>
-          <View style={styles.selectorHeader}>
-            <Text style={styles.sectionLabel}>EXERCICE ACTUEL</Text>
-            <TouchableOpacity
-              style={styles.changeExBtn}
-              onPress={() => {
-                triggerLightHaptic();
-                setIsPickerModalOpen(true);
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.changeExBtnText}>Changer d'exercice ▾</Text>
-            </TouchableOpacity>
+        {/* Barre de progression des exercices */}
+        {catalogExercises.length > 0 && (
+          <View style={styles.progressSection}>
+            <View style={styles.progressBarRow}>
+              {catalogExercises.map((ex, idx) => {
+                const isDone = completedExercises.some((c) => c.exerciseId === ex.id) && idx !== activeIndex;
+                const isActive = idx === activeIndex;
+                return (
+                  <View
+                    key={ex.id}
+                    style={[
+                      styles.progressSegment,
+                      { backgroundColor: isActive ? THEME.colors.textPrimary : isDone ? split.gradient[1] : 'rgba(0, 41, 107, 0.12)' },
+                    ]}
+                  />
+                );
+              })}
+            </View>
+            <View style={styles.progressMetaRow}>
+              <Text style={styles.progressMetaText}>
+                Exercice {activeIndex + 1} sur {catalogExercises.length}
+              </Text>
+              <TouchableOpacity
+                style={styles.changeExBtn}
+                onPress={() => {
+                  triggerLightHaptic();
+                  setIsPickerSheetOpen(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.changeExBtnText}>Changer d'exercice</Text>
+                <Icon name="chevron-down" size={15} color={THEME.colors.accentStrong} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Carte héro : exercice actuel, dernière fois, charge/reps, disques */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroTopRow}>
+            <View style={styles.typeBadge}>
+              <Text style={styles.typeBadgeText}>
+                {isFinisher ? 'BARRE LIBRE · FINISHER' : 'HAMMER STRENGTH'}
+              </Text>
+            </View>
+            <Text style={styles.setCounterText}>Série {currentSetNum}</Text>
           </View>
 
-          <TouchableOpacity
-            style={styles.currentExCard}
-            onPress={() => {
-              triggerLightHaptic();
-              setIsPickerModalOpen(true);
-            }}
-            activeOpacity={0.85}
-          >
-            <View style={styles.currentExTop}>
-              <View style={[styles.typeBadge, isFinisher ? styles.finisherBadge : styles.machineBadge]}>
-                <Text style={[styles.typeBadgeText, isFinisher ? styles.finisherBadgeText : styles.machineBadgeText]}>
-                  {isFinisher ? 'BARRE LIBRE' : 'HAMMER STRENGTH'}
-                </Text>
-              </View>
-              <Text style={styles.setCounterText}>Série {currentSetNum}</Text>
-            </View>
-
+          <TouchableOpacity onPress={() => setIsPickerSheetOpen(true)} activeOpacity={0.8}>
             <Text style={styles.currentExName} numberOfLines={2}>
               {currentExercise?.name || 'Sélectionner un exercice'}
             </Text>
-
-            {currentLastPerfText && currentLastPerf && (
-              <View style={styles.lastPerfRow}>
-                <Text style={styles.lastPerfLabel}>
-                  DERNIÈRE FOIS ({formatLastPerfDate(currentLastPerf.date)})
-                </Text>
-                <Text style={styles.lastPerfText}>{currentLastPerfText}</Text>
-              </View>
-            )}
           </TouchableOpacity>
-        </View>
 
-        {/* 2. Zone de Saisie de la Série en cours (Charge & Reps) */}
-        <View style={styles.setEntrySection}>
-          <Text style={styles.sectionLabel}>DONNÉES DE LA SÉRIE {currentSetNum}</Text>
-
-          <View style={styles.steppersRow}>
-            {/* Stepper Charge */}
-            <View style={styles.stepperCard}>
-              <Text style={styles.stepperMiniLabel}>CHARGE (KG)</Text>
-              <View style={styles.stepperControls}>
-                <TouchableOpacity style={styles.stepBtn} onPress={() => adjustWeight(-2.5)} activeOpacity={0.7}>
-                  <Text style={styles.stepBtnText}>-2.5</Text>
-                </TouchableOpacity>
-
-                <View style={styles.stepperValWrap}>
-                  <Text style={styles.stepperValueText}>{currentWeight}</Text>
-                  <Text style={styles.stepperUnitText}>kg</Text>
-                </View>
-
-                <TouchableOpacity style={styles.stepBtn} onPress={() => adjustWeight(2.5)} activeOpacity={0.7}>
-                  <Text style={styles.stepBtnText}>+2.5</Text>
-                </TouchableOpacity>
+          {currentLastPerf && currentLastPerf.sets.length > 0 && (
+            <View style={styles.lastPerfBlock}>
+              <Text style={styles.lastPerfLabel}>DERNIÈRE FOIS · {formatLastPerfDate(currentLastPerf.date)}</Text>
+              <View style={styles.lastPerfChipsRow}>
+                {currentLastPerf.sets.map((s, idx) => (
+                  <View key={idx} style={styles.lastPerfChip}>
+                    <Dot color={FEELING_INK[s.feeling]} size={8} />
+                    <Text style={styles.lastPerfChipText}>{fmtKg(s.weight)} × {s.repsDone}</Text>
+                  </View>
+                ))}
               </View>
             </View>
+          )}
 
-            {/* Stepper Répétitions */}
-            <View style={styles.stepperCard}>
-              <Text style={styles.stepperMiniLabel}>RÉPÉTITIONS</Text>
-              <View style={styles.stepperControls}>
-                <TouchableOpacity style={styles.stepBtn} onPress={() => adjustReps(-1)} activeOpacity={0.7}>
-                  <Text style={styles.stepBtnText}>-1</Text>
-                </TouchableOpacity>
-
-                <View style={styles.stepperValWrap}>
-                  <Text style={styles.stepperValueText}>{currentReps}</Text>
-                  <Text style={styles.stepperUnitText}>reps</Text>
+          {/* Steppers pleine largeur */}
+          <View style={styles.stepperContainer}>
+            <View style={styles.stepperFullRow}>
+              <TouchableOpacity style={styles.stepperBtnLg} onPress={() => adjustWeight(-2.5)} activeOpacity={0.7}>
+                <Text style={styles.stepperBtnLgText}>−2,5</Text>
+              </TouchableOpacity>
+              <View style={styles.stepperCenterCol}>
+                <Text style={styles.stepperRowLabel}>CHARGE</Text>
+                <View style={styles.stepperValueRow}>
+                  <Text style={styles.stepperBigValue}>{fmtKg(currentWeight)}</Text>
+                  <Text style={styles.stepperUnit}>kg</Text>
                 </View>
-
-                <TouchableOpacity style={styles.stepBtn} onPress={() => adjustReps(1)} activeOpacity={0.7}>
-                  <Text style={styles.stepBtnText}>+1</Text>
-                </TouchableOpacity>
               </View>
+              <TouchableOpacity style={styles.stepperBtnLg} onPress={() => adjustWeight(2.5)} activeOpacity={0.7}>
+                <Text style={styles.stepperBtnLgText}>+2,5</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.stepperFullRow}>
+              <TouchableOpacity style={styles.stepperBtnLg} onPress={() => adjustReps(-1)} activeOpacity={0.7}>
+                <Text style={styles.stepperBtnLgText}>−1</Text>
+              </TouchableOpacity>
+              <View style={styles.stepperCenterCol}>
+                <Text style={styles.stepperRowLabel}>RÉPÉTITIONS</Text>
+                <View style={styles.stepperValueRow}>
+                  <Text style={styles.stepperBigValue}>{currentReps}</Text>
+                  <Text style={styles.stepperUnit}>reps</Text>
+                </View>
+              </View>
+              <TouchableOpacity style={styles.stepperBtnLg} onPress={() => adjustReps(1)} activeOpacity={0.7}>
+                <Text style={styles.stepperBtnLgText}>+1</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
-          {/* Calculateur de disques en direct */}
+          {/* Disques */}
           {currentExercise && (
             <PlateBreakdown
               totalWeight={currentWeight}
@@ -485,53 +545,44 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
               category={currentExercise.category}
             />
           )}
-
-          {/* 3 Boutons de validation par Ressenti */}
-          <Text style={[styles.sectionLabel, { marginTop: 8, marginBottom: 8 }]}>VALIDER LA SÉRIE</Text>
-          <View style={styles.feelingRow}>
-            <TouchableOpacity onPress={() => handleCompleteSet('EASY')} activeOpacity={0.85} style={styles.feelBtnFlex}>
-              <LinearGradient
-                colors={THEME.colors.feelingEasyGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0.4 }}
-                style={styles.feelBtn}
-              >
-                <Text style={[styles.feelBtnTitle, { color: THEME.colors.feelingEasyText }]}>FACILE</Text>
-                <Text style={[styles.feelBtnSub, { color: THEME.colors.feelingEasyText }]}>2+ en réserve</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => handleCompleteSet('MEDIUM')} activeOpacity={0.85} style={styles.feelBtnFlex}>
-              <LinearGradient
-                colors={THEME.colors.feelingMediumGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0.4 }}
-                style={styles.feelBtn}
-              >
-                <Text style={[styles.feelBtnTitle, { color: THEME.colors.feelingMediumText }]}>JUSTE</Text>
-                <Text style={[styles.feelBtnSub, { color: THEME.colors.feelingMediumText }]}>0-1 en réserve</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => handleCompleteSet('HARD')} activeOpacity={0.85} style={styles.feelBtnFlex}>
-              <LinearGradient
-                colors={THEME.colors.feelingHardGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0.4 }}
-                style={styles.feelBtn}
-              >
-                <Text style={[styles.feelBtnTitle, { color: THEME.colors.feelingHardText }]}>ÉCHEC</Text>
-                <Text style={[styles.feelBtnSub, { color: THEME.colors.feelingHardText }]}>Atteint</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
         </View>
 
-        {/* 3. Récapitulatif en direct de la séance */}
+        {/* Validation par ressenti */}
+        <Text style={styles.sectionLabel}>VALIDER LA SÉRIE {currentSetNum}</Text>
+        <View style={styles.feelingRow}>
+          {(['EASY', 'MEDIUM', 'HARD'] as Feeling[]).map((feeling) => {
+            const cfg = FEELING_CONFIG[feeling];
+            return (
+              <Pressable
+                key={feeling}
+                onPress={() => handleCompleteSet(feeling)}
+                style={({ pressed }) => [styles.feelTileFlex, pressed && styles.feelTilePressed]}
+              >
+                <LinearGradient
+                  colors={FEELING_GRADIENT[feeling]}
+                  start={{ x: 0.1, y: 0 }}
+                  end={{ x: 0.6, y: 1 }}
+                  style={styles.feelTile}
+                >
+                  <View style={styles.feelTileTopRow}>
+                    <Text style={[styles.feelTileMark, { color: FEELING_INK[feeling] }]}>{cfg.mark}</Text>
+                    <Dot color={FEELING_INK[feeling]} size={10} />
+                  </View>
+                  <View>
+                    <Text style={[styles.feelTileTitle, { color: FEELING_INK[feeling] }]}>{cfg.label}</Text>
+                    <Text style={[styles.feelTileSub, { color: FEELING_INK[feeling] }]}>{cfg.sub}</Text>
+                  </View>
+                </LinearGradient>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Récapitulatif en direct de la séance */}
         <View style={styles.liveLogSection}>
           <View style={styles.liveLogHeader}>
-            <Text style={styles.sectionLabel}>SÉRIES EFFECTUÉES ({completedExercises.reduce((acc, e) => acc + e.sets.length, 0)})</Text>
-            <Text style={styles.liveVolumeText}>{Math.round(liveVolume)} kg vol.</Text>
+            <Text style={styles.sectionLabel}>SÉRIES EFFECTUÉES · {liveSetCount}</Text>
+            <Text style={styles.liveVolumeText}>{Math.round(liveVolume).toLocaleString('fr-FR')} kg</Text>
           </View>
 
           {completedExercises.length === 0 ? (
@@ -542,14 +593,14 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           ) : (
             <View style={styles.completedList}>
               {completedExercises.map((cEx, cIdx) => (
-                <View key={cIdx} style={styles.completedExCard}>
+                <View key={cIdx} style={[styles.completedExRow, cIdx > 0 && styles.completedExRowDivider]}>
                   <Text style={styles.completedExName}>{cEx.exerciseName}</Text>
                   <View style={styles.completedSetsRow}>
                     {cEx.sets.map((s, sIdx) => (
-                      <View key={sIdx} style={styles.setChip}>
-                        <Text style={styles.setChipText}>
-                          S{s.setNumber}: {s.repsDone} reps @ {s.weight}kg{' '}
-                          {s.feeling === 'EASY' ? '🟢' : s.feeling === 'MEDIUM' ? '🟠' : '🔴'}
+                      <View key={sIdx} style={[styles.setChip, { backgroundColor: FEELING_BG[s.feeling] }]}>
+                        <Dot color={FEELING_INK[s.feeling]} size={7} />
+                        <Text style={[styles.setChipText, { color: FEELING_INK[s.feeling] }]}>
+                          S{s.setNumber} · {s.repsDone} × {fmtKg(s.weight)}kg
                         </Text>
                       </View>
                     ))}
@@ -566,9 +617,16 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           onPress={handleFinalizeSession}
           activeOpacity={0.85}
         >
-          <Text style={styles.finishBtnText}>TERMINER LA SÉANCE</Text>
+          <Text style={styles.finishBtnText}>Terminer la séance</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Toast "séance vide" */}
+      {emptyToastVisible && (
+        <View style={styles.toast} pointerEvents="none">
+          <Text style={styles.toastText}>Valide au moins une série avant de terminer.</Text>
+        </View>
+      )}
 
       {/* Modal Minuteur de Repos */}
       {isResting && (
@@ -577,138 +635,138 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           exerciseName={currentExercise?.name || 'Série suivante'}
           nextSetNumber={currentSetNum}
           nextWeight={currentWeight}
+          nextReps={currentReps}
           onSkip={() => setIsResting(false)}
           onFinish={() => setIsResting(false)}
           onUndo={handleUndoFromRest}
         />
       )}
 
-      {/* MODAL : SÉLECTEUR D'EXERCICE DU CATALOGUE */}
-      <Modal visible={isPickerModalOpen} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Choisir un exercice</Text>
-            <Text style={styles.modalSubtitle}>Sélectionne ta prochaine machine</Text>
+      {/* FEUILLE : QUITTER LA SÉANCE */}
+      <BottomSheet visible={isQuitSheetOpen} onClose={() => setIsQuitSheetOpen(false)} maxHeightPercent={50}>
+        <Text style={styles.sheetTitle}>Quitter la séance ?</Text>
+        <Text style={styles.sheetBody}>Les séries effectuées pendant cette séance ne seront pas enregistrées.</Text>
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => setIsQuitSheetOpen(false)} activeOpacity={0.85}>
+          <Text style={styles.primaryBtnText}>Continuer</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.destructiveBtn} onPress={onQuitSession} activeOpacity={0.85}>
+          <Text style={styles.destructiveBtnText}>Quitter</Text>
+        </TouchableOpacity>
+      </BottomSheet>
 
-            <ScrollView style={styles.catalogScroll} showsVerticalScrollIndicator={false}>
-              {catalogExercises.map((catEx) => {
-                const isSelected = currentExercise?.id === catEx.id;
-                const lastPerf = lastPerfByExerciseId[catEx.id];
-                const lastPerfText = formatLastPerfSets(lastPerf);
-                return (
-                  <TouchableOpacity
-                    key={catEx.id}
-                    style={[styles.catalogItem, isSelected && styles.catalogItemActive]}
-                    onPress={() => handleSelectExercise(catEx)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.catalogItemName, isSelected && styles.catalogItemNameActive]}>
-                        {catEx.name}
-                      </Text>
-                      <Text style={styles.catalogItemSub}>
-                        {catEx.category === 'FREE_WEIGHT' ? 'Barre Libre' : 'Machine Hammer'} • Conseillé : {catEx.plannedWeights?.[0] || 40} kg
-                      </Text>
-                      {lastPerfText && (
-                        <Text style={styles.catalogItemLastPerf} numberOfLines={1}>
-                          Dernière fois : {lastPerfText}
-                        </Text>
-                      )}
-                    </View>
-                    <Text style={[styles.catalogItemAction, isSelected && styles.catalogItemActionActive]}>
-                      {isSelected ? '✓ Actuel' : 'Choisir'}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+      {/* FEUILLE : SÉLECTEUR D'EXERCICE DU CATALOGUE */}
+      <BottomSheet visible={isPickerSheetOpen} onClose={() => setIsPickerSheetOpen(false)}>
+        <Text style={styles.sheetTitle}>Choisir un exercice</Text>
+        <Text style={styles.sheetSubtitle}>{workoutName} · {catalogExercises.length} exercices</Text>
 
-            <TouchableOpacity
-              style={styles.createCustomBtn}
-              onPress={() => {
-                triggerLightHaptic();
-                setIsCreateModalOpen(true);
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.createCustomBtnText}>+ Créer un nouvel exercice</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.cancelModalBtn}
-              onPress={() => setIsPickerModalOpen(false)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.cancelModalBtnText}>Fermer</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* MODAL : CRÉER UN EXERCICE PERSONNALISÉ */}
-      <Modal visible={isCreateModalOpen} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Nouvel exercice</Text>
-            <Text style={styles.modalSubtitle}>Ajouter au catalogue permanent</Text>
-
-            <Text style={styles.inputMiniLabel}>NOM DE LA MACHINE</Text>
-            <TextInput
-              style={styles.modalTextInput}
-              value={newExName}
-              onChangeText={setNewExName}
-              placeholder="ex: HS Lateral Raise"
-              placeholderTextColor={THEME.colors.textMuted}
-            />
-
-            <Text style={styles.inputMiniLabel}>TYPE D'ÉQUIPEMENT</Text>
-            <View style={styles.typePillsRow}>
+        <ScrollView style={styles.catalogScroll} showsVerticalScrollIndicator={false}>
+          {catalogExercises.map((catEx, idx) => {
+            const isSelected = currentExercise?.id === catEx.id;
+            const doneSets = completedExercises.find((c) => c.exerciseId === catEx.id)?.sets || [];
+            return (
               <TouchableOpacity
-                style={[styles.typePill, newExCategory === 'HAMMER_STRENGTH' && styles.typePillActive]}
-                onPress={() => setNewExCategory('HAMMER_STRENGTH')}
+                key={catEx.id}
+                style={[styles.catalogItem, isSelected && { backgroundColor: split.tint }]}
+                onPress={() => handleSelectExercise(catEx)}
+                activeOpacity={0.7}
               >
-                <Text style={[styles.typePillText, newExCategory === 'HAMMER_STRENGTH' && styles.typePillTextActive]}>
-                  Machine (0kg base)
-                </Text>
+                <View style={[styles.catalogIndexBadge, isSelected && styles.catalogIndexBadgeActive]}>
+                  <Text style={[styles.catalogIndexText, isSelected && styles.catalogIndexTextActive]}>{idx + 1}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.catalogItemName}>{catEx.name}</Text>
+                  <Text style={styles.catalogItemSub}>
+                    {catEx.category === 'FREE_WEIGHT' ? 'Barre Libre' : 'Hammer Strength'} · conseillé {fmtKg(catEx.plannedWeights?.[0] || 40)} kg
+                  </Text>
+                </View>
+                {doneSets.length > 0 && (
+                  <View style={styles.catalogDoneDots}>
+                    {doneSets.map((s, sIdx) => (
+                      <Dot key={sIdx} color={FEELING_INK[s.feeling]} size={7} />
+                    ))}
+                  </View>
+                )}
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.typePill, newExCategory === 'FREE_WEIGHT' && styles.typePillActive]}
-                onPress={() => setNewExCategory('FREE_WEIGHT')}
-              >
-                <Text style={[styles.typePillText, newExCategory === 'FREE_WEIGHT' && styles.typePillTextActive]}>
-                  Barre Libre (20kg base)
-                </Text>
-              </TouchableOpacity>
-            </View>
+            );
+          })}
+        </ScrollView>
 
-            <Text style={styles.inputMiniLabel}>CHARGE INITIALE (KG)</Text>
-            <TextInput
-              style={styles.modalTextInput}
-              keyboardType="numeric"
-              value={newExWeight}
-              onChangeText={setNewExWeight}
-              placeholder="40"
-              placeholderTextColor={THEME.colors.textMuted}
-            />
+        <TouchableOpacity
+          style={styles.secondaryBtn}
+          onPress={() => {
+            triggerLightHaptic();
+            setIsCreateSheetOpen(true);
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.secondaryBtnText}>+ Nouvel exercice</Text>
+        </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.submitCreateBtn}
-              onPress={handleCreateCustomExercise}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.submitCreateBtnText}>CRÉER & SÉLECTIONNER</Text>
-            </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.outlineBtn}
+          onPress={() => setIsPickerSheetOpen(false)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.outlineBtnText}>Fermer</Text>
+        </TouchableOpacity>
+      </BottomSheet>
 
-            <TouchableOpacity
-              style={styles.cancelModalBtn}
-              onPress={() => setIsCreateModalOpen(false)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.cancelModalBtnText}>Annuler</Text>
-            </TouchableOpacity>
-          </View>
+      {/* FEUILLE : CRÉER UN EXERCICE PERSONNALISÉ */}
+      <BottomSheet visible={isCreateSheetOpen} onClose={() => setIsCreateSheetOpen(false)} maxHeightPercent={70}>
+        <Text style={styles.sheetTitle}>Nouvel exercice</Text>
+        <Text style={styles.sheetSubtitle}>Ajouter au catalogue permanent</Text>
+
+        <Text style={styles.inputMiniLabel}>NOM DE LA MACHINE</Text>
+        <TextInput
+          style={styles.modalTextInput}
+          value={newExName}
+          onChangeText={setNewExName}
+          placeholder="ex: HS Lateral Raise"
+          placeholderTextColor={THEME.colors.textMuted}
+        />
+
+        <Text style={styles.inputMiniLabel}>TYPE D'ÉQUIPEMENT</Text>
+        <View style={styles.typeSegmentRow}>
+          <TouchableOpacity
+            style={[styles.typeSegment, newExCategory === 'HAMMER_STRENGTH' && styles.typeSegmentActive]}
+            onPress={() => setNewExCategory('HAMMER_STRENGTH')}
+          >
+            <Text style={[styles.typeSegmentText, newExCategory === 'HAMMER_STRENGTH' && styles.typeSegmentTextActive]}>
+              Machine · 0 kg
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.typeSegment, newExCategory === 'FREE_WEIGHT' && styles.typeSegmentActive]}
+            onPress={() => setNewExCategory('FREE_WEIGHT')}
+          >
+            <Text style={[styles.typeSegmentText, newExCategory === 'FREE_WEIGHT' && styles.typeSegmentTextActive]}>
+              Barre libre · 20 kg
+            </Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
+
+        <Text style={styles.inputMiniLabel}>CHARGE INITIALE (KG)</Text>
+        <TextInput
+          style={styles.modalTextInput}
+          keyboardType="numeric"
+          value={newExWeight}
+          onChangeText={setNewExWeight}
+          placeholder="40"
+          placeholderTextColor={THEME.colors.textMuted}
+        />
+
+        <TouchableOpacity style={styles.primaryBtn} onPress={handleCreateCustomExercise} activeOpacity={0.85}>
+          <Text style={styles.primaryBtnText}>Créer & sélectionner</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.outlineBtn}
+          onPress={() => setIsCreateSheetOpen(false)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.outlineBtnText}>Annuler</Text>
+        </TouchableOpacity>
+      </BottomSheet>
       </SafeAreaView>
     </View>
   );
@@ -723,25 +781,47 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   container: {
-    paddingHorizontal: 16,
-    paddingTop: 18,
-    paddingBottom: 40,
+    paddingHorizontal: 18,
+    paddingTop: 48,
+    paddingBottom: 36,
+    gap: 18,
   },
   topHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
   },
-  titleCol: {
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     flex: 1,
     marginRight: 10,
   },
+  headerBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerBadgeText: {
+    fontFamily: THEME.fonts.serif,
+    fontSize: 18,
+    fontWeight: '700',
+  },
   sessionTitle: {
     fontFamily: THEME.fonts.serif,
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
     color: THEME.colors.textPrimary,
+  },
+  sessionSubtitle: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
+    fontWeight: '600',
+    color: THEME.colors.textSecondary,
+    marginTop: 1,
   },
   headerRightBox: {
     flexDirection: 'row',
@@ -749,278 +829,286 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   timerBox: {
-    backgroundColor: THEME.colors.cardInner,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    paddingHorizontal: 12,
+    borderRadius: THEME.radius.pill,
   },
   timerText: {
     fontFamily: THEME.fonts.sans,
-    color: THEME.colors.accent,
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 0.5,
+    color: THEME.colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+    fontVariant: ['tabular-nums'],
   },
   quitBtn: {
-    backgroundColor: 'rgba(255, 255, 255, 0.55)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(28, 28, 30, 0.08)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  quitBtnText: {
-    fontFamily: THEME.fonts.sans,
-    color: THEME.colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '700',
+  progressSection: {
+    gap: 8,
   },
-  exerciseSelectorBox: {
-    marginBottom: 16,
+  progressBarRow: {
+    flexDirection: 'row',
+    gap: 4,
   },
-  selectorHeader: {
+  progressSegment: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+  },
+  progressMetaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
   },
-  sectionLabel: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 10,
-    fontWeight: '800',
-    color: THEME.colors.textSecondary,
-    letterSpacing: 0.8,
-  },
-  changeExBtn: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  changeExBtnText: {
-    fontFamily: THEME.fonts.sans,
-    color: THEME.colors.accent,
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  currentExCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.72)',
-    borderRadius: 22,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.95)',
-    shadowColor: '#8C7060',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 18,
-  },
-  currentExTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  typeBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  typeBadgeText: {
-    letterSpacing: 0.5,
-  },
-  machineBadge: {
-    backgroundColor: THEME.colors.badgeBg,
-  },
-  machineBadgeText: {
-    fontFamily: THEME.fonts.sans,
-    color: THEME.colors.badgeText,
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  finisherBadge: {
-    backgroundColor: THEME.colors.finisherBadgeBg,
-  },
-  finisherBadgeText: {
-    fontFamily: THEME.fonts.sans,
-    color: THEME.colors.finisherBadgeText,
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  setCounterText: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 11,
-    fontWeight: '800',
-    color: THEME.colors.textSecondary,
-  },
-  currentExName: {
-    fontFamily: THEME.fonts.serif,
-    fontSize: 20,
-    fontWeight: '700',
-    color: THEME.colors.textPrimary,
-  },
-  lastPerfRow: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(28, 28, 30, 0.08)',
-  },
-  lastPerfLabel: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 8,
-    fontWeight: '800',
-    color: THEME.colors.textMuted,
-    letterSpacing: 0.6,
-    marginBottom: 3,
-  },
-  lastPerfText: {
+  progressMetaText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
     fontWeight: '700',
     color: THEME.colors.textSecondary,
   },
-  setEntrySection: {
-    backgroundColor: 'rgba(255, 255, 255, 0.72)',
-    borderRadius: 22,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.95)',
-    marginBottom: 18,
-    shadowColor: '#8C7060',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 18,
-  },
-  steppersRow: {
+  changeExBtn: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 8,
-    marginBottom: 10,
-  },
-  stepperCard: {
-    flex: 1,
-    backgroundColor: THEME.colors.cardInner,
-    borderRadius: 14,
-    padding: 10,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    gap: 3,
   },
-  stepperMiniLabel: {
+  changeExBtnText: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 8,
+    color: THEME.colors.accentStrong,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  heroCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+    borderRadius: THEME.radius.hero,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+    padding: 20,
+    gap: 16,
+    shadowColor: THEME.colors.shadow,
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.14,
+    shadowRadius: 30,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  typeBadge: {
+    backgroundColor: INK_SURFACE,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: THEME.radius.pill,
+  },
+  typeBadgeText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
+    fontWeight: '800',
+    color: THEME.colors.textPrimary,
+    letterSpacing: 0.4,
+  },
+  setCounterText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
     fontWeight: '800',
     color: THEME.colors.textSecondary,
-    letterSpacing: 0.8,
-    marginBottom: 6,
   },
-  stepperControls: {
+  currentExName: {
+    fontFamily: THEME.fonts.serif,
+    fontSize: 26,
+    fontWeight: '600',
+    color: THEME.colors.textPrimary,
+    letterSpacing: -0.3,
+    lineHeight: 30,
+  },
+  lastPerfBlock: {
+    gap: 6,
+  },
+  lastPerfLabel: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
+    fontWeight: '700',
+    color: THEME.colors.textSecondary,
+    opacity: 0.7,
+  },
+  lastPerfChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  lastPerfChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
+    gap: 5,
+    backgroundColor: INK_SURFACE,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: THEME.radius.pill,
   },
-  stepBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 8,
+  lastPerfChipText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
+    fontWeight: '700',
+    color: THEME.colors.textPrimary,
+  },
+  stepperContainer: {
+    backgroundColor: INK_SURFACE,
+    borderRadius: THEME.radius.card,
+    padding: 8,
+    gap: 6,
+  },
+  stepperFullRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  stepperBtnLg: {
+    width: 64,
+    height: 56,
+    borderRadius: THEME.radius.inner,
     backgroundColor: THEME.colors.cardBg,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
   },
-  stepBtnText: {
+  stepperBtnLgText: {
     fontFamily: THEME.fonts.sans,
     color: THEME.colors.textPrimary,
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '800',
   },
-  stepperValWrap: {
+  stepperCenterCol: {
+    flex: 1,
     alignItems: 'center',
   },
-  stepperValueText: {
+  stepperRowLabel: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 22,
-    fontWeight: '900',
-    color: THEME.colors.textPrimary,
-  },
-  stepperUnitText: {
-    fontSize: 10,
+    fontSize: 11,
+    fontWeight: '800',
     color: THEME.colors.textSecondary,
-    fontWeight: '600',
+    letterSpacing: 0.4,
+  },
+  stepperValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  stepperBigValue: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 40,
+    fontWeight: '800',
+    color: THEME.colors.textPrimary,
+    letterSpacing: -1,
+    fontVariant: ['tabular-nums'],
+  },
+  stepperUnit: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 15,
+    fontWeight: '700',
+    color: THEME.colors.textSecondary,
+  },
+  sectionLabel: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
+    fontWeight: '800',
+    color: THEME.colors.textSecondary,
+    letterSpacing: 1,
   },
   feelingRow: {
     flexDirection: 'row',
     gap: 8,
   },
-  feelBtnFlex: {
+  feelTileFlex: {
     flex: 1,
   },
-  feelBtn: {
-    paddingVertical: 14,
-    borderRadius: 999,
-    alignItems: 'center',
-    shadowColor: '#1C1200',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.14,
-    shadowRadius: 12,
+  feelTilePressed: {
+    transform: [{ scale: 0.95 }],
   },
-  feelBtnTitle: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 0.5,
+  feelTile: {
+    height: 108,
+    borderRadius: THEME.radius.card,
+    padding: 14,
+    justifyContent: 'space-between',
   },
-  feelBtnSub: {
+  feelTileTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  feelTileMark: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 9,
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  feelTileTitle: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  feelTileSub: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
     fontWeight: '600',
     marginTop: 2,
   },
   liveLogSection: {
-    marginBottom: 20,
+    gap: 8,
   },
   liveLogHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
   },
   liveVolumeText: {
-    fontSize: 11,
+    fontFamily: THEME.fonts.sans,
+    fontSize: 13,
     fontWeight: '800',
-    color: THEME.colors.accent,
+    color: THEME.colors.accentStrong,
   },
   emptyLogsCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
-    borderRadius: 16,
+    borderRadius: THEME.radius.card,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(0, 41, 107, 0.14)',
     padding: 16,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.85)',
   },
   emptyLogsText: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 13,
     fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
   emptyLogsSubtext: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 11,
     color: THEME.colors.textSecondary,
     marginTop: 2,
     textAlign: 'center',
   },
   completedList: {
-    gap: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderRadius: THEME.radius.card,
+    paddingHorizontal: 14,
   },
-  completedExCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.65)',
-    borderRadius: 16,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.85)',
+  completedExRow: {
+    paddingVertical: 11,
+  },
+  completedExRowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: THEME.colors.hairline,
   },
   completedExName: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 13,
     fontWeight: '800',
     color: THEME.colors.textPrimary,
@@ -1029,198 +1117,229 @@ const styles = StyleSheet.create({
   completedSetsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 4,
+    gap: 5,
   },
   setChip: {
-    backgroundColor: THEME.colors.cardInner,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: THEME.radius.pill,
   },
   setChipText: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 10,
-    color: THEME.colors.textSecondary,
     fontWeight: '700',
   },
   finishBtn: {
-    backgroundColor: THEME.colors.textPrimary,
-    paddingVertical: 16,
-    borderRadius: 16,
+    height: 56,
+    backgroundColor: THEME.colors.accent,
+    borderRadius: THEME.radius.pill,
     alignItems: 'center',
-    shadowColor: '#8C7060',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
+    justifyContent: 'center',
+    shadowColor: THEME.colors.accent,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.45,
+    shadowRadius: 24,
   },
   finishBtnText: {
     fontFamily: THEME.fonts.sans,
-    color: '#FFFFFF',
-    fontSize: 14,
+    color: THEME.colors.accentTextDark,
+    fontSize: 15,
     fontWeight: '800',
-    letterSpacing: 0.8,
   },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(28, 28, 30, 0.65)',
-    justifyContent: 'center',
+  toast: {
+    position: 'absolute',
+    left: 24,
+    right: 24,
+    bottom: 28,
+    backgroundColor: THEME.colors.textPrimary,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     alignItems: 'center',
-    padding: 16,
   },
-  modalCard: {
-    width: '100%',
-    maxWidth: 360,
-    maxHeight: '85%',
-    backgroundColor: THEME.colors.cardBg,
-    borderRadius: 22,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    shadowColor: '#8C7060',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
+  toastText: {
+    fontFamily: THEME.fonts.sans,
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
   },
-  modalTitle: {
+  sheetTitle: {
     fontFamily: THEME.fonts.serif,
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
-  modalSubtitle: {
+  sheetSubtitle: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 12,
     color: THEME.colors.textSecondary,
     fontWeight: '600',
     marginTop: 2,
     marginBottom: 14,
   },
+  sheetBody: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 13,
+    color: THEME.colors.textSecondary,
+    fontWeight: '500',
+    marginTop: 8,
+    marginBottom: 18,
+    lineHeight: 19,
+  },
+  primaryBtn: {
+    backgroundColor: THEME.colors.textPrimary,
+    paddingVertical: 15,
+    borderRadius: THEME.radius.pill,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  primaryBtnText: {
+    fontFamily: THEME.fonts.sans,
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  destructiveBtn: {
+    backgroundColor: THEME.colors.feelingHardBg,
+    paddingVertical: 15,
+    borderRadius: THEME.radius.pill,
+    alignItems: 'center',
+  },
+  destructiveBtnText: {
+    fontFamily: THEME.fonts.sans,
+    color: THEME.colors.feelingHardText,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  secondaryBtn: {
+    height: 52,
+    backgroundColor: THEME.colors.cardInner,
+    borderRadius: THEME.radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  secondaryBtnText: {
+    fontFamily: THEME.fonts.sans,
+    color: THEME.colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  outlineBtn: {
+    paddingVertical: 13,
+    borderRadius: THEME.radius.pill,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+  },
+  outlineBtnText: {
+    fontFamily: THEME.fonts.sans,
+    color: THEME.colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
   catalogScroll: {
-    maxHeight: 280,
+    maxHeight: 340,
     marginBottom: 10,
   },
   catalogItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: THEME.colors.cardInner,
+    gap: 12,
     padding: 12,
-    borderRadius: 10,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderRadius: 18,
+    marginBottom: 6,
   },
-  catalogItemActive: {
-    borderColor: THEME.colors.accent,
+  catalogIndexBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: THEME.colors.cardInner,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  catalogItemName: {
+  catalogIndexBadgeActive: {
+    backgroundColor: THEME.colors.textPrimary,
+  },
+  catalogIndexText: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 13,
     fontWeight: '800',
-    color: THEME.colors.textPrimary,
+    color: THEME.colors.textSecondary,
   },
-  catalogItemNameActive: {
-    color: THEME.colors.accent,
+  catalogIndexTextActive: {
+    color: '#FFFFFF',
+  },
+  catalogItemName: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 14,
+    fontWeight: '700',
+    color: THEME.colors.textPrimary,
   },
   catalogItemSub: {
-    fontSize: 10,
-    color: THEME.colors.textSecondary,
-    marginTop: 2,
-  },
-  catalogItemLastPerf: {
-    fontSize: 10,
-    color: THEME.colors.textMuted,
-    marginTop: 2,
-    fontWeight: '600',
-  },
-  catalogItemAction: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: THEME.colors.textSecondary,
-  },
-  catalogItemActionActive: {
-    color: THEME.colors.accent,
-  },
-  createCustomBtn: {
-    backgroundColor: THEME.colors.cardInner,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    marginBottom: 8,
-  },
-  createCustomBtnText: {
-    color: THEME.colors.textPrimary,
+    fontFamily: THEME.fonts.sans,
     fontSize: 12,
-    fontWeight: '700',
-  },
-  cancelModalBtn: {
-    backgroundColor: THEME.colors.cardInner,
-    paddingVertical: 9,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelModalBtnText: {
+    fontWeight: '500',
     color: THEME.colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '700',
+    marginTop: 2,
+  },
+  catalogDoneDots: {
+    flexDirection: 'row',
+    gap: 3,
   },
   inputMiniLabel: {
-    fontSize: 9,
+    fontFamily: THEME.fonts.sans,
+    fontSize: 10,
     fontWeight: '800',
     color: THEME.colors.textSecondary,
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
     marginBottom: 6,
   },
   modalTextInput: {
-    backgroundColor: THEME.colors.cardInner,
+    height: 52,
+    backgroundColor: THEME.colors.bg,
     color: THEME.colors.textPrimary,
+    fontFamily: THEME.fonts.sans,
     fontSize: 14,
     fontWeight: '700',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    borderRadius: THEME.radius.inner,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
-    marginBottom: 12,
+    marginBottom: 14,
   },
-  typePillsRow: {
+  typeSegmentRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-  },
-  typePill: {
-    flex: 1,
     backgroundColor: THEME.colors.cardInner,
+    borderRadius: THEME.radius.pill,
+    padding: 4,
+    gap: 4,
+    marginBottom: 14,
+  },
+  typeSegment: {
+    flex: 1,
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: THEME.radius.pill,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
   },
-  typePillActive: {
-    backgroundColor: THEME.colors.accent,
-    borderColor: THEME.colors.accent,
+  typeSegmentActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: THEME.colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
   },
-  typePillText: {
+  typeSegmentText: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '700',
     color: THEME.colors.textSecondary,
   },
-  typePillTextActive: {
-    color: THEME.colors.accentTextDark,
-  },
-  submitCreateBtn: {
-    backgroundColor: THEME.colors.accent,
-    paddingVertical: 13,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  submitCreateBtnText: {
-    color: THEME.colors.accentTextDark,
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 0.5,
+  typeSegmentTextActive: {
+    color: THEME.colors.textPrimary,
   },
 });

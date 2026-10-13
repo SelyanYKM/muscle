@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import { THEME } from '../theme';
 import { playRestTimerAlarm } from '../utils/audio';
 import { triggerLightHaptic, triggerTimerEndHaptic, triggerWarningHaptic } from '../utils/haptics';
@@ -26,10 +27,20 @@ interface RestTimerOverlayProps {
   exerciseName: string;
   nextSetNumber: number;
   nextWeight: number;
+  nextReps: number;
   onSkip: () => void;
   onFinish: () => void;
   /** Ferme le repos et annule la dernière série validée (accessible directement depuis cet écran). */
   onUndo?: () => void;
+}
+
+const RING_SIZE = 264;
+const RING_STROKE = 13;
+const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+function fmtKg(w: number): string {
+  return w % 1 === 0 ? String(w) : String(w).replace('.', ',');
 }
 
 export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
@@ -37,6 +48,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   exerciseName,
   nextSetNumber,
   nextWeight,
+  nextReps,
   onSkip,
   onFinish,
   onUndo,
@@ -150,8 +162,8 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     targetTimeRef.current += secs * 1000;
     const newRemaining = Math.max(0, Math.ceil((targetTimeRef.current - Date.now()) / 1000));
     setSecondsRemaining(newRemaining);
-    // Le total (dénominateur de la barre de progression) ne grandit que si on AJOUTE du temps ;
-    // retirer du temps raccourcit juste le repos restant sans faire "sauter" la barre.
+    // Le total (dénominateur de l'anneau) ne grandit que si on AJOUTE du temps ;
+    // retirer du temps raccourcit juste le repos restant sans faire "sauter" l'anneau.
     if (secs > 0) {
       setTotalSeconds((prev) => prev + secs);
     }
@@ -185,87 +197,96 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   const seconds = secondsRemaining % 60;
   const formattedTime = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
 
-  const progressPercent = totalSeconds > 0 ? (secondsRemaining / totalSeconds) * 100 : 0;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const totalSecs = totalSeconds % 60;
+  const formattedTotal = `${totalMinutes}:${totalSecs < 10 ? '0' : ''}${totalSecs}`;
+
+  const progressFraction = totalSeconds > 0 ? secondsRemaining / totalSeconds : 0;
+  const dashOffset = RING_CIRCUMFERENCE * (1 - progressFraction);
 
   return (
     <Modal visible transparent animationType="fade">
-      <View style={styles.backdrop}>
-        {/* Fond dégradé Focus Violet → Rest Blue, "verre" sur la séance en arrière-plan */}
+      <View style={styles.root}>
         <LinearGradient
-          colors={[THEME.colors.restGradientViolet, THEME.colors.restGradientBlue, THEME.colors.restGradientMist]}
+          colors={[THEME.colors.textPrimary, THEME.colors.accentDark, THEME.colors.accentStrong]}
           locations={[0, 0.55, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+          start={{ x: 0.15, y: 0 }}
+          end={{ x: 0.85, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
-        <View style={styles.backdropBlur} />
 
-        <Animated.View style={[styles.cardWrapper, { opacity: fadeAnim }]}>
-            <LinearGradient
-              colors={['rgba(255,255,255,0.94)', 'rgba(255,255,255,0.88)', 'rgba(255,255,255,0.92)']}
-              locations={[0, 0.45, 1]}
-              style={styles.container}
-            >
-              <Text style={styles.topSub}>RÉCUPÉRATION</Text>
+        <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+          <Text style={styles.topSub}>RÉCUPÉRATION</Text>
 
-              {/* Chronomètre Géant avec pulsation */}
-              <Animated.Text style={[styles.timeBig, { transform: [{ scale: pulseAnim }] }]}>
-                {formattedTime}
-              </Animated.Text>
+          {/* Anneau de progression avec chronomètre centré */}
+          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+            <Svg width={RING_SIZE} height={RING_SIZE}>
+              <Circle
+                cx={RING_SIZE / 2}
+                cy={RING_SIZE / 2}
+                r={RING_RADIUS}
+                stroke="rgba(255, 255, 255, 0.14)"
+                strokeWidth={RING_STROKE}
+                fill="none"
+              />
+              <Circle
+                cx={RING_SIZE / 2}
+                cy={RING_SIZE / 2}
+                r={RING_RADIUS}
+                stroke={THEME.colors.accent}
+                strokeWidth={RING_STROKE}
+                fill="none"
+                strokeLinecap="round"
+                strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
+                strokeDashoffset={dashOffset}
+                rotation={-90}
+                originX={RING_SIZE / 2}
+                originY={RING_SIZE / 2}
+              />
+            </Svg>
+            <View style={[StyleSheet.absoluteFill, styles.ringInner]}>
+              <Text style={styles.timeBig}>{formattedTime}</Text>
+              <Text style={styles.timeOf}>sur {formattedTotal}</Text>
+            </View>
+          </Animated.View>
 
-              {/* Jauge de progression */}
-              <View style={styles.progressBarBg}>
-                <LinearGradient
-                  colors={[THEME.colors.restGradientMist, THEME.colors.restGradientBlue]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={[styles.progressBarFill, { width: `${progressPercent}%` }]}
-                />
-              </View>
+          {/* Boutons d'ajustement du repos */}
+          <View style={styles.adjustRow}>
+            <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(-15)} activeOpacity={0.7}>
+              <Text style={styles.adjustBtnText}>−15s</Text>
+            </TouchableOpacity>
 
-              {/* Boutons d'ajustement du repos */}
-              <View style={styles.adjustRow}>
-                <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(-15)} activeOpacity={0.7}>
-                  <Text style={styles.adjustBtnText}>-15s</Text>
-                </TouchableOpacity>
+            <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(30)} activeOpacity={0.7}>
+              <Text style={styles.adjustBtnText}>+30s</Text>
+            </TouchableOpacity>
 
-                <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(30)} activeOpacity={0.7}>
-                  <Text style={styles.adjustBtnText}>+30s</Text>
-                </TouchableOpacity>
+            <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(60)} activeOpacity={0.7}>
+              <Text style={styles.adjustBtnText}>+60s</Text>
+            </TouchableOpacity>
+          </View>
 
-                <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(60)} activeOpacity={0.7}>
-                  <Text style={styles.adjustBtnText}>+60s</Text>
-                </TouchableOpacity>
-              </View>
+          {/* Teaser Prochaine Série */}
+          <View style={styles.nextSetInfoCard}>
+            <Text style={styles.nextSetLabel}>PROCHAINE SÉRIE</Text>
+            <Text style={styles.nextSetTitle} numberOfLines={1}>
+              {exerciseName}
+            </Text>
+            <Text style={styles.nextSetDetails}>
+              Série {nextSetNumber} · <Text style={styles.nextSetHighlight}>{fmtKg(nextWeight)} kg</Text> × {nextReps}
+            </Text>
+          </View>
 
-              {/* Teaser Prochaine Série */}
-              <LinearGradient
-                colors={['rgba(232,211,245,0.8)', 'rgba(220,233,242,0.72)']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.nextSetInfoCard}
-              >
-                <Text style={styles.nextSetLabel}>PROCHAINE SÉRIE</Text>
-                <Text style={styles.nextSetTitle} numberOfLines={1}>
-                  {exerciseName}
-                </Text>
-                <Text style={styles.nextSetDetails}>
-                  Série {nextSetNumber} • <Text style={styles.nextSetHighlight}>{nextWeight} kg</Text>
-                </Text>
-              </LinearGradient>
+          {/* Bouton Prêt */}
+          <TouchableOpacity style={styles.skipButton} onPress={handleSkip} activeOpacity={0.85}>
+            <Text style={styles.skipButtonText}>Je suis prêt</Text>
+          </TouchableOpacity>
 
-              {/* Bouton Passer */}
-              <TouchableOpacity style={styles.skipButton} onPress={handleSkip} activeOpacity={0.85}>
-                <Text style={styles.skipButtonText}>Je suis prêt (Passer)</Text>
-              </TouchableOpacity>
-
-              {/* Correction d'une erreur de validation, sans attendre la fin du repos */}
-              {onUndo && (
-                <TouchableOpacity style={styles.undoLink} onPress={handleUndo} activeOpacity={0.7}>
-                  <Text style={styles.undoLinkText}>Erreur ? Corriger la dernière série</Text>
-                </TouchableOpacity>
-              )}
-            </LinearGradient>
+          {/* Correction d'une erreur de validation, sans attendre la fin du repos */}
+          {onUndo && (
+            <TouchableOpacity style={styles.undoLink} onPress={handleUndo} activeOpacity={0.7}>
+              <Text style={styles.undoLinkText}>Erreur ? Corriger la dernière série</Text>
+            </TouchableOpacity>
+          )}
         </Animated.View>
       </View>
     </Modal>
@@ -273,140 +294,118 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
 };
 
 const styles = StyleSheet.create({
-  backdrop: {
+  root: {
     flex: 1,
-    justifyContent: 'center',
+  },
+  content: {
+    flex: 1,
     alignItems: 'center',
-    padding: 16,
-  },
-  backdropBlur: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(36, 26, 46, 0.42)',
-  },
-  cardWrapper: {
-    width: '100%',
-    maxWidth: 360,
-    borderRadius: 34,
-    overflow: 'hidden',
-    shadowColor: '#102A43',
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.35,
-    shadowRadius: 30,
-  },
-  container: {
-    borderRadius: 34,
-    padding: 24,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
+    paddingTop: 60,
+    paddingHorizontal: 24,
+    paddingBottom: 34,
+    gap: 22,
   },
   topSub: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
-    color: '#627D98',
-    letterSpacing: 1.5,
-    marginBottom: 4,
+    color: THEME.colors.accent,
+    letterSpacing: 2.4,
+  },
+  ringInner: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   timeBig: {
     fontFamily: THEME.fonts.serif,
-    fontSize: 60,
+    fontSize: 80,
     fontWeight: '600',
-    color: THEME.colors.restNumber,
-    letterSpacing: -1,
+    color: '#FFFFFF',
+    letterSpacing: -1.5,
+    fontVariant: ['tabular-nums'],
   },
-  progressBarBg: {
-    width: '100%',
-    height: 7,
-    backgroundColor: 'rgba(215, 228, 238, 0.85)',
-    borderRadius: 4,
-    marginVertical: 14,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 4,
+  timeOf: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.72)',
+    marginTop: 2,
   },
   adjustRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
+    gap: 10,
   },
   adjustBtn: {
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 999,
+    height: 44,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 16,
+    borderRadius: THEME.radius.pill,
     borderWidth: 1,
-    borderColor: 'rgba(206, 222, 235, 0.9)',
+    borderColor: 'rgba(255, 255, 255, 0.22)',
   },
   adjustBtnText: {
     fontFamily: THEME.fonts.sans,
-    color: THEME.colors.restNumber,
-    fontSize: 12,
-    fontWeight: '700',
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
   },
   nextSetInfoCard: {
     width: '100%',
-    borderRadius: 22,
-    padding: 16,
+    borderRadius: THEME.radius.card,
+    padding: 18,
     alignItems: 'center',
-    marginBottom: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
+    borderColor: 'rgba(255, 255, 255, 0.16)',
   },
   nextSetLabel: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: '800',
-    color: '#627D98',
+    color: THEME.colors.accent,
     letterSpacing: 1,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   nextSetTitle: {
     fontFamily: THEME.fonts.serif,
-    fontSize: 20,
+    fontSize: 21,
     fontWeight: '600',
-    color: '#102A43',
+    color: '#FFFFFF',
     textAlign: 'center',
   },
   nextSetDetails: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 12.5,
-    color: '#627D98',
-    marginTop: 3,
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.85)',
+    marginTop: 4,
     fontWeight: '600',
   },
   nextSetHighlight: {
-    color: THEME.colors.accentStrong,
+    color: THEME.colors.accent,
     fontWeight: '800',
   },
   skipButton: {
     width: '100%',
-    backgroundColor: THEME.colors.textPrimary,
-    paddingVertical: 15,
-    borderRadius: 999,
+    height: 56,
+    backgroundColor: THEME.colors.accent,
+    borderRadius: THEME.radius.pill,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   skipButtonText: {
     fontFamily: THEME.fonts.sans,
-    color: '#FFFFFF',
-    fontSize: 13,
+    color: THEME.colors.accentTextDark,
+    fontSize: 15,
     fontWeight: '800',
-    letterSpacing: 0.5,
   },
   undoLink: {
-    marginTop: 14,
     paddingVertical: 4,
   },
   undoLinkText: {
     fontFamily: THEME.fonts.sans,
-    color: '#627D98',
-    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 13,
     fontWeight: '700',
     textDecorationLine: 'underline',
   },

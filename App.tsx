@@ -1,4 +1,9 @@
-import { Manrope_700Bold } from '@expo-google-fonts/manrope';
+import {
+  Manrope_500Medium,
+  Manrope_600SemiBold,
+  Manrope_700Bold,
+  Manrope_800ExtraBold,
+} from '@expo-google-fonts/manrope';
 import { Petrona_600SemiBold } from '@expo-google-fonts/petrona';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
@@ -31,6 +36,7 @@ const EXACT_ALARM_TIP_METADATA_KEY = 'exact_alarm_tip_shown_v2';
 type ScreenState = 'SPLIT_SELECT' | 'LIVE' | 'SUMMARY' | 'HISTORY';
 
 interface WorkoutSummaryData {
+  workoutId: number;
   workoutName: string;
   durationMinutes: number;
   totalVolume: number;
@@ -45,7 +51,10 @@ export default function App() {
   const [isDbReady, setIsDbReady] = useState(false);
   const [fontsLoaded] = useFonts({
     Petrona_600SemiBold,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
     Manrope_700Bold,
+    Manrope_800ExtraBold,
   });
   const [currentScreen, setCurrentScreen] = useState<ScreenState>('SPLIT_SELECT');
 

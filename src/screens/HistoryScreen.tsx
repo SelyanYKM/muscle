@@ -1,8 +1,9 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
-  Modal,
+  Animated,
+  Easing,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,6 +11,10 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { BottomSheet } from '../components/BottomSheet';
+import { Dot } from '../components/Dot';
+import { Icon } from '../components/Icon';
 import {
   clearAllWorkoutLogs,
   deleteExerciseFromSession,
@@ -19,7 +24,7 @@ import {
   updateWorkoutSessionType,
 } from '../database/db';
 import { THEME } from '../theme';
-import { WorkoutLogEntry } from '../types';
+import { Feeling, WorkoutLogEntry } from '../types';
 import { exportHistoryAsText } from '../utils/exportHistory';
 import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
 
@@ -41,19 +46,85 @@ interface GroupedSession {
   exercises: GroupedExerciseLogs[];
 }
 
+interface MonthGroup {
+  label: string;
+  sessions: GroupedSession[];
+}
+
+const FEELING_LABEL: Record<Feeling, string> = { EASY: 'Facile', MEDIUM: 'Juste', HARD: 'Échec' };
+const FEELING_BG: Record<Feeling, string> = {
+  EASY: THEME.colors.feelingEasyBg,
+  MEDIUM: THEME.colors.feelingMediumBg,
+  HARD: THEME.colors.feelingHardBg,
+};
+const FEELING_INK: Record<Feeling, string> = {
+  EASY: THEME.colors.feelingEasyText,
+  MEDIUM: THEME.colors.feelingMediumText,
+  HARD: THEME.colors.feelingHardText,
+};
+
+function fmtKg(w: number): string {
+  return w % 1 === 0 ? String(w) : String(w).replace('.', ',');
+}
+
+function groupByMonth(sessions: GroupedSession[]): MonthGroup[] {
+  const groups: MonthGroup[] = [];
+  const indexByLabel = new Map<string, number>();
+
+  for (const session of sessions) {
+    const [y, m] = session.date.split('-').map(Number);
+    const label = new Date(y, m - 1, 1)
+      .toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+      .toUpperCase();
+
+    if (!indexByLabel.has(label)) {
+      indexByLabel.set(label, groups.length);
+      groups.push({ label, sessions: [] });
+    }
+    groups[indexByLabel.get(label)!].sessions.push(session);
+  }
+
+  return groups;
+}
+
+// Flèche pivotante (200ms) pour le chevron de chaque séance : un Animated.Value par
+// sessionKey, créé à la demande et conservé dans un ref pour survivre aux re-renders.
+function useChevronAnim() {
+  const animsRef = useRef<Map<string, Animated.Value>>(new Map());
+
+  const get = (key: string, expanded: boolean) => {
+    if (!animsRef.current.has(key)) {
+      animsRef.current.set(key, new Animated.Value(expanded ? 1 : 0));
+    }
+    return animsRef.current.get(key)!;
+  };
+
+  const animateTo = (key: string, expanded: boolean) => {
+    Animated.timing(get(key, expanded), {
+      toValue: expanded ? 1 : 0,
+      duration: 200,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  };
+
+  return { get, animateTo };
+}
+
 export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
   const [sessions, setSessions] = useState<GroupedSession[]>([]);
   const [expandedSessions, setExpandedSessions] = useState<{ [sessionKey: string]: boolean }>({});
   const [isExporting, setIsExporting] = useState(false);
+  const chevronAnim = useChevronAnim();
 
-  // Modal 1 : Édition globale de la séance (Programme Push / Pull / Legs)
+  // Feuille 1 : Édition globale de la séance (Programme Push / Pull / Legs)
   const [editingSession, setEditingSession] = useState<GroupedSession | null>(null);
   const [selectedTargetWorkoutId, setSelectedTargetWorkoutId] = useState<number>(1);
 
-  // Modal 2 : Édition détaillée d'un exercice dans une séance passée
+  // Feuille 2 : Édition détaillée d'un exercice dans une séance passée
   const [editingExSession, setEditingExSession] = useState<{ session: GroupedSession; ex: GroupedExerciseLogs } | null>(null);
   const [editExName, setEditExName] = useState<string>('');
-  const [editExSets, setEditExSets] = useState<{ setNumber: number; weight: number; repsTarget: number; repsDone: number; feeling: 'EASY' | 'MEDIUM' | 'HARD' }[]>([]);
+  const [editExSets, setEditExSets] = useState<{ setNumber: number; weight: number; repsTarget: number; repsDone: number; feeling: Feeling }[]>([]);
 
   useEffect(() => {
     loadHierarchicalLogs();
@@ -111,10 +182,11 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
 
   const toggleSessionExpand = (sessionKey: string) => {
     triggerLightHaptic();
-    setExpandedSessions((prev) => ({
-      ...prev,
-      [sessionKey]: !prev[sessionKey],
-    }));
+    setExpandedSessions((prev) => {
+      const nextExpanded = !prev[sessionKey];
+      chevronAnim.animateTo(sessionKey, nextExpanded);
+      return { ...prev, [sessionKey]: nextExpanded };
+    });
   };
 
   const promptClearHistory = () => {
@@ -191,7 +263,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
     );
   };
 
-  // Ouvrir le modal d'édition d'un exercice dans l'historique
+  // Ouvrir la feuille d'édition d'un exercice dans l'historique
   const openEditExerciseModal = (session: GroupedSession, ex: GroupedExerciseLogs) => {
     triggerLightHaptic();
     setEditingExSession({ session, ex });
@@ -202,7 +274,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
         weight: s.weight,
         repsTarget: s.repsTarget || 8,
         repsDone: s.repsDone,
-        feeling: s.feeling as 'EASY' | 'MEDIUM' | 'HARD',
+        feeling: s.feeling as Feeling,
       }))
     );
   };
@@ -231,7 +303,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
     });
   };
 
-  const setSetFeeling = (setIdx: number, feeling: 'EASY' | 'MEDIUM' | 'HARD') => {
+  const setSetFeeling = (setIdx: number, feeling: Feeling) => {
     triggerLightHaptic();
     setEditExSets((prev) => {
       const updated = [...prev];
@@ -243,7 +315,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
   const addSetToEx = () => {
     triggerLightHaptic();
     setEditExSets((prev) => {
-      const last = prev[prev.length - 1] || { weight: 40, repsTarget: 8, repsDone: 8, feeling: 'MEDIUM' };
+      const last = prev[prev.length - 1] || { weight: 40, repsTarget: 8, repsDone: 8, feeling: 'MEDIUM' as Feeling };
       return [
         ...prev,
         {
@@ -327,6 +399,8 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
     }
   };
 
+  const monthGroups = groupByMonth(sessions);
+
   return (
     <View style={styles.root}>
       <LinearGradient
@@ -336,11 +410,12 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
         end={{ x: 0, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
+      <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* En-tête avec bouton Retour & Option Clear au clic long */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.8}>
-          <Text style={styles.backButtonText}>← Retour</Text>
+          <Icon name="arrow-left" size={18} color={THEME.colors.textPrimary} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -357,290 +432,263 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
           disabled={isExporting || sessions.length === 0}
           activeOpacity={0.8}
         >
-          <Text style={styles.exportButtonText}>{isExporting ? '...' : '⇧ Exporter'}</Text>
+          <Text style={styles.exportButtonText}>{isExporting ? '...' : 'Exporter'}</Text>
         </TouchableOpacity>
       </View>
 
       {sessions.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyEmoji}>📜</Text>
           <Text style={styles.emptyText}>Aucune séance enregistrée.</Text>
           <Text style={styles.emptySubtext}>
             Complète ton premier entraînement pour voir tes charges évoluer !
           </Text>
         </View>
       ) : (
-        <View style={styles.sessionList}>
-          {sessions.map((session, sIdx) => {
-            const sessionKey = `${session.date}_${session.workoutId}`;
-            const isExpanded = !!expandedSessions[sessionKey];
+        <View style={{ gap: 24 }}>
+          {monthGroups.map((group) => {
+            const monthVolume = group.sessions.reduce((acc, s) => acc + s.totalVolume, 0);
 
             return (
-              <View key={sIdx} style={styles.sessionCard}>
-                {/* En-tête de la séance */}
-                <TouchableOpacity
-                  style={styles.sessionHeader}
-                  onPress={() => toggleSessionExpand(sessionKey)}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.sessionHeaderLeft}>
-                    <View style={styles.dateBadge}>
-                      <Text style={styles.dateBadgeText}>{formatDate(session.date)}</Text>
-                    </View>
-                    <Text style={styles.sessionWorkoutTitle} numberOfLines={1}>
-                      {session.workoutName}
-                    </Text>
-                    <Text style={styles.sessionMetricsSummary}>
-                      {session.exercises.length} exos • {session.totalSets} séries •{' '}
-                      <Text style={styles.volumeHighlight}>{Math.round(session.totalVolume)} kg vol.</Text>
-                    </Text>
-                  </View>
+              <View key={group.label} style={{ gap: 10 }}>
+                <View style={styles.monthHeaderRow}>
+                  <Text style={styles.monthLabel}>{group.label}</Text>
+                  <Text style={styles.monthSummary}>
+                    {group.sessions.length} séance{group.sessions.length > 1 ? 's' : ''} · {Math.round(monthVolume).toLocaleString('fr-FR')} kg
+                  </Text>
+                </View>
 
-                  <View style={styles.sessionHeaderActions}>
-                    <TouchableOpacity
-                      style={styles.editSessionBtn}
-                      onPress={() => openEditSessionModal(session)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.editSessionIcon}>✏️</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.expandChevron}>{isExpanded ? '▲' : '▼'}</Text>
-                  </View>
-                </TouchableOpacity>
+                <View style={styles.monthContainer}>
+                  {group.sessions.map((session, sIdx) => {
+                    const sessionKey = `${session.date}_${session.workoutId}`;
+                    const isExpanded = !!expandedSessions[sessionKey];
+                    const split = THEME.splits[session.workoutId];
+                    const rotation = chevronAnim.get(sessionKey, isExpanded).interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['0deg', '180deg'],
+                    });
 
-                {/* Contenu détaillé */}
-                {isExpanded && (
-                  <View style={styles.sessionDetailsBox}>
-                    {session.exercises.map((ex, exIdx) => (
-                      <View key={exIdx} style={styles.exerciseDetailRow}>
-                        <View style={styles.exerciseHeaderRow}>
-                          <Text style={styles.exerciseDetailName}>{ex.exerciseName}</Text>
-                          <TouchableOpacity
-                            style={styles.editExBtn}
-                            onPress={() => openEditExerciseModal(session, ex)}
-                            activeOpacity={0.7}
+                    return (
+                      <View key={sIdx} style={[styles.sessionRow, sIdx > 0 && styles.sessionRowDivider]}>
+                        <TouchableOpacity
+                          style={styles.sessionHeader}
+                          onPress={() => toggleSessionExpand(sessionKey)}
+                          activeOpacity={0.8}
+                        >
+                          <LinearGradient
+                            colors={split.gradient}
+                            start={{ x: 0.1, y: 0 }}
+                            end={{ x: 0.9, y: 1 }}
+                            style={styles.letterBadge}
                           >
-                            <Text style={styles.editExIcon}>✏️ Modifier</Text>
-                          </TouchableOpacity>
-                        </View>
+                            <Text style={[styles.letterBadgeText, { color: split.fg }]}>
+                              {session.workoutName.charAt(0)}
+                            </Text>
+                          </LinearGradient>
 
-                        <View style={styles.setsChipsRow}>
-                          {ex.sets.map((set, setIdx) => (
-                            <View key={setIdx} style={styles.setChip}>
-                              <Text style={styles.setChipText}>
-                                S{set.setNumber}: {set.repsDone} reps @ {set.weight}kg{' '}
-                                {set.feeling === 'EASY' ? '🟢' : set.feeling === 'MEDIUM' ? '🟠' : '🔴'}
-                              </Text>
-                            </View>
-                          ))}
-                        </View>
+                          <View style={styles.sessionHeaderLeft}>
+                            <Text style={styles.dateText}>{formatDate(session.date)}</Text>
+                            <Text style={styles.sessionWorkoutTitle} numberOfLines={1}>
+                              {session.workoutName.split(' (')[0]}
+                            </Text>
+                            <Text style={styles.sessionMetricsSummary}>
+                              {session.exercises.length} exos · {session.totalSets} séries ·{' '}
+                              <Text style={styles.volumeHighlight}>{Math.round(session.totalVolume).toLocaleString('fr-FR')} kg</Text>
+                            </Text>
+                          </View>
+
+                          <Animated.View style={[styles.chevronCircle, { transform: [{ rotate: rotation }] }]}>
+                            <Icon name="chevron-down" size={16} color={THEME.colors.textSecondary} />
+                          </Animated.View>
+                        </TouchableOpacity>
+
+                        {/* Contenu détaillé */}
+                        {isExpanded && (
+                          <View style={styles.sessionDetailsBox}>
+                            {session.exercises.map((ex, exIdx) => (
+                              <View key={exIdx} style={styles.exerciseDetailRow}>
+                                <View style={styles.exerciseHeaderRow}>
+                                  <Text style={styles.exerciseDetailName}>{ex.exerciseName}</Text>
+                                  <TouchableOpacity
+                                    onPress={() => openEditExerciseModal(session, ex)}
+                                    activeOpacity={0.7}
+                                  >
+                                    <Text style={styles.editExLink}>Modifier</Text>
+                                  </TouchableOpacity>
+                                </View>
+
+                                <View style={styles.setsChipsRow}>
+                                  {ex.sets.map((set, setIdx) => (
+                                    <View key={setIdx} style={styles.setChip}>
+                                      <Dot color={FEELING_INK[set.feeling as Feeling]} size={7} />
+                                      <Text style={styles.setChipText}>
+                                        S{set.setNumber} · {set.repsDone} × {fmtKg(set.weight)}kg
+                                      </Text>
+                                    </View>
+                                  ))}
+                                </View>
+                              </View>
+                            ))}
+
+                            <TouchableOpacity
+                              style={styles.editSessionFooterBtn}
+                              onPress={() => openEditSessionModal(session)}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={styles.editSessionFooterText}>Modifier la séance</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
                       </View>
-                    ))}
-                  </View>
-                )}
+                    );
+                  })}
+                </View>
               </View>
             );
           })}
+
+          {/* Légende des pastilles */}
+          <View style={styles.legendRow}>
+            {(['EASY', 'MEDIUM', 'HARD'] as Feeling[]).map((f) => (
+              <View key={f} style={styles.legendItem}>
+                <Dot color={FEELING_INK[f]} size={8} />
+                <Text style={styles.legendText}>{FEELING_LABEL[f]}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       )}
 
-      {/* MODAL 1 : MODIFIER LE PROGRAMME DE LA SÉANCE (PUSH / PULL / LEGS) */}
-      <Modal visible={!!editingSession} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.editModalCard}>
-            <Text style={styles.modalTitle}>Modifier la séance</Text>
-            <Text style={styles.modalSubtitle}>
-              Séance du {editingSession ? formatDate(editingSession.date) : ''}
-            </Text>
+      {/* FEUILLE : MODIFIER LE PROGRAMME DE LA SÉANCE (PUSH / PULL / LEGS) */}
+      <BottomSheet visible={!!editingSession} onClose={() => setEditingSession(null)} maxHeightPercent={60}>
+        <Text style={styles.sheetTitle}>Modifier la séance</Text>
+        <Text style={styles.sheetSubtitle}>
+          Séance du {editingSession ? formatDate(editingSession.date) : ''}
+        </Text>
 
-            <Text style={styles.inputSectionLabel}>PROGRAMME ASSOCIÉ</Text>
-            <View style={styles.programToggleRow}>
-              <TouchableOpacity
-                style={[
-                  styles.programBtn,
-                  selectedTargetWorkoutId === 1 && styles.programBtnActive,
-                ]}
-                onPress={() => setSelectedTargetWorkoutId(1)}
-                activeOpacity={0.8}
-              >
-                <Text
-                  style={[
-                    styles.programBtnText,
-                    selectedTargetWorkoutId === 1 && styles.programBtnTextActive,
-                  ]}
-                >
-                  Push
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.programBtn,
-                  selectedTargetWorkoutId === 2 && styles.programBtnActive,
-                ]}
-                onPress={() => setSelectedTargetWorkoutId(2)}
-                activeOpacity={0.8}
-              >
-                <Text
-                  style={[
-                    styles.programBtnText,
-                    selectedTargetWorkoutId === 2 && styles.programBtnTextActive,
-                  ]}
-                >
-                  Pull
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.programBtn,
-                  selectedTargetWorkoutId === 3 && styles.programBtnActive,
-                ]}
-                onPress={() => setSelectedTargetWorkoutId(3)}
-                activeOpacity={0.8}
-              >
-                <Text
-                  style={[
-                    styles.programBtnText,
-                    selectedTargetWorkoutId === 3 && styles.programBtnTextActive,
-                  ]}
-                >
-                  Legs
-                </Text>
-              </TouchableOpacity>
-            </View>
-
+        <Text style={styles.inputSectionLabel}>PROGRAMME ASSOCIÉ</Text>
+        <View style={styles.programToggleRow}>
+          {[{ id: 1, label: 'Push' }, { id: 2, label: 'Pull' }, { id: 3, label: 'Legs' }].map((p) => (
             <TouchableOpacity
-              style={styles.saveEditBtn}
-              onPress={saveEditedSessionType}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.saveEditBtnText}>ENREGISTRER LA MODIFICATION</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.deleteSessionBtn}
-              onPress={confirmDeleteSession}
+              key={p.id}
+              style={[styles.programBtn, selectedTargetWorkoutId === p.id && styles.programBtnActive]}
+              onPress={() => setSelectedTargetWorkoutId(p.id)}
               activeOpacity={0.8}
             >
-              <Text style={styles.deleteSessionBtnText}>Supprimer cette séance</Text>
+              <Text style={[styles.programBtnText, selectedTargetWorkoutId === p.id && styles.programBtnTextActive]}>
+                {p.label}
+              </Text>
             </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.cancelModalBtn}
-              onPress={() => setEditingSession(null)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.cancelModalBtnText}>Fermer</Text>
-            </TouchableOpacity>
-          </View>
+          ))}
         </View>
-      </Modal>
 
-      {/* MODAL 2 : MODIFIER L'EXERCICE & LES SÉRIES DANS L'HISTORIQUE */}
-      <Modal visible={!!editingExSession} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={styles.editExModalCard}>
-            <Text style={styles.modalTitle}>Modifier l'exercice</Text>
-            <Text style={styles.modalSubtitle}>
-              Séance du {editingExSession ? formatDate(editingExSession.session.date) : ''}
-            </Text>
+        <TouchableOpacity style={styles.primaryBtn} onPress={saveEditedSessionType} activeOpacity={0.85}>
+          <Text style={styles.primaryBtnText}>Enregistrer la modification</Text>
+        </TouchableOpacity>
 
-            <Text style={styles.inputSectionLabel}>NOM DE L'EXERCICE</Text>
-            <TextInput
-              style={styles.modalTextInput}
-              value={editExName}
-              onChangeText={setEditExName}
-              placeholder="Nom de l'exercice"
-              placeholderTextColor={THEME.colors.textMuted}
-            />
+        <TouchableOpacity style={styles.destructiveBtn} onPress={confirmDeleteSession} activeOpacity={0.8}>
+          <Text style={styles.destructiveBtnText}>Supprimer cette séance</Text>
+        </TouchableOpacity>
 
-            <Text style={styles.inputSectionLabel}>SÉRIES EFFECTUÉES</Text>
-            <ScrollView style={styles.setsEditScroll} showsVerticalScrollIndicator={false}>
-              {editExSets.map((s, idx) => (
-                <View key={idx} style={styles.setEditCard}>
-                  <View style={styles.setEditTop}>
-                    <Text style={styles.setNumberBadge}>Série {s.setNumber}</Text>
-                    {editExSets.length > 1 && (
-                      <TouchableOpacity onPress={() => removeSetFromEx(idx)}>
-                        <Text style={styles.deleteSetBtn}>✕ Suppr</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+        <TouchableOpacity style={styles.outlineBtn} onPress={() => setEditingSession(null)} activeOpacity={0.8}>
+          <Text style={styles.outlineBtnText}>Fermer</Text>
+        </TouchableOpacity>
+      </BottomSheet>
 
-                  {/* Ligne Poids & Reps */}
-                  <View style={styles.steppersRow}>
-                    <View style={styles.stepperBlock}>
-                      <Text style={styles.stepperLabel}>POIDS</Text>
-                      <View style={styles.stepperWrap}>
-                        <TouchableOpacity style={styles.stepBtn} onPress={() => adjustSetWeight(idx, -2.5)}>
-                          <Text style={styles.stepBtnText}>-2.5</Text>
-                        </TouchableOpacity>
-                        <Text style={styles.stepValText}>{s.weight}kg</Text>
-                        <TouchableOpacity style={styles.stepBtn} onPress={() => adjustSetWeight(idx, 2.5)}>
-                          <Text style={styles.stepBtnText}>+2.5</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
+      {/* FEUILLE : MODIFIER L'EXERCICE & LES SÉRIES DANS L'HISTORIQUE */}
+      <BottomSheet visible={!!editingExSession} onClose={() => setEditingExSession(null)}>
+        <Text style={styles.sheetTitle}>Modifier l'exercice</Text>
+        <Text style={styles.sheetSubtitle}>
+          Séance du {editingExSession ? formatDate(editingExSession.session.date) : ''}
+        </Text>
 
-                    <View style={styles.stepperBlock}>
-                      <Text style={styles.stepperLabel}>REPS</Text>
-                      <View style={styles.stepperWrap}>
-                        <TouchableOpacity style={styles.stepBtn} onPress={() => adjustSetReps(idx, -1)}>
-                          <Text style={styles.stepBtnText}>-1</Text>
-                        </TouchableOpacity>
-                        <Text style={styles.stepValText}>{s.repsDone}</Text>
-                        <TouchableOpacity style={styles.stepBtn} onPress={() => adjustSetReps(idx, 1)}>
-                          <Text style={styles.stepBtnText}>+1</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  </View>
+        <Text style={styles.inputSectionLabel}>NOM DE L'EXERCICE</Text>
+        <TextInput
+          style={styles.modalTextInput}
+          value={editExName}
+          onChangeText={setEditExName}
+          placeholder="Nom de l'exercice"
+          placeholderTextColor={THEME.colors.textMuted}
+        />
 
-                  {/* Ressenti */}
-                  <View style={styles.feelingRow}>
-                    <TouchableOpacity
-                      style={[styles.feelBtn, s.feeling === 'EASY' && styles.feelBtnEasy]}
-                      onPress={() => setSetFeeling(idx, 'EASY')}
-                    >
-                      <Text style={styles.feelBtnText}>🟢 Facile</Text>
+        <Text style={styles.inputSectionLabel}>SÉRIES EFFECTUÉES</Text>
+        <ScrollView style={styles.setsEditScroll} showsVerticalScrollIndicator={false}>
+          {editExSets.map((s, idx) => (
+            <View key={idx} style={styles.setEditCard}>
+              <View style={styles.setEditTop}>
+                <Text style={styles.setNumberBadge}>Série {s.setNumber}</Text>
+                {editExSets.length > 1 && (
+                  <TouchableOpacity onPress={() => removeSetFromEx(idx)}>
+                    <Text style={styles.deleteSetLink}>Retirer</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Ligne Poids & Reps */}
+              <View style={styles.steppersRow}>
+                <View style={styles.stepperBlock}>
+                  <Text style={styles.stepperLabel}>POIDS</Text>
+                  <View style={styles.stepperWrap}>
+                    <TouchableOpacity style={styles.stepBtn} onPress={() => adjustSetWeight(idx, -2.5)}>
+                      <Text style={styles.stepBtnText}>−2,5</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.feelBtn, s.feeling === 'MEDIUM' && styles.feelBtnMedium]}
-                      onPress={() => setSetFeeling(idx, 'MEDIUM')}
-                    >
-                      <Text style={styles.feelBtnText}>🟠 Juste</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.feelBtn, s.feeling === 'HARD' && styles.feelBtnHard]}
-                      onPress={() => setSetFeeling(idx, 'HARD')}
-                    >
-                      <Text style={styles.feelBtnText}>🔴 Échec</Text>
+                    <Text style={styles.stepValText}>{fmtKg(s.weight)}kg</Text>
+                    <TouchableOpacity style={styles.stepBtn} onPress={() => adjustSetWeight(idx, 2.5)}>
+                      <Text style={styles.stepBtnText}>+2,5</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
-              ))}
-            </ScrollView>
 
-            <TouchableOpacity style={styles.addSetBtn} onPress={addSetToEx} activeOpacity={0.8}>
-              <Text style={styles.addSetBtnText}>+ Ajouter une série</Text>
-            </TouchableOpacity>
+                <View style={styles.stepperBlock}>
+                  <Text style={styles.stepperLabel}>REPS</Text>
+                  <View style={styles.stepperWrap}>
+                    <TouchableOpacity style={styles.stepBtn} onPress={() => adjustSetReps(idx, -1)}>
+                      <Text style={styles.stepBtnText}>−1</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.stepValText}>{s.repsDone}</Text>
+                    <TouchableOpacity style={styles.stepBtn} onPress={() => adjustSetReps(idx, 1)}>
+                      <Text style={styles.stepBtnText}>+1</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
 
-            <TouchableOpacity style={styles.saveEditBtn} onPress={saveEditedExercise} activeOpacity={0.85}>
-              <Text style={styles.saveEditBtnText}>ENREGISTRER L'EXERCICE</Text>
-            </TouchableOpacity>
+              {/* Ressenti */}
+              <View style={styles.feelingRow}>
+                {(['EASY', 'MEDIUM', 'HARD'] as Feeling[]).map((f) => (
+                  <TouchableOpacity
+                    key={f}
+                    style={[styles.feelBtn, s.feeling === f && { backgroundColor: FEELING_BG[f] }]}
+                    onPress={() => setSetFeeling(idx, f)}
+                  >
+                    <Dot color={FEELING_INK[f]} size={7} />
+                    <Text style={[styles.feelBtnText, s.feeling === f && { color: FEELING_INK[f] }]}>
+                      {FEELING_LABEL[f]}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          ))}
+        </ScrollView>
 
-            <TouchableOpacity style={styles.deleteSessionBtn} onPress={confirmDeleteExerciseFromSession} activeOpacity={0.8}>
-              <Text style={styles.deleteSessionBtnText}>Retirer cet exercice de la séance</Text>
-            </TouchableOpacity>
+        <TouchableOpacity style={styles.addSetBtn} onPress={addSetToEx} activeOpacity={0.8}>
+          <Text style={styles.addSetBtnText}>+ Ajouter une série</Text>
+        </TouchableOpacity>
 
-            <TouchableOpacity style={styles.cancelModalBtn} onPress={() => setEditingExSession(null)} activeOpacity={0.8}>
-              <Text style={styles.cancelModalBtnText}>Fermer</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        <TouchableOpacity style={styles.primaryBtn} onPress={saveEditedExercise} activeOpacity={0.85}>
+          <Text style={styles.primaryBtnText}>Enregistrer l'exercice</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.destructiveBtn} onPress={confirmDeleteExerciseFromSession} activeOpacity={0.8}>
+          <Text style={styles.destructiveBtnText}>Retirer cet exercice de la séance</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.outlineBtn} onPress={() => setEditingExSession(null)} activeOpacity={0.8}>
+          <Text style={styles.outlineBtnText}>Fermer</Text>
+        </TouchableOpacity>
+      </BottomSheet>
       </ScrollView>
+      </SafeAreaView>
     </View>
   );
 };
@@ -650,50 +698,53 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: THEME.colors.bg,
   },
+  safeArea: {
+    flex: 1,
+  },
   container: {
     flex: 1,
   },
   content: {
-    paddingHorizontal: 16,
-    paddingTop: 50,
-    paddingBottom: 40,
+    paddingHorizontal: 18,
+    paddingTop: 48,
+    paddingBottom: 32,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 18,
+    marginBottom: 22,
+    gap: 12,
   },
   backButton: {
-    backgroundColor: THEME.colors.cardBg,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-  },
-  backButtonText: {
-    color: THEME.colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '700',
+    borderColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   titleWrapper: {
     flex: 1,
-    marginLeft: 12,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '900',
+    fontFamily: THEME.fonts.serif,
+    fontSize: 28,
+    fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
   exportButton: {
-    backgroundColor: THEME.colors.cardBg,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 8,
+    height: 40,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    paddingHorizontal: 16,
+    borderRadius: THEME.radius.pill,
     borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: '#FFFFFF',
   },
   exportButtonText: {
+    fontFamily: THEME.fonts.sans,
     color: THEME.colors.textPrimary,
     fontSize: 12,
     fontWeight: '700',
@@ -704,11 +755,8 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
     paddingHorizontal: 20,
   },
-  emptyEmoji: {
-    fontSize: 40,
-    marginBottom: 10,
-  },
   emptyText: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 15,
     fontWeight: '700',
     color: THEME.colors.textPrimary,
@@ -716,222 +764,233 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   emptySubtext: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 12,
     color: THEME.colors.textSecondary,
     textAlign: 'center',
     lineHeight: 16,
   },
-  sessionList: {
-    gap: 10,
+  monthHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    paddingHorizontal: 4,
   },
-  sessionCard: {
-    backgroundColor: THEME.colors.cardBg,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    overflow: 'hidden',
+  monthLabel: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
+    fontWeight: '800',
+    color: THEME.colors.textSecondary,
+    letterSpacing: 0.8,
+  },
+  monthSummary: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
+    fontWeight: '700',
+    color: THEME.colors.textSecondary,
+  },
+  monthContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.82)',
+    borderRadius: THEME.radius.card,
+  },
+  sessionRow: {},
+  sessionRowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: THEME.colors.hairline,
   },
   sessionHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
+    gap: 12,
+    padding: 14,
+  },
+  letterBadge: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  letterBadgeText: {
+    fontFamily: THEME.fonts.serif,
+    fontSize: 20,
+    fontWeight: '700',
   },
   sessionHeaderLeft: {
     flex: 1,
-    marginRight: 10,
   },
-  sessionHeaderActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  editSessionBtn: {
-    backgroundColor: THEME.colors.cardInner,
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-  },
-  editSessionIcon: {
-    fontSize: 11,
-  },
-  dateBadge: {
-    backgroundColor: THEME.colors.cardInner,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginBottom: 4,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-  },
-  dateBadgeText: {
+  dateText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
+    fontWeight: '700',
     color: THEME.colors.textSecondary,
-    fontSize: 10,
-    fontWeight: '800',
-    textTransform: 'uppercase',
+    marginBottom: 1,
   },
   sessionWorkoutTitle: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontFamily: THEME.fonts.serif,
+    fontSize: 20,
+    fontWeight: '600',
     color: THEME.colors.textPrimary,
-    marginBottom: 2,
   },
   sessionMetricsSummary: {
-    fontSize: 11,
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
     color: THEME.colors.textSecondary,
     fontWeight: '600',
+    marginTop: 2,
   },
   volumeHighlight: {
     color: THEME.colors.textPrimary,
     fontWeight: '800',
   },
-  expandChevron: {
-    color: THEME.colors.textMuted,
-    fontSize: 11,
-    fontWeight: '900',
+  chevronCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: THEME.colors.cardInner,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   sessionDetailsBox: {
-    borderTopWidth: 1,
-    borderTopColor: THEME.colors.cardBorder,
-    backgroundColor: THEME.colors.cardInner,
-    padding: 10,
-    gap: 8,
+    backgroundColor: '#F2F5FA',
+    borderRadius: 16,
+    marginHorizontal: 12,
+    marginBottom: 12,
+    padding: 12,
+    gap: 10,
   },
   exerciseDetailRow: {
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
-    paddingBottom: 8,
+    gap: 6,
   },
   exerciseHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
   },
   exerciseDetailName: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
     color: THEME.colors.textPrimary,
     flex: 1,
   },
-  editExBtn: {
-    backgroundColor: THEME.colors.cardBg,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-  },
-  editExIcon: {
-    fontSize: 10,
+  editExLink: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
     fontWeight: '700',
-    color: THEME.colors.accent,
+    color: THEME.colors.accentStrong,
   },
   setsChipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 4,
+    gap: 5,
   },
   setChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     backgroundColor: THEME.colors.cardBg,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: THEME.radius.pill,
   },
   setChipText: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 10,
     fontWeight: '700',
     color: THEME.colors.textSecondary,
   },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(9, 9, 11, 0.94)',
+  editSessionFooterBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 2,
+  },
+  editSessionFooterText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
+    fontWeight: '700',
+    color: THEME.colors.accentStrong,
+  },
+  legendRow: {
+    flexDirection: 'row',
     justifyContent: 'center',
+    gap: 20,
+    paddingTop: 4,
+  },
+  legendItem: {
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    gap: 6,
   },
-  editModalCard: {
-    width: '100%',
-    maxWidth: 340,
-    backgroundColor: THEME.colors.cardBg,
-    borderRadius: 18,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+  legendText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
+    fontWeight: '600',
+    color: THEME.colors.textSecondary,
   },
-  editExModalCard: {
-    width: '100%',
-    maxWidth: 360,
-    maxHeight: '88%',
-    backgroundColor: THEME.colors.cardBg,
-    borderRadius: 18,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: '900',
+  sheetTitle: {
+    fontFamily: THEME.fonts.serif,
+    fontSize: 26,
+    fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
-  modalSubtitle: {
+  sheetSubtitle: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 12,
     color: THEME.colors.textSecondary,
     fontWeight: '600',
     marginTop: 2,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   inputSectionLabel: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 10,
     fontWeight: '800',
     color: THEME.colors.textSecondary,
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
     marginBottom: 6,
   },
   modalTextInput: {
-    backgroundColor: THEME.colors.cardInner,
+    height: 52,
+    backgroundColor: THEME.colors.bg,
     color: THEME.colors.textPrimary,
+    fontFamily: THEME.fonts.sans,
     fontSize: 14,
     fontWeight: '700',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    borderRadius: THEME.radius.inner,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   programToggleRow: {
     flexDirection: 'row',
-    gap: 8,
+    backgroundColor: THEME.colors.cardInner,
+    borderRadius: THEME.radius.pill,
+    padding: 4,
+    gap: 4,
     marginBottom: 16,
   },
   programBtn: {
     flex: 1,
-    backgroundColor: THEME.colors.cardInner,
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: THEME.radius.pill,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
   },
   programBtnActive: {
-    backgroundColor: THEME.colors.accent,
-    borderColor: THEME.colors.accent,
+    backgroundColor: '#FFFFFF',
+    shadowColor: THEME.colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
   },
   programBtnText: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
     color: THEME.colors.textSecondary,
   },
   programBtnTextActive: {
-    color: THEME.colors.accentTextDark,
+    color: THEME.colors.textPrimary,
   },
   setsEditScroll: {
     maxHeight: 220,
@@ -939,11 +998,9 @@ const styles = StyleSheet.create({
   },
   setEditCard: {
     backgroundColor: THEME.colors.cardInner,
-    borderRadius: 10,
+    borderRadius: THEME.radius.inner,
     padding: 10,
     marginBottom: 8,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
   },
   setEditTop: {
     flexDirection: 'row',
@@ -952,13 +1009,15 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   setNumberBadge: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 11,
     fontWeight: '800',
     color: THEME.colors.textPrimary,
   },
-  deleteSetBtn: {
-    color: '#EF4444',
-    fontSize: 10,
+  deleteSetLink: {
+    fontFamily: THEME.fonts.sans,
+    color: THEME.colors.feelingHardText,
+    fontSize: 11,
     fontWeight: '700',
   },
   steppersRow: {
@@ -970,7 +1029,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stepperLabel: {
-    fontSize: 8,
+    fontFamily: THEME.fonts.sans,
+    fontSize: 9,
     fontWeight: '800',
     color: THEME.colors.textSecondary,
     marginBottom: 3,
@@ -979,18 +1039,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: THEME.colors.cardBg,
-    borderRadius: 6,
+    borderRadius: THEME.radius.inner,
     padding: 2,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
   },
   stepBtn: {
-    width: 32,
-    height: 28,
+    width: 36,
+    height: 30,
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepBtnText: {
+    fontFamily: THEME.fonts.sans,
     color: THEME.colors.textPrimary,
     fontSize: 11,
     fontWeight: '800',
@@ -998,7 +1057,8 @@ const styles = StyleSheet.create({
   stepValText: {
     flex: 1,
     textAlign: 'center',
-    color: THEME.colors.accent,
+    fontFamily: THEME.fonts.sans,
+    color: THEME.colors.accentStrong,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -1008,80 +1068,70 @@ const styles = StyleSheet.create({
   },
   feelBtn: {
     flex: 1,
-    backgroundColor: THEME.colors.cardBg,
-    paddingVertical: 5,
-    borderRadius: 6,
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-  },
-  feelBtnEasy: {
-    backgroundColor: THEME.colors.feelingEasyBg,
-    borderColor: THEME.colors.feelingEasyBorder,
-  },
-  feelBtnMedium: {
-    backgroundColor: THEME.colors.feelingMediumBg,
-    borderColor: THEME.colors.feelingMediumBorder,
-  },
-  feelBtnHard: {
-    backgroundColor: THEME.colors.feelingHardBg,
-    borderColor: THEME.colors.feelingHardBorder,
+    gap: 5,
+    backgroundColor: THEME.colors.cardBg,
+    paddingVertical: 7,
+    borderRadius: THEME.radius.inner,
   },
   feelBtnText: {
-    fontSize: 9,
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
     fontWeight: '700',
-    color: THEME.colors.textPrimary,
+    color: THEME.colors.textSecondary,
   },
   addSetBtn: {
     backgroundColor: THEME.colors.cardInner,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: 10,
+    borderRadius: THEME.radius.pill,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
     marginBottom: 8,
   },
   addSetBtnText: {
+    fontFamily: THEME.fonts.sans,
     color: THEME.colors.textPrimary,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
   },
-  saveEditBtn: {
-    backgroundColor: THEME.colors.accent,
-    paddingVertical: 12,
-    borderRadius: 10,
+  primaryBtn: {
+    backgroundColor: THEME.colors.textPrimary,
+    paddingVertical: 15,
+    borderRadius: THEME.radius.pill,
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
-  saveEditBtnText: {
-    color: THEME.colors.accentTextDark,
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  deleteSessionBtn: {
-    backgroundColor: '#2D1216',
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#EF4444',
-    marginBottom: 6,
-  },
-  deleteSessionBtnText: {
-    color: '#EF4444',
-    fontSize: 11,
+  primaryBtnText: {
+    fontFamily: THEME.fonts.sans,
+    color: '#FFFFFF',
+    fontSize: 14,
     fontWeight: '800',
   },
-  cancelModalBtn: {
-    backgroundColor: THEME.colors.cardInner,
-    paddingVertical: 8,
-    borderRadius: 8,
+  destructiveBtn: {
+    backgroundColor: THEME.colors.feelingHardBg,
+    paddingVertical: 14,
+    borderRadius: THEME.radius.pill,
     alignItems: 'center',
+    marginBottom: 8,
   },
-  cancelModalBtnText: {
+  destructiveBtnText: {
+    fontFamily: THEME.fonts.sans,
+    color: THEME.colors.feelingHardText,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  outlineBtn: {
+    paddingVertical: 13,
+    borderRadius: THEME.radius.pill,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+  },
+  outlineBtnText: {
+    fontFamily: THEME.fonts.sans,
     color: THEME.colors.textSecondary,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
   },
 });

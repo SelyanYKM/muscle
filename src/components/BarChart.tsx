@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Svg, { Line, Rect } from 'react-native-svg';
+import Svg, { Line, Path } from 'react-native-svg';
 import { THEME } from '../theme';
 
 interface BarChartDatum {
@@ -18,12 +18,34 @@ interface BarChartProps {
 
 const CHART_WIDTH = 300;
 const BAR_GAP = 4;
+const TOP_RADIUS = 6;
+const BOTTOM_RADIUS = 2;
+
+// Rectangle à coins indépendants (SVG <rect rx> ne supporte qu'un rayon uniforme) :
+// coins du haut plus arrondis que ceux du bas, pour des barres en forme de "pilule" aplatie.
+function roundedBarPath(x: number, y: number, width: number, height: number): string {
+  const rt = Math.min(TOP_RADIUS, width / 2, height / 2);
+  const rb = Math.min(BOTTOM_RADIUS, width / 2, height / 2);
+  return `
+    M ${x + rt} ${y}
+    L ${x + width - rt} ${y}
+    Q ${x + width} ${y} ${x + width} ${y + rt}
+    L ${x + width} ${y + height - rb}
+    Q ${x + width} ${y + height} ${x + width - rb} ${y + height}
+    L ${x + rb} ${y + height}
+    Q ${x} ${y + height} ${x} ${y + height - rb}
+    L ${x} ${y + rt}
+    Q ${x} ${y} ${x + rt} ${y}
+    Z
+  `;
+}
 
 export const BarChart: React.FC<BarChartProps> = ({ data, color, height = 120, formatValue }) => {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   const maxValue = Math.max(1, ...data.map((d) => d.value));
   const barWidth = data.length > 0 ? CHART_WIDTH / data.length - BAR_GAP : 0;
+  const lastIdx = data.length - 1;
 
   return (
     <View>
@@ -37,25 +59,18 @@ export const BarChart: React.FC<BarChartProps> = ({ data, color, height = 120, f
 
       <Svg width={CHART_WIDTH} height={height}>
         {/* Ligne de base, discrète */}
-        <Line x1={0} y1={height - 1} x2={CHART_WIDTH} y2={height - 1} stroke="rgba(28, 28, 30, 0.1)" strokeWidth={1} />
+        <Line x1={0} y1={height - 1} x2={CHART_WIDTH} y2={height - 1} stroke="rgba(0, 41, 107, 0.07)" strokeWidth={1} />
 
         {data.map((d, idx) => {
           const barHeight = d.value > 0 ? Math.max(3, (d.value / maxValue) * (height - 8)) : 2;
           const x = idx * (barWidth + BAR_GAP);
           const y = height - barHeight - 1;
           const isSelected = selectedIdx === idx;
+          // La semaine courante (dernière barre) ressort par défaut, les autres sont en retrait.
+          const opacity = isSelected ? 1 : idx === lastIdx ? 1 : 0.45;
 
           return (
-            <Rect
-              key={idx}
-              x={x}
-              y={y}
-              width={Math.max(2, barWidth)}
-              height={barHeight}
-              rx={4}
-              fill={color}
-              opacity={isSelected ? 1 : d.value > 0 ? 0.75 : 0.25}
-            />
+            <Path key={idx} d={roundedBarPath(x, y, Math.max(2, barWidth), barHeight)} fill={color} opacity={opacity} />
           );
         })}
       </Svg>

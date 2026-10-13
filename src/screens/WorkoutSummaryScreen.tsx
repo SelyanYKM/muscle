@@ -8,8 +8,11 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { Dot } from '../components/Dot';
+import { Icon } from '../components/Icon';
+import { SPLIT_SUBTITLES } from '../constants/splits';
 import { THEME } from '../theme';
-import { NextSessionPlan, SetResult } from '../types';
+import { Feeling, NextSessionPlan, SetResult } from '../types';
 
 interface ExerciseSummaryItem {
   exerciseName: string;
@@ -19,6 +22,7 @@ interface ExerciseSummaryItem {
 
 interface WorkoutSummaryProps {
   summary: {
+    workoutId: number;
     workoutName: string;
     durationMinutes: number;
     totalVolume: number;
@@ -27,12 +31,40 @@ interface WorkoutSummaryProps {
   onClose: () => void;
 }
 
+const VERDICT_LABEL: Record<NextSessionPlan['progressionVerdict'], string> = {
+  FULL_INCREASE: 'Augmentation',
+  PARTIAL_INCREASE: 'Intermédiaire',
+  MAINTAIN: 'Maintien',
+  DELOAD: 'Deload',
+};
+
+const FEELING_INK: Record<Feeling, string> = {
+  EASY: THEME.colors.feelingEasyText,
+  MEDIUM: THEME.colors.feelingMediumText,
+  HARD: THEME.colors.feelingHardText,
+};
+
+function verdictColors(verdict: NextSessionPlan['progressionVerdict']) {
+  if (verdict === 'FULL_INCREASE') {
+    return { bg: THEME.colors.feelingEasyBg, ink: THEME.colors.feelingEasyText };
+  }
+  if (verdict === 'DELOAD') {
+    return { bg: THEME.colors.feelingHardBg, ink: THEME.colors.feelingHardText };
+  }
+  return { bg: THEME.colors.cardInner, ink: THEME.colors.textSecondary };
+}
+
+function fmtKg(w: number): string {
+  return w % 1 === 0 ? String(w) : String(w).replace('.', ',');
+}
+
 export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
   summary,
   onClose,
 }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
+  const split = THEME.splits[summary.workoutId];
 
   useEffect(() => {
     Animated.parallel([
@@ -50,13 +82,17 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
     ]).start();
   }, []);
 
+  const todayLabel = new Date()
+    .toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' })
+    .replace('.', '.');
+
   return (
     <View style={styles.root}>
       <LinearGradient
-        colors={[THEME.colors.bgGradientPeach, THEME.colors.bgGradientPink, THEME.colors.bgGradientSand]}
-        locations={[0, 0.55, 1]}
-        start={{ x: 1, y: 0 }}
-        end={{ x: 0, y: 1 }}
+        colors={[split.tint, THEME.colors.bg]}
+        locations={[0, 0.5]}
+        start={{ x: 0.2, y: 0 }}
+        end={{ x: 0.8, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -64,125 +100,99 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
         style={{
           opacity: fadeAnim,
           transform: [{ translateY: slideAnim }],
+          gap: 20,
         }}
       >
         {/* Badge et Titre */}
         <View style={styles.victoryHeader}>
           <LinearGradient
-            colors={['#F4C3AE', '#E28B72']}
+            colors={split.gradient}
             start={{ x: 0.15, y: 0 }}
             end={{ x: 0.85, y: 1 }}
             style={styles.trophyCircle}
           >
-            <Text style={styles.trophyIcon}>⚡</Text>
+            <Icon name="check" size={30} color={split.fg} />
           </LinearGradient>
-          <Text style={styles.victoryTitle}>SÉANCE TERMINÉE</Text>
-          <Text style={styles.workoutSubtitle}>{summary.workoutName}</Text>
+          <Text style={styles.victoryTitle}>Séance terminée</Text>
+          <Text style={styles.workoutSubtitle}>{summary.workoutName} · {todayLabel}</Text>
         </View>
 
-        {/* Cartes Métriques Clés */}
-        <View style={styles.statsRow}>
-          <View style={styles.statBox}>
+        {/* Bloc Statistiques */}
+        <View style={styles.statsBlock}>
+          <View style={styles.statCol}>
+            <Text style={styles.statValue}>{summary.durationMinutes}</Text>
+            <Text style={styles.statUnit}>min</Text>
             <Text style={styles.statLabel}>DURÉE</Text>
-            <Text style={styles.statValue}>
-              {summary.durationMinutes} <Text style={styles.statUnit}>min</Text>
-            </Text>
           </View>
-
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>VOLUME TOTAL</Text>
+          <View style={styles.statDivider} />
+          <View style={styles.statCol}>
+            <Text style={styles.statValue}>{Math.round(summary.totalVolume).toLocaleString('fr-FR')}</Text>
+            <Text style={styles.statUnit}>kg</Text>
+            <Text style={styles.statLabel}>VOLUME</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statCol}>
             <Text style={styles.statValue}>
-              {Math.round(summary.totalVolume)} <Text style={styles.statUnit}>kg</Text>
+              {summary.exerciseSummaries.reduce((acc, e) => acc + e.results.length, 0)}
             </Text>
+            <Text style={styles.statUnit}>séries</Text>
+            <Text style={styles.statLabel}>SÉRIES</Text>
           </View>
         </View>
 
         {/* Section Calculateur de Surcharge Progressive */}
-        <Text style={styles.sectionHeading}>BILAN DE SURCHARGE</Text>
+        <View style={{ gap: 10 }}>
+          <Text style={styles.sectionHeading}>BILAN DE SURCHARGE</Text>
 
-        <View style={styles.exercisesList}>
-          {summary.exerciseSummaries.map((item, index) => {
-            const isFull = item.plan.progressionVerdict === 'FULL_INCREASE';
-            const isPartial = item.plan.progressionVerdict === 'PARTIAL_INCREASE';
-            const isDeload = item.plan.progressionVerdict === 'DELOAD';
+          <View style={{ gap: 12 }}>
+            {summary.exerciseSummaries.map((item, index) => {
+              const { bg, ink } = verdictColors(item.plan.progressionVerdict);
 
-            return (
-              <View
-                key={index}
-                style={[
-                  styles.exerciseCard,
-                  isFull && styles.exerciseCardFull,
-                  isPartial && styles.exerciseCardPartial,
-                  isDeload && styles.exerciseCardDeload,
-                ]}
-              >
-                {/* En-tête de l'exercice */}
-                <View style={styles.cardHeader}>
-                  <Text style={styles.exerciseName} numberOfLines={1}>
-                    {item.exerciseName}
-                  </Text>
-                  <View
-                    style={[
-                      styles.verdictBadge,
-                      isFull && styles.verdictBadgeFull,
-                      isPartial && styles.verdictBadgePartial,
-                      isDeload && styles.verdictBadgeDeload,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.verdictBadgeText,
-                        isFull && styles.verdictBadgeTextFull,
-                        isPartial && styles.verdictBadgeTextPartial,
-                        isDeload && styles.verdictBadgeTextDeload,
-                      ]}
-                    >
-                      {isFull
-                        ? 'AUGMENTATION'
-                        : isPartial
-                        ? 'INTERMÉDIAIRE'
-                        : isDeload
-                        ? 'DELOAD'
-                        : 'MAINTIEN'}
+              return (
+                <View key={index} style={styles.exerciseCard}>
+                  {/* En-tête de l'exercice */}
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.exerciseName} numberOfLines={1}>
+                      {item.exerciseName}
                     </Text>
-                  </View>
-                </View>
-
-                {/* Résumé des séries */}
-                <View style={styles.setsSummaryRow}>
-                  {item.results.map((res, rIdx) => (
-                    <View key={rIdx} style={styles.setResultBadge}>
-                      <Text style={styles.setResultText}>
-                        S{res.setNumber}: {res.repsDone} reps @ {res.weight}kg{' '}
-                        {res.feeling === 'EASY' ? '🟢' : res.feeling === 'MEDIUM' ? '🟠' : '🔴'}
+                    <View style={[styles.verdictBadge, { backgroundColor: bg }]}>
+                      <Text style={[styles.verdictBadgeText, { color: ink }]}>
+                        {VERDICT_LABEL[item.plan.progressionVerdict]}
                       </Text>
                     </View>
-                  ))}
-                </View>
+                  </View>
 
-                {/* Instruction et Prochaine charge */}
-                <View style={styles.nextSessionBox}>
-                  <Text style={styles.nextSessionLabel}>PROCHAINE SÉANCE</Text>
-                  <Text style={styles.nextWeightsText}>
-                    {item.plan.weightsPerSet.join(' / ')} kg
-                  </Text>
-                  <Text style={styles.planMessageText}>{item.plan.message}</Text>
+                  {/* Résumé des séries */}
+                  <View style={styles.setsSummaryRow}>
+                    {item.results.map((res, rIdx) => (
+                      <View key={rIdx} style={styles.setResultBadge}>
+                        <Dot color={FEELING_INK[res.feeling]} size={7} />
+                        <Text style={styles.setResultText}>
+                          S{res.setNumber} · {res.repsDone} × {fmtKg(res.weight)}kg
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  <View style={styles.cardHairline} />
+
+                  {/* Instruction et Prochaine charge */}
+                  <View>
+                    <Text style={styles.nextSessionLabel}>PROCHAINE SÉANCE</Text>
+                    <Text style={[styles.nextWeightsText, { color: ink }]}>
+                      {item.plan.weightsPerSet.map(fmtKg).join(' / ')} kg
+                    </Text>
+                    <Text style={styles.planMessageText}>{item.plan.message}</Text>
+                  </View>
                 </View>
-              </View>
-            );
-          })}
+              );
+            })}
+          </View>
         </View>
 
         {/* Bouton de Fermeture */}
-        <TouchableOpacity onPress={onClose} activeOpacity={0.85}>
-          <LinearGradient
-            colors={['#F4C3AE', '#E28B72']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0.4 }}
-            style={styles.closeButton}
-          >
-            <Text style={styles.closeButtonText}>ENREGISTRER & RETOUR</Text>
-          </LinearGradient>
+        <TouchableOpacity style={styles.closeButton} onPress={onClose} activeOpacity={0.85}>
+          <Text style={styles.closeButtonText}>Enregistrer & revenir</Text>
         </TouchableOpacity>
       </Animated.View>
       </ScrollView>
@@ -199,196 +209,166 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: 16,
-    paddingTop: 50,
-    paddingBottom: 40,
+    paddingHorizontal: 18,
+    paddingTop: 56,
+    paddingBottom: 32,
   },
   victoryHeader: {
     alignItems: 'center',
-    marginBottom: 18,
   },
   trophyCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 999,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
-    shadowColor: '#E28B72',
+    marginBottom: 14,
+    shadowColor: THEME.colors.shadow,
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.2,
     shadowRadius: 20,
   },
-  trophyIcon: {
-    fontSize: 24,
-  },
   victoryTitle: {
-    fontSize: 22,
-    fontWeight: '900',
+    fontFamily: THEME.fonts.serif,
+    fontSize: 32,
+    fontWeight: '700',
     color: THEME.colors.textPrimary,
-    letterSpacing: 0.5,
+    letterSpacing: -0.5,
   },
   workoutSubtitle: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 13,
     fontWeight: '600',
     color: THEME.colors.textSecondary,
-    marginTop: 3,
+    marginTop: 4,
   },
-  statsRow: {
+  statsBlock: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: THEME.radius.card,
+    paddingVertical: 18,
   },
-  statBox: {
+  statCol: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.72)',
-    borderRadius: 20,
-    padding: 14,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.95)',
   },
-  statLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: THEME.colors.textSecondary,
-    letterSpacing: 0.8,
-    marginBottom: 3,
+  statDivider: {
+    width: 1,
+    backgroundColor: THEME.colors.hairline,
   },
   statValue: {
-    fontSize: 22,
-    fontWeight: '900',
+    fontFamily: THEME.fonts.serif,
+    fontSize: 26,
+    fontWeight: '600',
     color: THEME.colors.textPrimary,
   },
   statUnit: {
-    fontSize: 12,
+    fontFamily: THEME.fonts.sans,
+    fontSize: 13,
     fontWeight: '600',
     color: THEME.colors.textSecondary,
+    marginTop: 1,
   },
-  sectionHeading: {
+  statLabel: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 11,
     fontWeight: '800',
     color: THEME.colors.textSecondary,
-    letterSpacing: 0.8,
-    marginBottom: 10,
+    letterSpacing: 0.6,
+    marginTop: 4,
   },
-  exercisesList: {
-    gap: 10,
-    marginBottom: 22,
+  sectionHeading: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
+    fontWeight: '800',
+    color: THEME.colors.textSecondary,
+    letterSpacing: 1,
   },
   exerciseCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.76)',
-    borderRadius: 22,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(28, 28, 30, 0.08)',
-  },
-  exerciseCardFull: {
-    borderColor: THEME.colors.feelingEasyBorder,
-  },
-  exerciseCardPartial: {
-    borderColor: 'rgba(28, 28, 30, 0.08)',
-  },
-  exerciseCardDeload: {
-    borderColor: THEME.colors.feelingHardBorder,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    borderRadius: THEME.radius.card,
+    padding: 16,
+    gap: 12,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
   },
   exerciseName: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontFamily: THEME.fonts.sans,
+    fontSize: 15,
+    fontWeight: '700',
     color: THEME.colors.textPrimary,
     flex: 1,
     marginRight: 8,
   },
   verdictBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 4,
-    backgroundColor: THEME.colors.cardInner,
-  },
-  verdictBadgeFull: {
-    backgroundColor: THEME.colors.feelingEasyBg,
-  },
-  verdictBadgePartial: {
-    backgroundColor: THEME.colors.cardInner,
-  },
-  verdictBadgeDeload: {
-    backgroundColor: THEME.colors.feelingHardBg,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: THEME.radius.pill,
   },
   verdictBadgeText: {
-    fontSize: 9,
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
     fontWeight: '800',
-    color: THEME.colors.textSecondary,
-  },
-  verdictBadgeTextFull: {
-    color: THEME.colors.feelingEasyBorder,
-  },
-  verdictBadgeTextPartial: {
-    color: THEME.colors.textPrimary,
-  },
-  verdictBadgeTextDeload: {
-    color: THEME.colors.feelingHardBorder,
   },
   setsSummaryRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 4,
-    marginBottom: 8,
+    gap: 6,
   },
   setResultBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     backgroundColor: THEME.colors.cardInner,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: THEME.radius.pill,
   },
   setResultText: {
-    fontSize: 10,
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
     color: THEME.colors.textPrimary,
     fontWeight: '700',
   },
-  nextSessionBox: {
-    backgroundColor: THEME.colors.cardInner,
-    borderRadius: 8,
-    padding: 8,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+  cardHairline: {
+    height: 1,
+    backgroundColor: THEME.colors.hairline,
   },
   nextSessionLabel: {
-    fontSize: 8,
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
     fontWeight: '800',
     color: THEME.colors.textSecondary,
-    letterSpacing: 0.8,
-    marginBottom: 2,
+    letterSpacing: 0.6,
+    marginBottom: 3,
   },
   nextWeightsText: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: THEME.colors.accent,
-    marginBottom: 2,
+    fontFamily: THEME.fonts.sans,
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 3,
   },
   planMessageText: {
-    fontSize: 11,
+    fontFamily: THEME.fonts.sans,
+    fontSize: 13,
+    fontWeight: '500',
     color: THEME.colors.textSecondary,
-    lineHeight: 15,
+    lineHeight: 18,
   },
   closeButton: {
-    paddingVertical: 16,
-    borderRadius: 999,
+    height: 56,
+    backgroundColor: THEME.colors.textPrimary,
+    borderRadius: THEME.radius.pill,
     alignItems: 'center',
-    shadowColor: '#E28B72',
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.4,
-    shadowRadius: 24,
+    justifyContent: 'center',
   },
   closeButtonText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#1C1C1E',
-    letterSpacing: 0.5,
+    fontFamily: THEME.fonts.sans,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });
