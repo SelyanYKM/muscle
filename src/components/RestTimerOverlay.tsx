@@ -319,7 +319,6 @@ const styles = StyleSheet.create({
   timeBig: {
     fontFamily: THEME.fonts.serif,
     fontSize: 80,
-    fontWeight: '600',
     color: '#FFFFFF',
     letterSpacing: -1.5,
     fontVariant: ['tabular-nums'],
@@ -370,7 +369,6 @@ const styles = StyleSheet.create({
   nextSetTitle: {
     fontFamily: THEME.fonts.serif,
     fontSize: 21,
-    fontWeight: '600',
     color: '#FFFFFF',
     textAlign: 'center',
   },

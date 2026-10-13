@@ -253,7 +253,6 @@ const styles = StyleSheet.create({
   brandTitle: {
     fontFamily: THEME.fonts.serif,
     fontSize: 26,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
     letterSpacing: -0.5,
   },
@@ -288,7 +287,6 @@ const styles = StyleSheet.create({
   stepHeading: {
     fontFamily: THEME.fonts.serif,
     fontSize: 32,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
     letterSpacing: -0.6,
   },
@@ -326,7 +324,6 @@ const styles = StyleSheet.create({
     bottom: -46,
     fontFamily: THEME.fonts.serif,
     fontSize: 190,
-    fontWeight: '700',
     color: 'rgba(255, 255, 255, 0.32)',
   },
   cardTopRow: {
@@ -338,7 +335,6 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontFamily: THEME.fonts.serif,
     fontSize: 32,
-    fontWeight: '700',
     letterSpacing: -0.5,
   },
   toFollowChip: {

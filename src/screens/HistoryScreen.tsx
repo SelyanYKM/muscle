@@ -731,7 +731,6 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: THEME.fonts.serif,
     fontSize: 28,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
   exportButton: {
@@ -814,7 +813,6 @@ const styles = StyleSheet.create({
   letterBadgeText: {
     fontFamily: THEME.fonts.serif,
     fontSize: 20,
-    fontWeight: '700',
   },
   sessionHeaderLeft: {
     flex: 1,
@@ -829,7 +827,6 @@ const styles = StyleSheet.create({
   sessionWorkoutTitle: {
     fontFamily: THEME.fonts.serif,
     fontSize: 20,
-    fontWeight: '600',
     color: THEME.colors.textPrimary,
   },
   sessionMetricsSummary: {
@@ -930,7 +927,6 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontFamily: THEME.fonts.serif,
     fontSize: 26,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
   sheetSubtitle: {

@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 3,
-    flexShrink: 1,
+    flexShrink: 0,
   },
   sleeve: {
     width: 12,
@@ -110,6 +110,8 @@ const styles = StyleSheet.create({
   },
   valueCol: {
     alignItems: 'flex-end',
+    flexShrink: 1,
+    minWidth: 0,
   },
   valueLabel: {
     fontFamily: THEME.fonts.sans,
@@ -121,7 +123,6 @@ const styles = StyleSheet.create({
   valueText: {
     fontFamily: THEME.fonts.serif,
     fontSize: 22,
-    fontWeight: '600',
     color: THEME.colors.textOnDark,
   },
   summaryText: {
@@ -130,6 +131,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'rgba(242, 246, 252, 0.72)',
     marginTop: 1,
+    maxWidth: '100%',
   },
   emptyText: {
     fontFamily: THEME.fonts.sans,

@@ -273,7 +273,6 @@ const styles = StyleSheet.create({
   peekInsight: {
     fontFamily: THEME.fonts.serif,
     fontSize: 18,
-    fontWeight: '600',
     color: THEME.colors.textPrimary,
   },
   expandedHeaderRow: {
@@ -284,7 +283,6 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontFamily: THEME.fonts.serif,
     fontSize: 26,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
   reduceBtn: {
@@ -334,7 +332,6 @@ const styles = StyleSheet.create({
   statValue: {
     fontFamily: THEME.fonts.serif,
     fontSize: 20,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
   statLabel: {

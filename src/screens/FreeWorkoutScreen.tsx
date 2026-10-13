@@ -812,12 +812,10 @@ const styles = StyleSheet.create({
   headerBadgeText: {
     fontFamily: THEME.fonts.serif,
     fontSize: 18,
-    fontWeight: '700',
   },
   sessionTitle: {
     fontFamily: THEME.fonts.serif,
     fontSize: 24,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
   sessionSubtitle: {
@@ -927,7 +925,6 @@ const styles = StyleSheet.create({
   currentExName: {
     fontFamily: THEME.fonts.serif,
     fontSize: 26,
-    fontWeight: '600',
     color: THEME.colors.textOnDark,
     letterSpacing: -0.3,
     lineHeight: 30,
@@ -1175,7 +1172,6 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontFamily: THEME.fonts.serif,
     fontSize: 26,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
   sheetSubtitle: {

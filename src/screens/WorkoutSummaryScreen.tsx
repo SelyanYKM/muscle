@@ -231,7 +231,6 @@ const styles = StyleSheet.create({
   victoryTitle: {
     fontFamily: THEME.fonts.serif,
     fontSize: 32,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
     letterSpacing: -0.5,
   },
@@ -259,7 +258,6 @@ const styles = StyleSheet.create({
   statValue: {
     fontFamily: THEME.fonts.serif,
     fontSize: 26,
-    fontWeight: '600',
     color: THEME.colors.textPrimary,
   },
   statUnit: {
