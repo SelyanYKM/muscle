@@ -10,13 +10,14 @@ interface PlateBreakdownProps {
 }
 
 // Taille fixe par type de disque (pas une formule : des valeurs de design figées), plus
-// grand = plus lourd. Rayon 4, couleurs olympiques reprises de plateCalculator.ts.
+// lourd = plus haut. Barres verticales (vue de côté, comme sur une barre réelle), rayon 4,
+// couleurs olympiques reprises de plateCalculator.ts.
 const PLATE_DIMENSIONS: Record<number, { width: number; height: number; border?: string }> = {
-  20: { width: 72, height: 14 },
-  10: { width: 60, height: 12 },
-  5: { width: 46, height: 10 },
-  2.5: { width: 36, height: 8, border: '#D0D5DD' },
-  1.25: { width: 28, height: 7 },
+  20: { width: 14, height: 72 },
+  10: { width: 12, height: 60 },
+  5: { width: 10, height: 46 },
+  2.5: { width: 8, height: 36, border: '#D0D5DD' },
+  1.25: { width: 7, height: 28 },
 };
 
 function formatWeightFr(w: number): string {
