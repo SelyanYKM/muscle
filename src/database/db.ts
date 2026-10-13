@@ -969,7 +969,7 @@ function buildInsightText(weeklyStats: WeeklyStat[]): string {
   }
 
   const changePercent = Math.round(((lastVolume - prevVolume) / prevVolume) * 100);
-  if (changePercent >= 10) return `🔥 Volume en hausse de ${changePercent}% sur les 2 dernières semaines !`;
+  if (changePercent >= 10) return `Volume en hausse de ${changePercent}% sur les 2 dernières semaines !`;
   if (changePercent <= -15) return `Volume en baisse de ${Math.abs(changePercent)}% sur 2 semaines — une séance de plus cette semaine ?`;
   return 'Volume stable sur les 2 dernières semaines — régularité au rendez-vous.';
 }

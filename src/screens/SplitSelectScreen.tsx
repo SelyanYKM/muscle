@@ -10,9 +10,69 @@ import {
   View
 } from 'react-native';
 import { DashboardSheet } from '../components/DashboardSheet';
-import { clearAllWorkoutLogs, getDashboardSummary, getWorkouts } from '../database/db';
+import { Icon } from '../components/Icon';
+import { SPLIT_LETTERS, SPLIT_SUBTITLES } from '../constants/splits';
+import { clearAllWorkoutLogs, getDashboardSummary, getExercisesForWorkout, getRecentLogs, getWorkouts } from '../database/db';
 import { THEME } from '../theme';
+import { Workout } from '../types';
 import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
+
+interface SplitMeta {
+  exerciseCount: number;
+  daysSinceLastSession: number | null;
+}
+
+function daysSince(dateStr: string): number {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const past = new Date(y, m - 1, d);
+  const today = new Date();
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const diffMs = todayMidnight.getTime() - past.getTime();
+  return Math.max(0, Math.round(diffMs / 86400000));
+}
+
+function formatLastSessionMeta(days: number | null): string {
+  if (days === null) return 'Jamais fait';
+  if (days === 0) return "Aujourd'hui";
+  if (days === 1) return 'Hier';
+  return `il y a ${days} j`;
+}
+
+// Charge réelle (nb d'exercices du catalogue + dernière séance) par split, pour la méta
+// affichée sur chaque carte et pour déterminer le split "à suivre" (le plus en retard).
+function getSplitMeta(workouts: Workout[]): Record<number, SplitMeta> {
+  const logs = getRecentLogs(500);
+  const lastDateByWorkout = new Map<number, string>();
+  for (const log of logs) {
+    const existing = lastDateByWorkout.get(log.workoutId);
+    if (!existing || log.date > existing) lastDateByWorkout.set(log.workoutId, log.date);
+  }
+
+  const meta: Record<number, SplitMeta> = {};
+  for (const w of workouts) {
+    const lastDate = lastDateByWorkout.get(w.id) || null;
+    meta[w.id] = {
+      exerciseCount: getExercisesForWorkout(w.id).length,
+      daysSinceLastSession: lastDate ? daysSince(lastDate) : null,
+    };
+  }
+  return meta;
+}
+
+// Le split "à suivre" : celui dont la dernière séance est la plus ancienne (jamais fait = prioritaire).
+function getToFollowWorkoutId(workouts: Workout[], meta: Record<number, SplitMeta>): number | null {
+  let candidate: number | null = null;
+  let oldestDays = -1;
+  for (const w of workouts) {
+    const days = meta[w.id]?.daysSinceLastSession;
+    if (days === null || days === undefined) return w.id; // jamais fait = le plus en retard possible
+    if (days > oldestDays) {
+      oldestDays = days;
+      candidate = w.id;
+    }
+  }
+  return candidate;
+}
 
 interface SplitSelectScreenProps {
   onSelectWorkout: (workoutId: number, workoutName: string) => void;
@@ -25,38 +85,12 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
 }) => {
   const workouts = getWorkouts();
   const dashboardSummary = getDashboardSummary();
+  const splitMeta = getSplitMeta(workouts);
+  const toFollowWorkoutId = getToFollowWorkoutId(workouts, splitMeta);
 
   const handleSelect = (wId: number, wName: string) => {
     triggerMediumHaptic();
     onSelectWorkout(wId, wName);
-  };
-
-  const getSplitDetails = (id: number) => {
-    if (id === 1) {
-      return {
-        letter: 'P',
-        subtitle: 'Pectoraux • Épaules • Triceps',
-        focus: 'Poussée & Développés',
-        exercisesCount: '5 exos cibles',
-        gradient: ['#F4C3AE', '#E28B72'] as [string, string],
-      };
-    } else if (id === 2) {
-      return {
-        letter: 'P',
-        subtitle: 'Dos • Arrière d’épaules • Biceps',
-        focus: 'Tirages & Épaisseur',
-        exercisesCount: '5 exos cibles',
-        gradient: ['#E8D3F5', '#C080E0'] as [string, string],
-      };
-    } else {
-      return {
-        letter: 'L',
-        subtitle: 'Quadriceps • Ischios • Mollets',
-        focus: 'Force & Volume bas du corps',
-        exercisesCount: '5 exos cibles',
-        gradient: ['#DCE9F2', '#8FB9D0'] as [string, string],
-      };
-    }
   };
 
   return (
@@ -123,42 +157,50 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
         {/* 3 Cartes de Split P/P/L, qui se partagent tout l'espace restant jusqu'au tiroir */}
         <View style={styles.cardsContainer}>
           {workouts.map((w) => {
-            const details = getSplitDetails(w.id);
+            const split = THEME.splits[w.id];
+            const meta = splitMeta[w.id];
+            const isToFollow = w.id === toFollowWorkoutId;
 
             return (
               <TouchableOpacity
                 key={w.id}
-                style={styles.splitCard}
+                style={[styles.splitCard, isToFollow && { borderColor: split.gradient[1] }]}
                 onPress={() => handleSelect(w.id, w.name)}
                 activeOpacity={0.85}
               >
                 {/* Badge lettre majuscule P / P / L */}
                 <LinearGradient
-                  colors={details.gradient}
+                  colors={split.gradient}
                   start={{ x: 0.1, y: 0 }}
                   end={{ x: 0.9, y: 1 }}
                   style={styles.letterBadge}
                 >
-                  <Text style={styles.letterBadgeText}>{details.letter}</Text>
+                  <Text style={[styles.letterBadgeText, { color: split.fg }]}>{SPLIT_LETTERS[w.id]}</Text>
                 </LinearGradient>
 
                 {/* Détails du split */}
                 <View style={styles.cardContent}>
                   <View style={styles.cardTopRow}>
                     <Text style={styles.cardTitle}>{w.name}</Text>
-                    <Text style={styles.chevron}>→</Text>
+                    {isToFollow && (
+                      <View style={styles.toFollowChip}>
+                        <Text style={styles.toFollowChipText}>À suivre</Text>
+                      </View>
+                    )}
                   </View>
 
                   <Text style={styles.cardSubtitle} numberOfLines={1}>
-                    {details.subtitle}
+                    {SPLIT_SUBTITLES[w.id]}
                   </Text>
 
-                  <View style={styles.metaRow}>
-                    <View style={styles.metaTag}>
-                      <Text style={styles.metaTagText}>{details.focus}</Text>
-                    </View>
-                    <Text style={styles.metaCount}>{details.exercisesCount}</Text>
-                  </View>
+                  <Text style={styles.cardMeta}>
+                    {meta.exerciseCount} exercices · {formatLastSessionMeta(meta.daysSinceLastSession)}
+                  </Text>
+                </View>
+
+                {/* Bouton flèche */}
+                <View style={[styles.arrowBtn, { backgroundColor: split.tint }]}>
+                  <Icon name="arrow-right" size={18} color={split.ink} />
                 </View>
               </TouchableOpacity>
             );
@@ -182,17 +224,17 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 24,
+    paddingHorizontal: 20,
+    paddingTop: 52,
     // Marge basse suffisante pour que les cartes ne soient jamais cachées par la
     // feuille "Ton progrès" repliée (voir PEEK_HEIGHT dans DashboardSheet.tsx).
-    paddingBottom: 150,
+    paddingBottom: 120,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 22,
   },
   brandRow: {
     flexDirection: 'row',
@@ -200,9 +242,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   brandLogo: {
-    width: 38,
-    height: 38,
-    borderRadius: 9,
+    width: 42,
+    height: 42,
+    borderRadius: 13,
     borderWidth: 1,
     borderColor: THEME.colors.cardBorder,
   },
@@ -219,21 +261,18 @@ const styles = StyleSheet.create({
   brandSubtitle: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '600',
     color: THEME.colors.textSecondary,
     marginTop: 1,
   },
   historyBtn: {
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 999,
+    height: 40,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    paddingHorizontal: 16,
+    borderRadius: THEME.radius.pill,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.95)',
-    shadowColor: '#8C7060',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
+    borderColor: '#FFFFFF',
   },
   historyBtnText: {
     fontFamily: THEME.fonts.sans,
@@ -242,21 +281,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   stepTitleBox: {
-    marginBottom: 14,
+    marginBottom: 22,
   },
   stepHeading: {
     fontFamily: THEME.fonts.serif,
-    fontSize: 23,
+    fontSize: 32,
     fontWeight: '700',
     color: THEME.colors.textPrimary,
-    letterSpacing: -0.3,
+    letterSpacing: -0.6,
   },
   stepSubheading: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 13,
-    fontWeight: '400',
+    fontSize: 14,
+    fontWeight: '500',
     color: THEME.colors.textSecondary,
-    marginTop: 3,
+    marginTop: 4,
   },
   cardsContainer: {
     flex: 1,
@@ -264,77 +303,75 @@ const styles = StyleSheet.create({
   },
   splitCard: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.72)',
-    borderRadius: 24,
-    paddingHorizontal: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: THEME.radius.sheet,
+    paddingHorizontal: 18,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-    shadowColor: '#8C7060',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
+    shadowColor: THEME.colors.shadow,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
   },
   letterBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
+    width: 60,
+    height: 60,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
   letterBadgeText: {
     fontFamily: THEME.fonts.serif,
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#1C1C1E',
   },
   cardContent: {
     flex: 1,
   },
   cardTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 3,
+    gap: 8,
+    marginBottom: 2,
   },
   cardTitle: {
     fontFamily: THEME.fonts.serif,
-    fontSize: 21,
+    fontSize: 24,
     fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
-  chevron: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: THEME.colors.accent,
+  toFollowChip: {
+    backgroundColor: THEME.colors.textPrimary,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: THEME.radius.pill,
+  },
+  toFollowChipText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   cardSubtitle: {
+    fontSize: 13,
+    color: THEME.colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  cardMeta: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 12,
     color: THEME.colors.textSecondary,
     fontWeight: '600',
-    marginBottom: 10,
   },
-  metaRow: {
-    flexDirection: 'row',
+  arrowBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    justifyContent: 'center',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  metaTag: {
-    backgroundColor: THEME.colors.cardInner,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  metaTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: THEME.colors.textSecondary,
-  },
-  metaCount: {
-    fontSize: 11,
-    color: THEME.colors.textMuted,
-    fontWeight: '600',
   },
 });

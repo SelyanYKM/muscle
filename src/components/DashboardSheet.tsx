@@ -9,15 +9,21 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import Svg, { Rect } from 'react-native-svg';
 import { DashboardSummary } from '../database/db';
 import { THEME } from '../theme';
 import { triggerLightHaptic } from '../utils/haptics';
 import { BarChart } from './BarChart';
+import { Icon } from './Icon';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
-const PEEK_HEIGHT = 124;
+const PEEK_HEIGHT = 108;
 const EXPANDED_HEIGHT = Math.round(SCREEN_HEIGHT * 0.82);
 const COLLAPSED_TRANSLATE = EXPANDED_HEIGHT - PEEK_HEIGHT;
+
+const SPARK_BAR_WIDTH = 6;
+const SPARK_BAR_GAP = 4;
+const SPARK_MAX_HEIGHT = 34;
 
 interface DashboardSheetProps {
   summary: DashboardSummary;
@@ -32,6 +38,35 @@ function formatWeekLabel(weekStartISO: string): string {
     return weekStartISO;
   }
 }
+
+/** Mini-histogramme (6 dernières semaines de volume) affiché dans le tiroir replié. */
+const MiniSparkline: React.FC<{ weeklyStats: DashboardSummary['weeklyStats'] }> = ({ weeklyStats }) => {
+  const bars = weeklyStats.slice(-6);
+  const maxValue = Math.max(1, ...bars.map((b) => b.totalVolume));
+  const width = bars.length * SPARK_BAR_WIDTH + Math.max(0, bars.length - 1) * SPARK_BAR_GAP;
+
+  return (
+    <Svg width={width} height={SPARK_MAX_HEIGHT}>
+      {bars.map((b, idx) => {
+        const barHeight = b.totalVolume > 0 ? Math.max(2, (b.totalVolume / maxValue) * SPARK_MAX_HEIGHT) : 2;
+        const x = idx * (SPARK_BAR_WIDTH + SPARK_BAR_GAP);
+        const isLast = idx === bars.length - 1;
+        return (
+          <Rect
+            key={idx}
+            x={x}
+            y={SPARK_MAX_HEIGHT - barHeight}
+            width={SPARK_BAR_WIDTH}
+            height={barHeight}
+            rx={2}
+            fill={THEME.colors.accent}
+            opacity={isLast ? 1 : 0.4}
+          />
+        );
+      })}
+    </Svg>
+  );
+};
 
 export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -71,7 +106,7 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
 
   const backdropOpacity = translateY.interpolate({
     inputRange: [0, COLLAPSED_TRANSLATE],
-    outputRange: [0.45, 0],
+    outputRange: [0.4, 0],
     extrapolate: 'clamp',
   });
 
@@ -100,17 +135,21 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
           <View style={styles.handleBar} />
 
           {!isExpanded ? (
-            <TouchableOpacity style={styles.peekPreview} onPress={() => snapTo(true)} activeOpacity={0.8}>
-              <Text style={styles.peekLabel}>📊 TON PROGRÈS</Text>
-              <Text style={styles.peekInsight} numberOfLines={1}>
-                {summary.insightText}
-              </Text>
+            <TouchableOpacity style={styles.peekRow} onPress={() => snapTo(true)} activeOpacity={0.8}>
+              <View style={styles.peekTextCol}>
+                <Text style={styles.peekLabel}>TON PROGRÈS</Text>
+                <Text style={styles.peekInsight} numberOfLines={1}>
+                  {summary.insightText}
+                </Text>
+              </View>
+              <MiniSparkline weeklyStats={summary.weeklyStats} />
             </TouchableOpacity>
           ) : (
             <View style={styles.expandedHeaderRow}>
               <Text style={styles.sheetTitle}>Ton progrès</Text>
-              <TouchableOpacity onPress={() => snapTo(false)} activeOpacity={0.8}>
-                <Text style={styles.closeHint}>▾ Réduire</Text>
+              <TouchableOpacity style={styles.reduceBtn} onPress={() => snapTo(false)} activeOpacity={0.8}>
+                <Icon name="chevron-down" size={14} color={THEME.colors.textSecondary} />
+                <Text style={styles.closeHint}>Réduire</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -124,17 +163,19 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
         >
           <Text style={styles.insightFull}>{summary.insightText}</Text>
 
-          {/* Tuiles de stats */}
-          <View style={styles.statsRow}>
-            <View style={styles.statTile}>
+          {/* Bloc de stats unique, 3 colonnes séparées par des filets */}
+          <View style={styles.statsBlock}>
+            <View style={styles.statCol}>
               <Text style={styles.statValue}>{Math.round(summary.totalVolumeAllTime)}</Text>
               <Text style={styles.statLabel}>KG SOULEVÉS</Text>
             </View>
-            <View style={styles.statTile}>
+            <View style={styles.statDivider} />
+            <View style={styles.statCol}>
               <Text style={styles.statValue}>{summary.totalSessions}</Text>
               <Text style={styles.statLabel}>SÉANCES</Text>
             </View>
-            <View style={styles.statTile}>
+            <View style={styles.statDivider} />
+            <View style={styles.statCol}>
               <Text style={styles.statValue}>{summary.streakWeeks}</Text>
               <Text style={styles.statLabel}>SEM. DE SUITE</Text>
             </View>
@@ -148,7 +189,7 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
           <Text style={[styles.sectionLabel, { marginTop: 18 }]}>SÉANCES PAR SEMAINE</Text>
           <BarChart
             data={sessionsChartData}
-            color={THEME.colors.restGradientBlue}
+            color={THEME.colors.accentStrong}
             height={80}
             formatValue={(v) => `${v} séance${v > 1 ? 's' : ''}`}
           />
@@ -159,7 +200,7 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
               <Text style={[styles.sectionLabel, { marginTop: 18 }]}>RECORDS PERSONNELS</Text>
               <View style={styles.prList}>
                 {summary.personalRecords.map((pr, idx) => (
-                  <View key={idx} style={styles.prRow}>
+                  <View key={idx} style={[styles.prRow, idx > 0 && styles.prRowDivider]}>
                     <Text style={styles.prName} numberOfLines={1}>
                       {pr.exerciseName}
                     </Text>
@@ -182,7 +223,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#1C1C1E',
+    backgroundColor: THEME.colors.shadow,
     zIndex: 5,
   },
   sheet: {
@@ -190,10 +231,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.98)',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    shadowColor: '#8C7060',
+    backgroundColor: 'rgba(255, 255, 255, 0.97)',
+    borderTopLeftRadius: THEME.radius.sheet,
+    borderTopRightRadius: THEME.radius.sheet,
+    shadowColor: THEME.colors.shadow,
     shadowOffset: { width: 0, height: -6 },
     shadowOpacity: 0.12,
     shadowRadius: 20,
@@ -205,26 +246,33 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   handleBar: {
-    width: 36,
+    width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(28, 28, 30, 0.15)',
+    backgroundColor: 'rgba(0, 41, 107, 0.15)',
     alignSelf: 'center',
     marginBottom: 10,
   },
-  peekPreview: {
+  peekRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  peekTextCol: {
+    flex: 1,
+    marginRight: 12,
     gap: 2,
   },
   peekLabel: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
-    color: THEME.colors.accent,
-    letterSpacing: 0.8,
+    color: THEME.colors.accentStrong,
+    letterSpacing: 1,
   },
   peekInsight: {
     fontFamily: THEME.fonts.serif,
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: '600',
     color: THEME.colors.textPrimary,
   },
@@ -235,14 +283,23 @@ const styles = StyleSheet.create({
   },
   sheetTitle: {
     fontFamily: THEME.fonts.serif,
-    fontSize: 20,
+    fontSize: 26,
     fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
+  reduceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: THEME.colors.cardInner,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: THEME.radius.pill,
+  },
   closeHint: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 11,
-    fontWeight: '800',
+    fontSize: 12,
+    fontWeight: '700',
     color: THEME.colors.textSecondary,
   },
   body: {
@@ -259,19 +316,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 14,
   },
-  statsRow: {
+  statsBlock: {
     flexDirection: 'row',
-    gap: 8,
+    backgroundColor: THEME.colors.cardInner,
+    borderRadius: THEME.radius.card,
+    paddingVertical: 14,
     marginBottom: 20,
   },
-  statTile: {
+  statCol: {
     flex: 1,
-    backgroundColor: THEME.colors.cardInner,
-    borderRadius: 14,
-    paddingVertical: 12,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+  },
+  statDivider: {
+    width: 1,
+    backgroundColor: THEME.colors.hairline,
   },
   statValue: {
     fontFamily: THEME.fonts.serif,
@@ -297,22 +355,23 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   prList: {
-    gap: 6,
+    backgroundColor: THEME.colors.cardInner,
+    borderRadius: THEME.radius.card,
+    paddingHorizontal: 14,
   },
   prRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: THEME.colors.cardInner,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
+    paddingVertical: 11,
+  },
+  prRowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: THEME.colors.hairline,
   },
   prName: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     color: THEME.colors.textPrimary,
     flex: 1,
@@ -320,8 +379,8 @@ const styles = StyleSheet.create({
   },
   prWeight: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 13,
-    fontWeight: '900',
+    fontSize: 15,
+    fontWeight: '800',
     color: THEME.colors.accentStrong,
   },
 });
