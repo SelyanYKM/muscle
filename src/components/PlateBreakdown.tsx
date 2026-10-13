@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
   },
   hairline: {
     height: 1,
-    backgroundColor: THEME.colors.hairline,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     marginBottom: 12,
   },
   row: {
@@ -114,26 +114,26 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     fontSize: 9,
     fontWeight: '800',
-    color: THEME.colors.textSecondary,
+    color: 'rgba(242, 246, 252, 0.65)',
     letterSpacing: 0.6,
   },
   valueText: {
     fontFamily: THEME.fonts.serif,
     fontSize: 22,
     fontWeight: '600',
-    color: THEME.colors.textPrimary,
+    color: THEME.colors.textOnDark,
   },
   summaryText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
     fontWeight: '600',
-    color: THEME.colors.textSecondary,
+    color: 'rgba(242, 246, 252, 0.72)',
     marginTop: 1,
   },
   emptyText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
-    color: THEME.colors.textMuted,
+    color: 'rgba(242, 246, 252, 0.55)',
     fontStyle: 'italic',
   },
 });

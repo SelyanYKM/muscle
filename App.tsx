@@ -255,13 +255,13 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: THEME.colors.bg,
+    backgroundColor: THEME.colors.textPrimary,
     justifyContent: 'center',
     alignItems: 'center',
     gap: 14,
   },
   loadingText: {
-    color: THEME.colors.textSecondary,
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.5,

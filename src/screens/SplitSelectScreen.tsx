@@ -3,6 +3,7 @@ import React from 'react';
 import {
   Alert,
   Image,
+  Pressable,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -162,47 +163,48 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
             const isToFollow = w.id === toFollowWorkoutId;
 
             return (
-              <TouchableOpacity
+              <Pressable
                 key={w.id}
-                style={[styles.splitCard, isToFollow && { borderColor: split.gradient[1] }]}
                 onPress={() => handleSelect(w.id, w.name)}
-                activeOpacity={0.85}
+                style={({ pressed }) => [styles.splitCardWrap, pressed && styles.splitCardPressed]}
               >
-                {/* Badge lettre majuscule P / P / L */}
                 <LinearGradient
                   colors={split.gradient}
-                  start={{ x: 0.1, y: 0 }}
-                  end={{ x: 0.9, y: 1 }}
-                  style={styles.letterBadge}
+                  start={{ x: 0.15, y: 0 }}
+                  end={{ x: 0.85, y: 1 }}
+                  style={styles.splitCard}
                 >
-                  <Text style={[styles.letterBadgeText, { color: split.fg }]}>{SPLIT_LETTERS[w.id]}</Text>
-                </LinearGradient>
+                  {/* Lettre en filigrane */}
+                  <Text style={styles.watermarkLetter} numberOfLines={1}>
+                    {SPLIT_LETTERS[w.id]}
+                  </Text>
 
-                {/* Détails du split */}
-                <View style={styles.cardContent}>
+                  {/* Haut : nom + chip "À suivre" */}
                   <View style={styles.cardTopRow}>
-                    <Text style={styles.cardTitle}>{w.name}</Text>
+                    <Text style={[styles.cardTitle, { color: split.fg }]}>{w.name}</Text>
                     {isToFollow && (
                       <View style={styles.toFollowChip}>
                         <Text style={styles.toFollowChipText}>À suivre</Text>
                       </View>
                     )}
                   </View>
-
-                  <Text style={styles.cardSubtitle} numberOfLines={1}>
+                  <Text style={[styles.cardSubtitle, { color: split.fg }]} numberOfLines={1}>
                     {SPLIT_SUBTITLES[w.id]}
                   </Text>
 
-                  <Text style={styles.cardMeta}>
-                    {meta.exerciseCount} exercices · {formatLastSessionMeta(meta.daysSinceLastSession)}
-                  </Text>
-                </View>
-
-                {/* Bouton flèche */}
-                <View style={[styles.arrowBtn, { backgroundColor: split.tint }]}>
-                  <Icon name="arrow-right" size={18} color={split.ink} />
-                </View>
-              </TouchableOpacity>
+                  {/* Bas : chip méta + bouton flèche */}
+                  <View style={styles.cardBottomRow}>
+                    <View style={[styles.cardMetaChip, { backgroundColor: split.chipBg }]}>
+                      <Text style={[styles.cardMetaText, { color: split.fg }]}>
+                        {meta.exerciseCount} exercices · {formatLastSessionMeta(meta.daysSinceLastSession)}
+                      </Text>
+                    </View>
+                    <View style={[styles.arrowBtn, { backgroundColor: split.btnBg }]}>
+                      <Icon name="arrow-right" size={20} color={split.btnFg} />
+                    </View>
+                  </View>
+                </LinearGradient>
+              </Pressable>
             );
           })}
         </View>
@@ -301,52 +303,48 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 12,
   },
+  splitCardWrap: {
+    flex: 1,
+  },
+  splitCardPressed: {
+    transform: [{ scale: 0.98 }],
+  },
   splitCard: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
     borderRadius: THEME.radius.sheet,
-    paddingHorizontal: 18,
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
+    padding: 22,
+    overflow: 'hidden',
+    justifyContent: 'space-between',
     shadowColor: THEME.colors.shadow,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.16,
+    shadowRadius: 26,
   },
-  letterBadge: {
-    width: 60,
-    height: 60,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  letterBadgeText: {
+  watermarkLetter: {
+    position: 'absolute',
+    right: -6,
+    bottom: -46,
     fontFamily: THEME.fonts.serif,
-    fontSize: 28,
+    fontSize: 190,
     fontWeight: '700',
-  },
-  cardContent: {
-    flex: 1,
+    color: 'rgba(255, 255, 255, 0.32)',
   },
   cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 8,
-    marginBottom: 2,
   },
   cardTitle: {
     fontFamily: THEME.fonts.serif,
-    fontSize: 24,
+    fontSize: 32,
     fontWeight: '700',
-    color: THEME.colors.textPrimary,
+    letterSpacing: -0.5,
   },
   toFollowChip: {
     backgroundColor: THEME.colors.textPrimary,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: THEME.radius.pill,
   },
   toFollowChipText: {
@@ -356,21 +354,31 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   cardSubtitle: {
+    fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    color: THEME.colors.textSecondary,
-    fontWeight: '600',
-    marginBottom: 4,
+    fontWeight: '700',
+    marginTop: 6,
   },
-  cardMeta: {
+  cardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  cardMetaChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: THEME.radius.pill,
+  },
+  cardMetaText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
-    color: THEME.colors.textSecondary,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   arrowBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
   },

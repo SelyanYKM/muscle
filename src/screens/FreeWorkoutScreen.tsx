@@ -71,23 +71,23 @@ const FEELING_CONFIG: Record<
   HARD: { label: 'Échec', sub: 'Reps non atteintes', mark: '×' },
 };
 
-const FEELING_GRADIENT: Record<Feeling, [string, string]> = {
-  EASY: THEME.colors.feelingEasyGradient,
-  MEDIUM: THEME.colors.feelingMediumGradient,
-  HARD: THEME.colors.feelingHardGradient,
-};
 const FEELING_INK: Record<Feeling, string> = {
   EASY: THEME.colors.feelingEasyText,
   MEDIUM: THEME.colors.feelingMediumText,
   HARD: THEME.colors.feelingHardText,
+};
+// Couleur bordure des ressentis : utilisée pour rester visible sur la carte héro bleu nuit
+// (l'encre, trop sombre, se fondrait dans le fond).
+const FEELING_BORDER: Record<Feeling, string> = {
+  EASY: THEME.colors.feelingEasyBorder,
+  MEDIUM: THEME.colors.feelingMediumBorder,
+  HARD: THEME.colors.feelingHardBorder,
 };
 const FEELING_BG: Record<Feeling, string> = {
   EASY: THEME.colors.feelingEasyBg,
   MEDIUM: THEME.colors.feelingMediumBg,
   HARD: THEME.colors.feelingHardBg,
 };
-
-const INK_SURFACE = 'rgba(0, 41, 107, 0.07)';
 
 function fmtKg(w: number): string {
   return w % 1 === 0 ? String(w) : String(w).replace('.', ',');
@@ -472,7 +472,13 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         )}
 
         {/* Carte héro : exercice actuel, dernière fois, charge/reps, disques */}
-        <View style={styles.heroCard}>
+        <LinearGradient
+          colors={[THEME.colors.seriesCardFrom, THEME.colors.seriesCardMid, THEME.colors.seriesCardTo]}
+          locations={[0, 0.6, 1]}
+          start={{ x: 0.1, y: 0 }}
+          end={{ x: 0.9, y: 1 }}
+          style={styles.heroCard}
+        >
           <View style={styles.heroTopRow}>
             <View style={styles.typeBadge}>
               <Text style={styles.typeBadgeText}>
@@ -494,7 +500,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
               <View style={styles.lastPerfChipsRow}>
                 {currentLastPerf.sets.map((s, idx) => (
                   <View key={idx} style={styles.lastPerfChip}>
-                    <Dot color={FEELING_INK[s.feeling]} size={8} />
+                    <Dot color={FEELING_BORDER[s.feeling]} size={8} />
                     <Text style={styles.lastPerfChipText}>{fmtKg(s.weight)} × {s.repsDone}</Text>
                   </View>
                 ))}
@@ -545,34 +551,32 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
               category={currentExercise.category}
             />
           )}
-        </View>
+        </LinearGradient>
 
         {/* Validation par ressenti */}
         <Text style={styles.sectionLabel}>VALIDER LA SÉRIE {currentSetNum}</Text>
-        <View style={styles.feelingRow}>
+        <View style={styles.feelingRows}>
           {(['EASY', 'MEDIUM', 'HARD'] as Feeling[]).map((feeling) => {
             const cfg = FEELING_CONFIG[feeling];
+            const ink = FEELING_INK[feeling];
             return (
               <Pressable
                 key={feeling}
                 onPress={() => handleCompleteSet(feeling)}
-                style={({ pressed }) => [styles.feelTileFlex, pressed && styles.feelTilePressed]}
+                style={({ pressed }) => [
+                  styles.feelRow,
+                  { backgroundColor: FEELING_BG[feeling], borderColor: FEELING_BORDER[feeling] },
+                  pressed && styles.feelRowPressed,
+                ]}
               >
-                <LinearGradient
-                  colors={FEELING_GRADIENT[feeling]}
-                  start={{ x: 0.1, y: 0 }}
-                  end={{ x: 0.6, y: 1 }}
-                  style={styles.feelTile}
-                >
-                  <View style={styles.feelTileTopRow}>
-                    <Text style={[styles.feelTileMark, { color: FEELING_INK[feeling] }]}>{cfg.mark}</Text>
-                    <Dot color={FEELING_INK[feeling]} size={10} />
-                  </View>
-                  <View>
-                    <Text style={[styles.feelTileTitle, { color: FEELING_INK[feeling] }]}>{cfg.label}</Text>
-                    <Text style={[styles.feelTileSub, { color: FEELING_INK[feeling] }]}>{cfg.sub}</Text>
-                  </View>
-                </LinearGradient>
+                <View style={[styles.feelRowMark, { backgroundColor: FEELING_BORDER[feeling] }]}>
+                  <Text style={[styles.feelRowMarkText, { color: ink }]}>{cfg.mark}</Text>
+                </View>
+                <View style={styles.feelRowTextCol}>
+                  <Text style={[styles.feelRowTitle, { color: ink }]}>{cfg.label}</Text>
+                  <Text style={[styles.feelRowSub, { color: ink }]}>{cfg.sub}</Text>
+                </View>
+                <Icon name="arrow-right" size={20} color={ink} />
               </Pressable>
             );
           })}
@@ -888,16 +892,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   heroCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.88)',
     borderRadius: THEME.radius.hero,
-    borderWidth: 1,
-    borderColor: '#FFFFFF',
     padding: 20,
     gap: 16,
     shadowColor: THEME.colors.shadow,
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.14,
-    shadowRadius: 30,
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.35,
+    shadowRadius: 36,
   },
   heroTopRow: {
     flexDirection: 'row',
@@ -905,7 +906,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   typeBadge: {
-    backgroundColor: INK_SURFACE,
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: THEME.radius.pill,
@@ -914,20 +915,20 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
     fontWeight: '800',
-    color: THEME.colors.textPrimary,
+    color: THEME.colors.textOnDark,
     letterSpacing: 0.4,
   },
   setCounterText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
     fontWeight: '800',
-    color: THEME.colors.textSecondary,
+    color: 'rgba(242, 246, 252, 0.75)',
   },
   currentExName: {
     fontFamily: THEME.fonts.serif,
     fontSize: 26,
     fontWeight: '600',
-    color: THEME.colors.textPrimary,
+    color: THEME.colors.textOnDark,
     letterSpacing: -0.3,
     lineHeight: 30,
   },
@@ -938,8 +939,7 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
     fontWeight: '700',
-    color: THEME.colors.textSecondary,
-    opacity: 0.7,
+    color: 'rgba(242, 246, 252, 0.7)',
   },
   lastPerfChipsRow: {
     flexDirection: 'row',
@@ -950,7 +950,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: INK_SURFACE,
+    backgroundColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: THEME.radius.pill,
@@ -959,10 +959,10 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
     fontWeight: '700',
-    color: THEME.colors.textPrimary,
+    color: THEME.colors.textOnDark,
   },
   stepperContainer: {
-    backgroundColor: INK_SURFACE,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: THEME.radius.card,
     padding: 8,
     gap: 6,
@@ -976,13 +976,13 @@ const styles = StyleSheet.create({
     width: 64,
     height: 56,
     borderRadius: THEME.radius.inner,
-    backgroundColor: THEME.colors.cardBg,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepperBtnLgText: {
     fontFamily: THEME.fonts.sans,
-    color: THEME.colors.textPrimary,
+    color: THEME.colors.textOnDark,
     fontSize: 15,
     fontWeight: '800',
   },
@@ -994,7 +994,7 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
     fontWeight: '800',
-    color: THEME.colors.textSecondary,
+    color: 'rgba(242, 246, 252, 0.7)',
     letterSpacing: 0.4,
   },
   stepperValueRow: {
@@ -1006,7 +1006,7 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     fontSize: 40,
     fontWeight: '800',
-    color: THEME.colors.textPrimary,
+    color: THEME.colors.textOnDark,
     letterSpacing: -1,
     fontVariant: ['tabular-nums'],
   },
@@ -1014,7 +1014,7 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     fontSize: 15,
     fontWeight: '700',
-    color: THEME.colors.textSecondary,
+    color: 'rgba(242, 246, 252, 0.75)',
   },
   sectionLabel: {
     fontFamily: THEME.fonts.sans,
@@ -1023,40 +1023,45 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary,
     letterSpacing: 1,
   },
-  feelingRow: {
-    flexDirection: 'row',
+  feelingRows: {
     gap: 8,
   },
-  feelTileFlex: {
-    flex: 1,
-  },
-  feelTilePressed: {
-    transform: [{ scale: 0.95 }],
-  },
-  feelTile: {
-    height: 108,
+  feelRow: {
+    height: 66,
     borderRadius: THEME.radius.card,
-    padding: 14,
-    justifyContent: 'space-between',
-  },
-  feelTileTopRow: {
+    borderWidth: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    gap: 14,
+    paddingLeft: 11,
+    paddingRight: 18,
   },
-  feelTileMark: {
+  feelRowPressed: {
+    transform: [{ scale: 0.98 }],
+  },
+  feelRowMark: {
+    width: 44,
+    height: 44,
+    borderRadius: THEME.radius.inner,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  feelRowMarkText: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 24,
+    fontSize: 17,
     fontWeight: '800',
   },
-  feelTileTitle: {
+  feelRowTextCol: {
+    flex: 1,
+  },
+  feelRowTitle: {
     fontFamily: THEME.fonts.sans,
     fontSize: 16,
     fontWeight: '800',
   },
-  feelTileSub: {
+  feelRowSub: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
     marginTop: 2,
   },
