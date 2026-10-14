@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
   },
   platesRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     gap: 3,
     flexShrink: 0,
   },

@@ -506,7 +506,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
             <LinearGradient colors={split.gradient} style={styles.headerBadge} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}>
               <Text style={[styles.headerBadgeText, { color: split.fg }]}>{workoutName.charAt(0)}</Text>
             </LinearGradient>
-            <View>
+            <View style={styles.headerTitleCol}>
               <Text style={styles.sessionTitle}>{workoutName}</Text>
               <Text style={styles.sessionSubtitle} numberOfLines={1}>{SPLIT_SUBTITLES[workoutId]}</Text>
             </View>
@@ -927,6 +927,10 @@ const styles = StyleSheet.create({
     gap: 10,
     flex: 1,
     marginRight: 10,
+  },
+  headerTitleCol: {
+    flexShrink: 1,
+    minWidth: 0,
   },
   headerBadge: {
     width: 40,
