@@ -1,78 +1,91 @@
-# 🏋️‍♂️ Gym Progression App - Surcharge Progressive PPL
+# 🏋️ mooscles
 
-Application mobile hors-ligne conçue pour automatiser la surcharge progressive en salle de musculation (programme PPL axé **Hammer Strength Plate-Loaded** + **Finishers poly-articulaires à la barre libre**).
-
----
-
-## 📱 Fonctionnalités Clés (MVP)
-
-1. **User Flow "Live Companion"** :
-   - **Étape 1 (Préparation)** : Choix du programme (Push, Pull, Legs) et réglage des temps de repos automatiques.
-   - **Étape 2 (Cartes Focus format Tinder)** : Une seule carte à la fois pour un focus total en séance.
-   - **Étape 3 (Validation ultra-rapide)** : 3 gros boutons tactiles (🟢 Facile, 🟠 Juste, 🔴 Échec).
-   - **Étape 4 (Minuteur automatique)** : Compte à rebours automatique avec alertes sonores et vibrations haptiques.
-   - **Étape 5 (Bilan $N+1$)** : Calcul automatique déterministe des charges pour la prochaine séance.
-2. **Calculateur visuel de disques** :
-   - Affiche les disques à charger par côté (`20, 10, 5, 2.5, 1.25 kg`) avec code couleur olympique.
-3. **100 % Hors-ligne** :
-   - Base de données SQLite locale (`expo-sqlite`). Aucune connexion requise à la salle.
-4. **Écran toujours allumé** :
-   - Empêche la mise en veille automatique du smartphone pendant l'entraînement (`expo-keep-awake`).
+Application mobile Android, 100 % hors-ligne, pour suivre un programme Push / Pull / Legs avec suggestion automatique des charges (surcharge progressive) et visualisation des disques à charger.
 
 ---
 
-## 🚀 Démarrer et Tester l'Application en 1 Minute
+## 📱 Fonctionnalités
 
-### 1. Sur ton smartphone (Le plus rapide)
-1. Installe l'application gratuite **Expo Go** sur ton téléphone Android (Google Play Store) ou iOS (App Store).
-2. Assure-toi que ton PC et ton téléphone sont connectés au même réseau Wi-Fi.
-3. Dans le terminal du projet, lance :
-   ```bash
-   npx expo start
-   ```
-4. Scanne le **QR Code** affiché dans le terminal avec l'application Expo Go (ou l'appareil photo sur iOS).
+**Séance en direct**
+- Sélection du split (Push / Pull / Legs) depuis l'accueil, qui affiche aussi le temps écoulé depuis la dernière séance de chaque split.
+- Un écran de série à la fois : charge et répétitions ajustables, validation en un geste.
+- Séries d'échauffement suggérées (barre libre et machines) et décomposition visuelle des disques à charger par côté (code couleur olympique).
+- Minuteur de repos plein écran avec alerte sonore, vibration et notification — durée automatique selon l'équipement (poulie / machine / barre libre).
+
+**Algorithme de progression (double progression)**
+- Deux modes par exercice : `CHARGE` (séries identiques, poids qui monte — compound/machine) et `REPS_PUIS_CHARGE` (les répétitions montent dans une plage avant que le poids augmente — isolation/poulie).
+- Classification de chaque séance (réussie facile / réussie / partielle / ratée) à partir des répétitions réellement faites, avec déchargement uniquement après 2 échecs consécutifs ou 3 séances sans réussite — jamais sur une seule mauvaise séance.
+- Réduction automatique de la charge après une longue coupure (14/30 jours), calibration libre au premier lancement d'un nouvel exercice.
+
+**Bilan & historique**
+- Fin de séance : statut et prochaine charge par exercice, ressenti mental/physique et étirements (optionnel).
+- Historique groupé par mois, une feuille unique pour tout modifier d'une séance passée (programme, exercices, séries), mini phrase bilan générée automatiquement par séance.
+- Export de l'historique en texte lisible, et sauvegarde/restauration complète en JSON (catalogue, historique, progression, ressentis, poids de corps) via le partage natif — aucune synchronisation cloud intégrée.
+
+**Suivi**
+- Tiroir de stats sur l'accueil : volume et régularité par semaine, répartition du volume par groupe musculaire, courbe de force estimée (formule Epley) sur les exercices barre libre, records personnels.
+- Suivi du poids de corps avec photo optionnelle (appareil photo ou galerie).
+
+**Catalogue**
+- Exercices Hammer Strength (machines), finishers barre libre, exercices poulie — catalogue géré en base, modifiable (ajout/suppression) directement dans l'app.
 
 ---
 
-## 🐙 Synchroniser avec GitHub
+## 🏗️ Stack technique
 
-Pour héberger et versionner ton code sur GitHub :
-
-1. **Crée un nouveau dépôt vide sur [GitHub.com](https://github.com/new)** (ex: nomme-le `gym-progression-app`, sans cocher "Add a README").
-2. **Dans le terminal de ton projet, exécute les commandes suivantes** (en remplaçant `<TON_PSEUDO>` par ton identifiant GitHub) :
-   ```bash
-   git remote add origin https://github.com/<TON_PSEUDO>/gym-progression-app.git
-   git branch -M main
-   git push -u origin main
-   ```
+- **Expo SDK 57** (React Native) + TypeScript
+- **expo-sqlite** : toute la donnée est locale, aucun compte ni backend
+- **expo-updates** (OTA) + **EAS Build** pour la distribution Android (voir ci-dessous)
 
 ---
 
-## 🏗️ Structure du Projet
+## 🚀 Mises à jour & build
+
+Deux canaux de livraison distincts, à ne pas confondre :
+
+- **Mise à jour OTA** (`eas update`, via `.github/workflows/publish-update.yml`) : se déclenche automatiquement à chaque `push` sur `main`. Elle met à jour le code JS/les assets d'une app déjà installée, **sans réinstallation** — appliquée au prochain lancement de l'app. Suffisant pour la quasi-totalité des changements (écrans, logique, styles, schéma SQLite).
+- **Nouvel APK** (`eas build`, via `.github/workflows/build-android-apk.yml`, déclenchement manuel) : nécessaire uniquement quand une **nouvelle dépendance native** est ajoutée (ex: `expo-image-picker`, `expo-document-picker`) — un changement qu'une mise à jour OTA ne peut pas livrer, car le module natif doit être compilé dans le binaire.
+
+Le champ `version` dans `app.json` pilote le `runtimeVersion` (politique `appVersion`) : une mise à jour OTA n'est proposée qu'aux APK partageant la même version. **Toujours incrémenter `version` avant de pousser un changement qui ajoute une dépendance native**, pour qu'un APK existant (sans ce module) ne tente jamais de charger une mise à jour qui le ferait planter.
+
+---
+
+## 🏗️ Structure du projet
 
 ```
-gym-progression-app/
+mooscles/
 ├── src/
 │   ├── components/
-│   │   ├── ExerciseCard.tsx        # Carte focus de l'exercice
-│   │   ├── PlateBreakdown.tsx      # Visualisation des disques par côté
-│   │   └── RestTimerOverlay.tsx    # Minuteur plein écran avec alertes
+│   │   ├── BarChart.tsx            # Graphique en barres réutilisable (stats)
+│   │   ├── BottomSheet.tsx         # Feuille basse commune à toute l'app
+│   │   ├── DashboardSheet.tsx      # Tiroir de stats (accueil)
+│   │   ├── Dot.tsx / Icon.tsx      # Composants partagés
+│   │   ├── PlateBreakdown.tsx      # Décomposition visuelle des disques
+│   │   └── RestTimerOverlay.tsx    # Minuteur de repos plein écran
+│   ├── constants/
+│   │   ├── feeling.ts              # Libellés/couleurs de ressenti (partagés)
+│   │   └── splits.ts               # Métadonnées des splits Push/Pull/Legs
 │   ├── database/
-│   │   ├── db.ts                   # SQLite local (openDatabaseSync)
-│   │   └── seed.ts                 # Catalogue Hammer Strength & Finishers
+│   │   ├── db.ts                   # SQLite local, migrations, requêtes
+│   │   └── seed.ts                 # Catalogue d'exercices par défaut
 │   ├── engine/
-│   │   ├── plateCalculator.ts      # Algorithme de décomposition des disques
-│   │   └── progression.ts          # Algorithme de surcharge progressive
+│   │   ├── plateCalculator.ts      # Décomposition des disques par côté
+│   │   └── progressionV2.ts        # Algorithme de double progression
 │   ├── screens/
-│   │   ├── HistoryScreen.tsx       # Historique des séances passées
-│   │   ├── LiveWorkoutScreen.tsx   # Déroulé complet de la séance
-│   │   ├── SessionPrepScreen.tsx   # Préparation & temps de repos
-│   │   └── WorkoutSummaryScreen.tsx# Bilan & nouvelles charges N+1
+│   │   ├── SplitSelectScreen.tsx   # Accueil (choix du split + tiroir de stats)
+│   │   ├── FreeWorkoutScreen.tsx   # Déroulé de la séance en direct
+│   │   ├── WorkoutSummaryScreen.tsx# Bilan de fin de séance
+│   │   └── HistoryScreen.tsx       # Historique, édition, sauvegarde
+│   ├── theme/
+│   │   └── index.ts                # Thème (couleurs, polices, rayons)
 │   ├── types/
 │   │   └── index.ts                # Modèles et interfaces TypeScript
 │   └── utils/
-│       ├── audio.ts                # Alertes sonores
-│       └── haptics.ts              # Retours vibratoires
+│       ├── audio.ts / haptics.ts / restTimerService.ts
+│       ├── backup.ts               # Export/import JSON complet
+│       ├── bodyPhoto.ts            # Capture/copie de photo (poids de corps)
+│       ├── exportHistory.ts        # Export texte de l'historique
+│       └── format.ts               # Formatage poids/dates partagé
 ├── App.tsx                         # Point d'entrée principal
-└── package.json
+└── app.json                        # Config Expo (version, plugins, EAS)
 ```
