@@ -103,6 +103,22 @@ function fmtKg(w: number): string {
   return w % 1 === 0 ? String(w) : String(w).replace('.', ',');
 }
 
+// Échauffement suggéré (50% × 8, 70% × 4 de la charge de travail), arrondi au palier le plus
+// proche sans jamais descendre sous la charge à vide (barre/machine). Purement informatif : pas
+// de poulie (charges déjà légères, isolation) et uniquement avant la 1ère série de travail.
+function computeWarmupSets(
+  workingWeight: number,
+  baseWeight: number,
+  increment: number
+): { weight: number; reps: number }[] | null {
+  if (workingWeight <= baseWeight) return null;
+  const round = (w: number) => Math.max(baseWeight, Math.round(w / increment) * increment);
+  return [
+    { weight: round(workingWeight * 0.5), reps: 8 },
+    { weight: round(workingWeight * 0.7), reps: 4 },
+  ];
+}
+
 export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   workoutId,
   workoutName,
@@ -462,6 +478,10 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   const currentSetNum = getCurrentSetNumber();
   const currentLastPerf = currentExercise ? lastPerfByExerciseId[currentExercise.id] : null;
   const activeIndex = currentExercise ? catalogExercises.findIndex((e) => e.id === currentExercise.id) : -1;
+  const warmupSets =
+    currentExercise && currentExercise.category !== 'CABLE' && currentSetNum === 1
+      ? computeWarmupSets(currentWeight, currentExercise.baseWeight, currentExercise.minIncrement)
+      : null;
 
   // Volume total accumulé en direct
   const liveVolume = completedExercises.reduce((total, ex) => {
@@ -588,6 +608,19 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 Nouvel exercice : choisis ta charge de départ, la suggestion démarrera à la prochaine séance.
               </Text>
             )
+          )}
+
+          {!!warmupSets && (
+            <View style={styles.warmupBlock}>
+              <Text style={styles.warmupLabel}>ÉCHAUFFEMENT SUGGÉRÉ</Text>
+              <View style={styles.warmupChipsRow}>
+                {warmupSets.map((w, idx) => (
+                  <View key={idx} style={styles.warmupChip}>
+                    <Text style={styles.warmupChipText}>{fmtKg(w.weight)} kg × {w.reps}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
           )}
 
           {/* Steppers pleine largeur */}
@@ -1050,6 +1083,34 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: THEME.colors.textOnDark,
+  },
+  warmupBlock: {
+    gap: 6,
+  },
+  warmupLabel: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(242, 246, 252, 0.7)',
+  },
+  warmupChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  warmupChip: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: THEME.radius.pill,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(242, 246, 252, 0.35)',
+  },
+  warmupChipText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(242, 246, 252, 0.75)',
   },
   stepperContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
