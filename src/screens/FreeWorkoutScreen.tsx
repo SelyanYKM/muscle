@@ -16,7 +16,6 @@ import { Dot } from '../components/Dot';
 import { Icon } from '../components/Icon';
 import { PlateBreakdown } from '../components/PlateBreakdown';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
-import { SPLIT_SUBTITLES } from '../constants/splits';
 import {
   addCustomExercise,
   deleteExercise,
@@ -507,8 +506,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
               <Text style={[styles.headerBadgeText, { color: split.fg }]}>{workoutName.charAt(0)}</Text>
             </LinearGradient>
             <View style={styles.headerTitleCol}>
-              <Text style={styles.sessionTitle}>{workoutName}</Text>
-              <Text style={styles.sessionSubtitle} numberOfLines={1}>{SPLIT_SUBTITLES[workoutId]}</Text>
+              <Text style={styles.sessionTitle} numberOfLines={1}>{workoutName}</Text>
             </View>
           </View>
 
@@ -947,13 +945,6 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.serif,
     fontSize: 24,
     color: THEME.colors.textPrimary,
-  },
-  sessionSubtitle: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 12,
-    fontWeight: '600',
-    color: THEME.colors.textSecondary,
-    marginTop: 1,
   },
   headerRightBox: {
     flexDirection: 'row',

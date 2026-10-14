@@ -202,19 +202,20 @@ export const THEME_BLUE_GOLD = {
     finisherBadgeBg: '#FFF1B8',
     finisherBadgeText: '#00296B',
 
-    // Ressentis — inchangés (sémantique)
-    feelingEasyBg: '#DCF0D4',
-    feelingEasyBorder: '#C3E4C0',
-    feelingEasyText: '#2C5A35',
-    feelingEasyGradient: ['#DCF0D4', '#C3E4C0'] as [string, string],
-    feelingMediumBg: '#FFEBD6',
-    feelingMediumBorder: '#FFDCC0',
-    feelingMediumText: '#8A5321',
-    feelingMediumGradient: ['#FFEBD6', '#FFDCC0'] as [string, string],
-    feelingHardBg: '#FBD9DC',
-    feelingHardBorder: '#F6C3C8',
-    feelingHardText: '#96404A',
-    feelingHardGradient: ['#FBD9DC', '#F6C3C8'] as [string, string],
+    // Ressentis — palette vert/ambre/rouge plus saturée (la précédente, pêche clair vs rose
+    // poudré, était trop proche en teinte/luminosité pour se distinguer en petite pastille).
+    feelingEasyBg: '#DCFCE7',
+    feelingEasyBorder: '#22C55E',
+    feelingEasyText: '#15803D',
+    feelingEasyGradient: ['#DCFCE7', '#BBF7D0'] as [string, string],
+    feelingMediumBg: '#FEF3C7',
+    feelingMediumBorder: '#F59E0B',
+    feelingMediumText: '#B45309',
+    feelingMediumGradient: ['#FEF3C7', '#FDE68A'] as [string, string],
+    feelingHardBg: '#FEE2E2',
+    feelingHardBorder: '#EF4444',
+    feelingHardText: '#B91C1C',
+    feelingHardGradient: ['#FEE2E2', '#FECACA'] as [string, string],
 
     hairline: 'rgba(0, 41, 107, 0.07)',
     shadow: '#00296B',
