@@ -228,9 +228,11 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 52,
-    // Marge basse suffisante pour que les cartes ne soient jamais cachées par la
-    // feuille "Ton progrès" repliée (voir PEEK_HEIGHT dans DashboardSheet.tsx).
-    paddingBottom: 120,
+    // Marge basse : au-delà de ne pas cacher les cartes sous la feuille "Ton progrès" repliée
+    // (PEEK_HEIGHT = 108 dans DashboardSheet.tsx), laisse une vraie zone morte au doigt entre le
+    // bas de la carte Legs et le haut du tiroir — sans ça (paddingBottom trop proche de
+    // PEEK_HEIGHT) un tap visant le tiroir touchait la carte juste au-dessus.
+    paddingBottom: 148,
   },
   headerRow: {
     flexDirection: 'row',
