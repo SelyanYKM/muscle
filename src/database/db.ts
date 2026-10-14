@@ -1,12 +1,13 @@
 import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
-import { ConfiguredExercise, EquipmentCategory, Exercise, ExerciseProgressionState, ProgressionMode, Workout, WorkoutLogEntry } from '../types';
+import { BodyWeightEntry, ConfiguredExercise, EquipmentCategory, Exercise, ExerciseProgressionState, ProgressionMode, Workout, WorkoutLogEntry } from '../types';
 import { SEED_EXERCISES, SEED_WORKOUTS } from './seed';
 
 let db: SQLite.SQLiteDatabase | null = null;
 
 let memoryLogs: WorkoutLogEntry[] = [];
 let memoryExercises: ConfiguredExercise[] = [];
+let memoryBodyWeightLogs: BodyWeightEntry[] = [];
 
 // Valeurs par défaut par catégorie d'équipement — une seule source de vérité au lieu d'un
 // if/else répété à chaque endroit qui en a besoin (repos, poids de base d'un exercice créé).
@@ -166,6 +167,17 @@ export async function initDatabase(): Promise<void> {
         mental_feeling INTEGER,
         stretched INTEGER DEFAULT 0,
         PRIMARY KEY (date, workout_id)
+      );
+    `);
+
+    // Suivi du poids de corps : une entrée par jour, photo optionnelle (chemin local persistant,
+    // copié depuis la galerie/l'appareil photo au moment de l'ajout — jamais l'URI temporaire
+    // renvoyée par le sélecteur).
+    db.execSync(`
+      CREATE TABLE IF NOT EXISTS body_weight_logs (
+        date TEXT PRIMARY KEY,
+        weight REAL NOT NULL,
+        photo_uri TEXT
       );
     `);
 
@@ -643,6 +655,65 @@ export function getAllSessionFeedback(): SessionFeedbackRow[] {
   } catch (error) {
     console.error('Erreur getAllSessionFeedback:', error);
     return [];
+  }
+}
+
+/**
+ * Enregistre une pesée (une par jour, photo optionnelle) — écrase l'entrée du jour si elle
+ * existe déjà (correction d'une pesée déjà saisie).
+ */
+export function saveBodyWeightEntry(date: string, weight: number, photoUri: string | null): void {
+  if (!db || Platform.OS === 'web') {
+    memoryBodyWeightLogs = memoryBodyWeightLogs.filter((e) => e.date !== date);
+    memoryBodyWeightLogs.push({ date, weight, photoUri });
+    return;
+  }
+
+  try {
+    db.runSync(
+      `INSERT INTO body_weight_logs (date, weight, photo_uri)
+       VALUES (?, ?, ?)
+       ON CONFLICT(date) DO UPDATE SET weight = excluded.weight, photo_uri = excluded.photo_uri;`,
+      [date, weight, photoUri]
+    );
+  } catch (error) {
+    console.error('Erreur saveBodyWeightEntry:', error);
+  }
+}
+
+/** Pesées les plus récentes, triées du plus ancien au plus récent (ordre naturel pour un graphique). */
+export function getBodyWeightLogs(limit: number = 60): BodyWeightEntry[] {
+  if (!db || Platform.OS === 'web') {
+    return [...memoryBodyWeightLogs].sort((a, b) => (a.date < b.date ? -1 : 1)).slice(-limit);
+  }
+
+  try {
+    // Sous-requête : les `limit` pesées les plus RÉCENTES, puis ré-ordonnées chronologiquement
+    // (sinon LIMIT appliqué directement sur un ORDER BY ASC renverrait les plus anciennes).
+    return db
+      .getAllSync<{ date: string; weight: number; photo_uri: string | null }>(
+        `SELECT * FROM (
+           SELECT date, weight, photo_uri FROM body_weight_logs ORDER BY date DESC LIMIT ?
+         ) ORDER BY date ASC;`,
+        [limit]
+      )
+      .map((r) => ({ date: r.date, weight: r.weight, photoUri: r.photo_uri }));
+  } catch (error) {
+    console.error('Erreur getBodyWeightLogs:', error);
+    return [];
+  }
+}
+
+export function deleteBodyWeightEntry(date: string): void {
+  if (!db || Platform.OS === 'web') {
+    memoryBodyWeightLogs = memoryBodyWeightLogs.filter((e) => e.date !== date);
+    return;
+  }
+
+  try {
+    db.runSync('DELETE FROM body_weight_logs WHERE date = ?;', [date]);
+  } catch (error) {
+    console.error('Erreur deleteBodyWeightEntry:', error);
   }
 }
 
@@ -1286,4 +1357,91 @@ export function getAllSessionsForExport(): ExportSession[] {
   }
 
   return sessionOrder.map((k) => sessionMap.get(k)!);
+}
+
+// ---------------------------------------------------------------------------
+// Sauvegarde/restauration complète (export JSON) — l'app n'a aucune synchronisation cloud
+// intégrée, c'est la seule protection contre la perte du téléphone.
+// ---------------------------------------------------------------------------
+
+const BACKUP_SCHEMA_VERSION = 1;
+// Tables couvertes par la sauvegarde. app_metadata est volontairement exclu : il ne contient
+// que des drapeaux internes à CETTE installation (versions de migration déjà jouées, conseils
+// déjà affichés) — le restaurer depuis une sauvegarde plus ancienne pourrait faire sauter des
+// migrations qui n'ont pourtant pas encore tourné sur ce téléphone.
+const BACKUP_TABLES = [
+  'workouts',
+  'exercises',
+  'exercise_progression_state',
+  'workout_logs',
+  'session_feedback',
+  'body_weight_logs',
+] as const;
+
+export interface FullBackup {
+  schemaVersion: number;
+  exportedAt: string;
+  tables: Partial<Record<(typeof BACKUP_TABLES)[number], Record<string, unknown>[]>>;
+}
+
+function readAllRows(table: string): Record<string, unknown>[] {
+  if (!db) return [];
+  try {
+    return db.getAllSync<Record<string, unknown>>(`SELECT * FROM ${table};`);
+  } catch (error) {
+    console.error(`Erreur lecture ${table} pour sauvegarde:`, error);
+    return [];
+  }
+}
+
+/** Construit une sauvegarde complète : lignes brutes de chaque table (colonnes SQL d'origine). */
+export function buildFullBackup(): FullBackup {
+  const tables: FullBackup['tables'] = {};
+  if (db && Platform.OS !== 'web') {
+    for (const table of BACKUP_TABLES) {
+      tables[table] = readAllRows(table);
+    }
+  }
+  return {
+    schemaVersion: BACKUP_SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    tables,
+  };
+}
+
+/**
+ * Remplace le contenu des tables couvertes par celui de la sauvegarde — opération destructive,
+ * l'appelant doit avoir fait confirmer explicitement avant d'appeler cette fonction. Atomique
+ * (withTransactionSync) : en cas d'erreur en cours de route, rien n'est modifié.
+ */
+export function restoreFullBackup(backup: FullBackup): { ok: boolean; error?: string } {
+  if (!db || Platform.OS === 'web') {
+    return { ok: false, error: 'Restauration indisponible sur cette plateforme.' };
+  }
+  if (!backup || typeof backup !== 'object' || !backup.tables) {
+    return { ok: false, error: 'Fichier de sauvegarde invalide.' };
+  }
+
+  try {
+    db.withTransactionSync(() => {
+      for (const table of BACKUP_TABLES) {
+        const rows = backup.tables[table];
+        if (!rows) continue;
+        db!.runSync(`DELETE FROM ${table};`);
+        for (const row of rows) {
+          const columns = Object.keys(row);
+          if (columns.length === 0) continue;
+          const placeholders = columns.map(() => '?').join(', ');
+          db!.runSync(
+            `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders});`,
+            columns.map((c) => row[c]) as (string | number | null)[]
+          );
+        }
+      }
+    });
+    return { ok: true };
+  } catch (error) {
+    console.error('Erreur restoreFullBackup:', error);
+    return { ok: false, error: "La restauration a échoué — la base n'a pas été modifiée." };
+  }
 }

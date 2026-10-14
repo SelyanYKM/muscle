@@ -28,6 +28,7 @@ import {
 } from '../database/db';
 import { THEME } from '../theme';
 import { Feeling, WorkoutLogEntry } from '../types';
+import { exportBackupFile, importBackupFile } from '../utils/backup';
 import { exportHistoryAsText } from '../utils/exportHistory';
 import { fmtKg, parseLocalDate } from '../utils/format';
 import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
@@ -150,6 +151,8 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
   const [feedbackByKey, setFeedbackByKey] = useState<Record<string, SessionFeedbackRow>>({});
   const [expandedSessions, setExpandedSessions] = useState<{ [sessionKey: string]: boolean }>({});
   const [isExporting, setIsExporting] = useState(false);
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
   const chevronAnim = useChevronAnim();
 
   // Édition unifiée d'une séance passée : programme + tous ses exercices/séries en un seul
@@ -253,6 +256,44 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
       await exportHistoryAsText();
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleBackup = async () => {
+    if (isBackingUp) return;
+    triggerLightHaptic();
+    setIsBackingUp(true);
+    try {
+      await exportBackupFile();
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
+
+  const confirmRestore = () => {
+    triggerWarningHaptic();
+    Alert.alert(
+      'Restaurer une sauvegarde ?',
+      'Toutes tes données actuelles (catalogue, historique, progression) seront remplacées par celles du fichier choisi. Cette action est irréversible.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Choisir un fichier', style: 'destructive', onPress: handleRestore },
+      ]
+    );
+  };
+
+  const handleRestore = async () => {
+    if (isRestoring) return;
+    setIsRestoring(true);
+    try {
+      const outcome = await importBackupFile();
+      if (outcome === 'restored') {
+        triggerMediumHaptic();
+        loadHierarchicalLogs();
+        Alert.alert('Restauration terminée', 'Tes données ont été remplacées par celles de la sauvegarde.');
+      }
+    } finally {
+      setIsRestoring(false);
     }
   };
 
@@ -480,6 +521,31 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
         >
           <Text style={styles.exportButtonText}>{isExporting ? '...' : 'Exporter'}</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Sauvegarde complète : contrairement à "Exporter" (texte lisible, non réimportable),
+          ce JSON couvre catalogue + historique + progression et peut être restauré plus tard —
+          seule protection contre la perte du téléphone, l'app n'a pas de synchro cloud. */}
+      <View style={styles.backupRow}>
+        <Text style={styles.backupLabel}>SAUVEGARDE COMPLÈTE</Text>
+        <View style={styles.backupBtnRow}>
+          <TouchableOpacity
+            style={styles.backupBtn}
+            onPress={handleBackup}
+            disabled={isBackingUp}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.backupBtnText}>{isBackingUp ? '...' : 'Sauvegarder'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.backupBtn}
+            onPress={confirmRestore}
+            disabled={isRestoring}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.backupBtnText}>{isRestoring ? '...' : 'Restaurer'}</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {sessions.length === 0 ? (
@@ -745,8 +811,42 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 22,
+    marginBottom: 14,
     gap: 12,
+  },
+  backupRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderRadius: THEME.radius.inner,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 20,
+  },
+  backupLabel: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 10,
+    fontWeight: '800',
+    color: THEME.colors.textSecondary,
+    letterSpacing: 0.6,
+  },
+  backupBtnRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  backupBtn: {
+    height: 30,
+    justifyContent: 'center',
+    backgroundColor: THEME.colors.cardInner,
+    paddingHorizontal: 12,
+    borderRadius: THEME.radius.pill,
+  },
+  backupBtnText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
+    fontWeight: '700',
+    color: THEME.colors.accentStrong,
   },
   backButton: {
     width: 40,

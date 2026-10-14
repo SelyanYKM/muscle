@@ -90,6 +90,12 @@ export interface PlateInfo {
   textColor: string;
 }
 
+export interface BodyWeightEntry {
+  date: string; // 'YYYY-MM-DD', une entrée par jour
+  weight: number;
+  photoUri: string | null; // chemin local persistant (Paths.document), jamais une URI temporaire
+}
+
 // --- Algorithme de suggestion de charges v2 (double progression) ---
 // Remplace le moteur ressenti EASY/MEDIUM/HARD par une classification basée uniquement sur
 // les répétitions réellement faites vs l'objectif, avec deux modes de progression par exercice.

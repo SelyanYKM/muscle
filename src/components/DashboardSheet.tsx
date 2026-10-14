@@ -1,20 +1,26 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   Dimensions,
+  Image,
   PanResponder,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
 import Svg, { Rect } from 'react-native-svg';
-import { DashboardSummary } from '../database/db';
+import { DashboardSummary, formatLocalDate, getBodyWeightLogs, saveBodyWeightEntry } from '../database/db';
 import { THEME } from '../theme';
-import { parseLocalDate } from '../utils/format';
-import { triggerLightHaptic } from '../utils/haptics';
+import { BodyWeightEntry } from '../types';
+import { pickBodyWeightPhoto } from '../utils/bodyPhoto';
+import { fmtKg, parseLocalDate } from '../utils/format';
+import { triggerLightHaptic, triggerMediumHaptic } from '../utils/haptics';
 import { BarChart } from './BarChart';
+import { BottomSheet } from './BottomSheet';
 import { Icon } from './Icon';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -72,6 +78,50 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
   const translateY = useRef(new Animated.Value(COLLAPSED_TRANSLATE)).current;
   const isExpandedRef = useRef(false);
   const dragStartRef = useRef(0);
+
+  // Suivi du poids de corps : chargé une fois au montage, indépendant de `summary` (recalculé à
+  // chaque ouverture du split-select — pas besoin d'y mêler ce qui n'en fait pas partie).
+  const [bodyWeightLogs, setBodyWeightLogs] = useState<BodyWeightEntry[]>([]);
+  const [isAddWeightOpen, setIsAddWeightOpen] = useState(false);
+  const [newWeightText, setNewWeightText] = useState('');
+  const [newWeightPhotoUri, setNewWeightPhotoUri] = useState<string | null>(null);
+  const [isPickingPhoto, setIsPickingPhoto] = useState(false);
+
+  useEffect(() => {
+    setBodyWeightLogs(getBodyWeightLogs());
+  }, []);
+
+  const openAddWeightSheet = () => {
+    triggerLightHaptic();
+    const lastEntry = bodyWeightLogs[bodyWeightLogs.length - 1];
+    setNewWeightText(lastEntry ? fmtKg(lastEntry.weight) : '');
+    setNewWeightPhotoUri(null);
+    setIsAddWeightOpen(true);
+  };
+
+  const handlePickWeightPhoto = async (source: 'camera' | 'library') => {
+    if (isPickingPhoto) return;
+    setIsPickingPhoto(true);
+    try {
+      const uri = await pickBodyWeightPhoto(source, formatLocalDate(new Date()));
+      if (uri) setNewWeightPhotoUri(uri);
+    } finally {
+      setIsPickingPhoto(false);
+    }
+  };
+
+  const handleSaveWeight = () => {
+    const weight = parseFloat(newWeightText.replace(',', '.'));
+    if (!weight || weight <= 0) {
+      Alert.alert('Poids invalide', 'Renseigne un poids valide.');
+      return;
+    }
+    triggerMediumHaptic();
+    const date = formatLocalDate(new Date());
+    saveBodyWeightEntry(date, weight, newWeightPhotoUri);
+    setBodyWeightLogs(getBodyWeightLogs());
+    setIsAddWeightOpen(false);
+  };
 
   const snapTo = (expand: boolean) => {
     triggerLightHaptic();
@@ -193,6 +243,43 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
             formatValue={(v) => `${v} séance${v > 1 ? 's' : ''}`}
           />
 
+          {/* Poids de corps (optionnellement accompagné d'une photo) */}
+          <View style={{ marginTop: 18 }}>
+            <View style={styles.bwHeaderRow}>
+              <Text style={styles.sectionLabel}>POIDS DE CORPS</Text>
+              <TouchableOpacity onPress={openAddWeightSheet} activeOpacity={0.8}>
+                <Text style={styles.bwAddLink}>+ Ajouter</Text>
+              </TouchableOpacity>
+            </View>
+
+            {bodyWeightLogs.length === 0 ? (
+              <Text style={styles.bwEmptyText}>Pas encore de pesée enregistrée.</Text>
+            ) : (
+              <>
+                <BarChart
+                  data={bodyWeightLogs.map((e) => ({ label: formatWeekLabel(e.date), value: e.weight }))}
+                  color={THEME.colors.accent}
+                  height={80}
+                  formatValue={(v) => `${fmtKg(v)} kg`}
+                />
+                {bodyWeightLogs.some((e) => e.photoUri) && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bwPhotoScroll}>
+                    {bodyWeightLogs
+                      .filter((e) => !!e.photoUri)
+                      .slice(-10)
+                      .reverse()
+                      .map((e) => (
+                        <View key={e.date} style={styles.bwPhotoThumbWrap}>
+                          <Image source={{ uri: e.photoUri! }} style={styles.bwPhotoThumb} />
+                          <Text style={styles.bwPhotoThumbDate}>{formatWeekLabel(e.date)}</Text>
+                        </View>
+                      ))}
+                  </ScrollView>
+                )}
+              </>
+            )}
+          </View>
+
           {/* Répartition du volume par groupe musculaire (4 dernières semaines) */}
           {summary.volumeByMuscleGroup.length > 0 && (
             <>
@@ -271,6 +358,58 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
           )}
         </ScrollView>
       </Animated.View>
+
+      {/* FEUILLE : AJOUTER UNE PESÉE (poids du jour + photo optionnelle) */}
+      <BottomSheet visible={isAddWeightOpen} onClose={() => setIsAddWeightOpen(false)} maxHeightPercent={65}>
+        <Text style={styles.bwSheetTitle}>Ajouter une pesée</Text>
+        <Text style={styles.bwSheetSubtitle}>Aujourd'hui</Text>
+
+        <Text style={styles.sectionLabel}>POIDS (KG)</Text>
+        <TextInput
+          style={styles.bwWeightInput}
+          value={newWeightText}
+          onChangeText={setNewWeightText}
+          keyboardType="decimal-pad"
+          placeholder="72,5"
+          placeholderTextColor={THEME.colors.textMuted}
+        />
+
+        <Text style={[styles.sectionLabel, { marginTop: 16 }]}>PHOTO (OPTIONNEL)</Text>
+        {newWeightPhotoUri ? (
+          <View style={styles.bwPhotoPreviewRow}>
+            <Image source={{ uri: newWeightPhotoUri }} style={styles.bwPhotoPreview} />
+            <TouchableOpacity onPress={() => setNewWeightPhotoUri(null)}>
+              <Text style={styles.bwRemovePhotoText}>Retirer</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.bwPhotoBtnRow}>
+            <TouchableOpacity
+              style={styles.bwPhotoBtn}
+              onPress={() => handlePickWeightPhoto('camera')}
+              disabled={isPickingPhoto}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.bwPhotoBtnText}>{isPickingPhoto ? '...' : 'Appareil photo'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.bwPhotoBtn}
+              onPress={() => handlePickWeightPhoto('library')}
+              disabled={isPickingPhoto}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.bwPhotoBtnText}>{isPickingPhoto ? '...' : 'Galerie'}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <TouchableOpacity style={styles.bwSaveBtn} onPress={handleSaveWeight} activeOpacity={0.85}>
+          <Text style={styles.bwSaveBtnText}>Enregistrer</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.bwCancelBtn} onPress={() => setIsAddWeightOpen(false)} activeOpacity={0.8}>
+          <Text style={styles.bwCancelBtnText}>Annuler</Text>
+        </TouchableOpacity>
+      </BottomSheet>
     </>
   );
 };
@@ -508,5 +647,134 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     color: THEME.colors.accentStrong,
+  },
+  bwHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  bwAddLink: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
+    fontWeight: '700',
+    color: THEME.colors.accentStrong,
+  },
+  bwEmptyText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    fontStyle: 'italic',
+  },
+  bwPhotoScroll: {
+    marginTop: 10,
+  },
+  bwPhotoThumbWrap: {
+    marginRight: 8,
+    alignItems: 'center',
+  },
+  bwPhotoThumb: {
+    width: 56,
+    height: 74,
+    borderRadius: THEME.radius.inner,
+    backgroundColor: THEME.colors.cardInner,
+  },
+  bwPhotoThumbDate: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 9,
+    fontWeight: '700',
+    color: THEME.colors.textSecondary,
+    marginTop: 3,
+  },
+  bwSheetTitle: {
+    fontFamily: THEME.fonts.serif,
+    fontSize: 26,
+    color: THEME.colors.textPrimary,
+  },
+  bwSheetSubtitle: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    fontWeight: '600',
+    marginTop: 2,
+    marginBottom: 14,
+  },
+  bwWeightInput: {
+    height: 52,
+    backgroundColor: THEME.colors.bg,
+    color: THEME.colors.textPrimary,
+    fontFamily: THEME.fonts.sans,
+    fontSize: 16,
+    fontWeight: '700',
+    paddingHorizontal: 14,
+    borderRadius: THEME.radius.inner,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+    marginTop: 6,
+  },
+  bwPhotoBtnRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 6,
+  },
+  bwPhotoBtn: {
+    flex: 1,
+    height: 46,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: THEME.colors.cardInner,
+    borderRadius: THEME.radius.inner,
+  },
+  bwPhotoBtnText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 13,
+    fontWeight: '700',
+    color: THEME.colors.textPrimary,
+  },
+  bwPhotoPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 6,
+  },
+  bwPhotoPreview: {
+    width: 64,
+    height: 84,
+    borderRadius: THEME.radius.inner,
+    backgroundColor: THEME.colors.cardInner,
+  },
+  bwRemovePhotoText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
+    fontWeight: '700',
+    color: THEME.colors.feelingHardText,
+  },
+  bwSaveBtn: {
+    height: 54,
+    backgroundColor: THEME.colors.textPrimary,
+    borderRadius: THEME.radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  bwSaveBtnText: {
+    fontFamily: THEME.fonts.sans,
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  bwCancelBtn: {
+    paddingVertical: 13,
+    borderRadius: THEME.radius.pill,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+  },
+  bwCancelBtnText: {
+    fontFamily: THEME.fonts.sans,
+    color: THEME.colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
