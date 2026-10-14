@@ -89,6 +89,18 @@ const FEELING_BG: Record<Feeling, string> = {
   HARD: THEME.colors.feelingHardBg,
 };
 
+const CATEGORY_LABEL: Record<EquipmentCategory, string> = {
+  HAMMER_STRENGTH: 'HAMMER STRENGTH',
+  FREE_WEIGHT: 'BARRE LIBRE · FINISHER',
+  CABLE: 'POULIE',
+};
+
+const CATEGORY_SUB_LABEL: Record<EquipmentCategory, string> = {
+  HAMMER_STRENGTH: 'Hammer Strength',
+  FREE_WEIGHT: 'Barre Libre',
+  CABLE: 'Poulie',
+};
+
 function fmtKg(w: number): string {
   return w % 1 === 0 ? String(w) : String(w).replace('.', ',');
 }
@@ -385,7 +397,6 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     });
   };
 
-  const isFinisher = currentExercise?.category === 'FREE_WEIGHT';
   const currentSetNum = getCurrentSetNumber();
   const currentLastPerf = currentExercise ? lastPerfByExerciseId[currentExercise.id] : null;
   const activeIndex = currentExercise ? catalogExercises.findIndex((e) => e.id === currentExercise.id) : -1;
@@ -482,7 +493,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           <View style={styles.heroTopRow}>
             <View style={styles.typeBadge}>
               <Text style={styles.typeBadgeText}>
-                {isFinisher ? 'BARRE LIBRE · FINISHER' : 'HAMMER STRENGTH'}
+                {currentExercise ? CATEGORY_LABEL[currentExercise.category] : 'HAMMER STRENGTH'}
               </Text>
             </View>
             <Text style={styles.setCounterText}>Série {currentSetNum}</Text>
@@ -543,8 +554,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
             </View>
           </View>
 
-          {/* Disques */}
-          {currentExercise && (
+          {/* Disques (hors poulie : pile à broche, rien à décomposer) */}
+          {currentExercise && currentExercise.category !== 'CABLE' && (
             <PlateBreakdown
               totalWeight={currentWeight}
               baseWeight={currentExercise.baseWeight}
@@ -680,7 +691,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 <View style={{ flex: 1 }}>
                   <Text style={styles.catalogItemName}>{catEx.name}</Text>
                   <Text style={styles.catalogItemSub}>
-                    {catEx.category === 'FREE_WEIGHT' ? 'Barre Libre' : 'Hammer Strength'} · conseillé {fmtKg(catEx.plannedWeights?.[0] || 40)} kg
+                    {CATEGORY_SUB_LABEL[catEx.category]} · conseillé {fmtKg(catEx.plannedWeights?.[0] || 40)} kg
                   </Text>
                 </View>
                 {doneSets.length > 0 && (
@@ -737,6 +748,14 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           >
             <Text style={[styles.typeSegmentText, newExCategory === 'HAMMER_STRENGTH' && styles.typeSegmentTextActive]}>
               Machine · 0 kg
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.typeSegment, newExCategory === 'CABLE' && styles.typeSegmentActive]}
+            onPress={() => setNewExCategory('CABLE')}
+          >
+            <Text style={[styles.typeSegmentText, newExCategory === 'CABLE' && styles.typeSegmentTextActive]}>
+              Poulie · 0 kg
             </Text>
           </TouchableOpacity>
           <TouchableOpacity

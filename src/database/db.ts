@@ -86,8 +86,11 @@ export async function initDatabase(): Promise<void> {
       );
     `);
 
+    // v4 : ajout des exercices à la poulie (triceps, élévations latérales, face pull, curl
+    // biceps) — relance le bloc de seed pour les installations déjà passées par v3, sans
+    // toucher aux exercices personnalisés de l'utilisateur (hors de SEED_EXERCISES).
     const catalogVersion = db.getFirstSync<{ value: string }>(
-      "SELECT value FROM app_metadata WHERE key = 'seed_version_v3';"
+      "SELECT value FROM app_metadata WHERE key = 'seed_version_v4';"
     );
 
     const workoutCount = db.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM workouts;');
@@ -142,7 +145,7 @@ export async function initDatabase(): Promise<void> {
         }
       }
 
-      db.runSync("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('seed_version_v3', '1');");
+      db.runSync("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('seed_version_v4', '1');");
     }
   } catch (error) {
     console.warn('Erreur initialisation SQLite, utilisation du mode mémoire de secours:', error);

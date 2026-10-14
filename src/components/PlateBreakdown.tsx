@@ -2,11 +2,14 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { getPlateBreakdownPerSide } from '../engine/plateCalculator';
 import { THEME } from '../theme';
+import { EquipmentCategory } from '../types';
 
 interface PlateBreakdownProps {
   totalWeight: number;
   baseWeight?: number;
-  category: 'HAMMER_STRENGTH' | 'FREE_WEIGHT';
+  // N'est jamais rendu pour 'CABLE' (pile à broche, pas de disques) : le type accepte quand
+  // même toute EquipmentCategory pour rester compatible avec currentExercise.category côté appelant.
+  category: EquipmentCategory;
 }
 
 // Taille fixe par type de disque (pas une formule : des valeurs de design figées), plus

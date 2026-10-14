@@ -1,6 +1,6 @@
 export type Feeling = 'EASY' | 'MEDIUM' | 'HARD';
 
-export type EquipmentCategory = 'HAMMER_STRENGTH' | 'FREE_WEIGHT';
+export type EquipmentCategory = 'HAMMER_STRENGTH' | 'FREE_WEIGHT' | 'CABLE';
 
 export interface Exercise {
   id: number;
