@@ -21,8 +21,8 @@ import {
   deleteWorkoutSession,
   getAllSessionFeedback,
   getRecentLogs,
+  insertExerciseLogsForSession,
   SessionFeedbackRow,
-  updateExerciseLogsForSession,
   updateWorkoutSessionType,
 } from '../database/db';
 import { THEME } from '../theme';
@@ -380,21 +380,39 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
   };
 
   const removeEditingExercise = (exIdx: number) => {
+    const exerciseName = editingSession?.exercises[exIdx]?.name;
+    if (!exerciseName) return;
     triggerWarningHaptic();
-    setEditingSession((prev) => {
-      if (!prev) return prev;
-      const removedName = prev.exercises[exIdx].originalName;
-      return {
-        ...prev,
-        exercises: prev.exercises.filter((_, idx) => idx !== exIdx),
-        removedExerciseNames: [...prev.removedExerciseNames, removedName],
-      };
-    });
+
+    Alert.alert(
+      'Retirer cet exercice ?',
+      `« ${exerciseName} » sera retiré de cette séance quand tu enregistreras les modifications.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Retirer',
+          style: 'destructive',
+          onPress: () => {
+            setEditingSession((prev) => {
+              if (!prev) return prev;
+              const removedName = prev.exercises[exIdx].originalName;
+              return {
+                ...prev,
+                exercises: prev.exercises.filter((_, idx) => idx !== exIdx),
+                removedExerciseNames: [...prev.removedExerciseNames, removedName],
+              };
+            });
+          },
+        },
+      ]
+    );
   };
 
-  // Enregistre tout d'un coup : programme, séries de chaque exercice modifié, et suppression
-  // des exercices retirés — dans cet ordre, pour que le changement de programme (qui déplace
-  // toutes les lignes de la séance) précède les écritures ciblées par exercice.
+  // Enregistre tout d'un coup : programme, puis séries de chaque exercice modifié/retiré.
+  // Toutes les suppressions (par ancien nom) sont faites AVANT toute insertion (par nom final) :
+  // si un exercice est renommé vers le nom d'origine d'un autre (modifié ou retiré), traiter
+  // delete+insert exercice par exercice effacerait les lignes tout juste insérées pour le
+  // premier dès que le second est traité — d'où cette passe en deux temps.
   const saveAllSessionChanges = () => {
     if (!editingSession) return;
     const { date, originalWorkoutId, workoutId, exercises, removedExerciseNames } = editingSession;
@@ -409,10 +427,13 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
       updateWorkoutSessionType(date, originalWorkoutId, workoutId);
     }
     for (const ex of exercises) {
-      updateExerciseLogsForSession(date, workoutId, ex.originalName, ex.name.trim(), ex.sets);
+      deleteExerciseFromSession(date, workoutId, ex.originalName);
     }
     for (const name of removedExerciseNames) {
       deleteExerciseFromSession(date, workoutId, name);
+    }
+    for (const ex of exercises) {
+      insertExerciseLogsForSession(date, workoutId, ex.name.trim(), ex.sets);
     }
 
     setEditingSession(null);

@@ -805,26 +805,26 @@ export function deleteWorkoutSession(date: string, workoutId: number): void {
 }
 
 /**
- * Met à jour un exercice complet et ses séries pour une séance passée.
+ * Insère les séries (ré)écrites d'un exercice pour une séance passée. Volontairement
+ * "insert-only" : l'appelant (l'éditeur unifié de l'historique) doit avoir déjà supprimé tous
+ * les anciens logs des exercices concernés — via `deleteExerciseFromSession` — AVANT d'appeler
+ * cette fonction pour chacun d'eux. Combiner delete+insert exercice par exercice, dans la même
+ * boucle, causait une perte de données si deux exercices finissaient sous le même nom (l'un
+ * renommé vers le nom d'origine de l'autre) : le DELETE du second effaçait les lignes tout
+ * juste insérées par le premier.
  */
-export function updateExerciseLogsForSession(
+export function insertExerciseLogsForSession(
   date: string,
   workoutId: number,
-  oldExerciseName: string,
-  newExerciseName: string,
-  updatedSets: { setNumber: number; weight: number; repsTarget: number; repsDone: number; feeling: 'EASY' | 'MEDIUM' | 'HARD' }[]
+  exerciseName: string,
+  sets: { setNumber: number; weight: number; repsTarget: number; repsDone: number; feeling: 'EASY' | 'MEDIUM' | 'HARD' }[]
 ): void {
   if (!db || Platform.OS === 'web') {
-    // Retirer les anciens logs de cet exercice
-    memoryLogs = memoryLogs.filter(
-      (log) => !(log.date === date && log.workoutId === workoutId && log.exerciseName === oldExerciseName)
-    );
-    // Insérer les nouveaux
-    for (const s of updatedSets) {
+    for (const s of sets) {
       memoryLogs.push({
         workoutId,
         exerciseId: 0,
-        exerciseName: newExerciseName,
+        exerciseName,
         date,
         setNumber: s.setNumber,
         weight: s.weight,
@@ -837,23 +837,16 @@ export function updateExerciseLogsForSession(
   }
 
   try {
-    // Supprimer les anciens logs pour cet exercice lors de cette séance
-    db.runSync(
-      `DELETE FROM workout_logs WHERE date = ? AND workout_id = ? AND exercise_name = ?;`,
-      [date, workoutId, oldExerciseName]
-    );
-
-    // Insérer les séries mises à jour
-    for (const s of updatedSets) {
+    for (const s of sets) {
       db.runSync(
-        `INSERT INTO workout_logs 
+        `INSERT INTO workout_logs
         (workout_id, exercise_id, exercise_name, date, set_number, weight, reps_target, reps_done, feeling)
         VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?);`,
-        [workoutId, newExerciseName, date, s.setNumber, s.weight, s.repsTarget, s.repsDone, s.feeling]
+        [workoutId, exerciseName, date, s.setNumber, s.weight, s.repsTarget, s.repsDone, s.feeling]
       );
     }
   } catch (error) {
-    console.error('Erreur updateExerciseLogsForSession:', error);
+    console.error('Erreur insertExerciseLogsForSession:', error);
   }
 }
 
