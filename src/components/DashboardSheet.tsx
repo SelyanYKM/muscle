@@ -12,8 +12,9 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { File } from 'expo-file-system';
 import Svg, { Rect } from 'react-native-svg';
-import { DashboardSummary, formatLocalDate, getBodyWeightLogs, saveBodyWeightEntry } from '../database/db';
+import { DashboardSummary, deleteBodyWeightEntry, formatLocalDate, getBodyWeightLogs, saveBodyWeightEntry } from '../database/db';
 import { THEME } from '../theme';
 import { BodyWeightEntry } from '../types';
 import { pickBodyWeightPhoto } from '../utils/bodyPhoto';
@@ -121,6 +122,32 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
     saveBodyWeightEntry(date, weight, newWeightPhotoUri);
     setBodyWeightLogs(getBodyWeightLogs());
     setIsAddWeightOpen(false);
+  };
+
+  const confirmDeleteWeightEntry = (entry: BodyWeightEntry) => {
+    Alert.alert(
+      'Supprimer cette pesée ?',
+      `La pesée du ${formatWeekLabel(entry.date)} (${fmtKg(entry.weight)} kg) sera supprimée${entry.photoUri ? ', photo comprise' : ''}.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: () => {
+            triggerLightHaptic();
+            deleteBodyWeightEntry(entry.date);
+            if (entry.photoUri) {
+              try {
+                new File(entry.photoUri).delete();
+              } catch (error) {
+                console.error('Erreur suppression photo poids de corps:', error);
+              }
+            }
+            setBodyWeightLogs(getBodyWeightLogs());
+          },
+        },
+      ]
+    );
   };
 
   const snapTo = (expand: boolean) => {
@@ -262,20 +289,33 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
                   height={80}
                   formatValue={(v) => `${fmtKg(v)} kg`}
                 />
-                {bodyWeightLogs.some((e) => e.photoUri) && (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bwPhotoScroll}>
-                    {bodyWeightLogs
-                      .filter((e) => !!e.photoUri)
-                      .slice(-10)
-                      .reverse()
-                      .map((e) => (
-                        <View key={e.date} style={styles.bwPhotoThumbWrap}>
-                          <Image source={{ uri: e.photoUri! }} style={styles.bwPhotoThumb} />
-                          <Text style={styles.bwPhotoThumbDate}>{formatWeekLabel(e.date)}</Text>
+                {/* Dernières pesées : chacune supprimable (photo comprise), pas seulement
+                    celles avec photo — sinon impossible de corriger une pesée sans photo. */}
+                <View style={styles.bwEntriesList}>
+                  {bodyWeightLogs
+                    .slice(-8)
+                    .reverse()
+                    .map((e, idx) => (
+                      <View key={e.date} style={[styles.bwEntryRow, idx > 0 && styles.bwEntryRowDivider]}>
+                        {e.photoUri ? (
+                          <Image source={{ uri: e.photoUri }} style={styles.bwEntryThumb} />
+                        ) : (
+                          <View style={styles.bwEntryThumbPlaceholder} />
+                        )}
+                        <View style={styles.bwEntryTextCol}>
+                          <Text style={styles.bwEntryWeight}>{fmtKg(e.weight)} kg</Text>
+                          <Text style={styles.bwEntryDate}>{formatWeekLabel(e.date)}</Text>
                         </View>
-                      ))}
-                  </ScrollView>
-                )}
+                        <TouchableOpacity
+                          onPress={() => confirmDeleteWeightEntry(e)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          activeOpacity={0.6}
+                        >
+                          <Icon name="x" size={14} color={THEME.colors.textSecondary} />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                </View>
               </>
             )}
           </View>
@@ -666,25 +706,49 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary,
     fontStyle: 'italic',
   },
-  bwPhotoScroll: {
+  bwEntriesList: {
+    backgroundColor: THEME.colors.cardInner,
+    borderRadius: THEME.radius.card,
+    paddingHorizontal: 14,
     marginTop: 10,
   },
-  bwPhotoThumbWrap: {
-    marginRight: 8,
+  bwEntryRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
   },
-  bwPhotoThumb: {
-    width: 56,
-    height: 74,
-    borderRadius: THEME.radius.inner,
-    backgroundColor: THEME.colors.cardInner,
+  bwEntryRowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: THEME.colors.hairline,
   },
-  bwPhotoThumbDate: {
+  bwEntryThumb: {
+    width: 34,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: THEME.colors.cardBg,
+  },
+  bwEntryThumbPlaceholder: {
+    width: 34,
+    height: 44,
+    borderRadius: 8,
+    backgroundColor: THEME.colors.cardBg,
+  },
+  bwEntryTextCol: {
+    flex: 1,
+  },
+  bwEntryWeight: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 9,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
+    color: THEME.colors.textPrimary,
+  },
+  bwEntryDate: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
+    fontWeight: '600',
     color: THEME.colors.textSecondary,
-    marginTop: 3,
+    marginTop: 1,
   },
   bwSheetTitle: {
     fontFamily: THEME.fonts.serif,
