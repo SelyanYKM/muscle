@@ -2,6 +2,7 @@ import { useKeepAwake } from 'expo-keep-awake';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,6 +20,7 @@ import { RestTimerOverlay } from '../components/RestTimerOverlay';
 import { SPLIT_SUBTITLES } from '../constants/splits';
 import {
   addCustomExercise,
+  deleteExercise,
   formatLocalDate,
   getAllCatalogExercises,
   getLastExercisePerformance,
@@ -210,6 +212,46 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       setCurrentReps(ex.targetReps || 8);
     }
     setIsPickerSheetOpen(false);
+  };
+
+  // Retire un exercice du catalogue de ce split (ex: doublon créé par erreur). L'historique
+  // des séances passées sur cet exercice reste intact (exerciseName est dénormalisé dans
+  // workout_logs), seul le catalogue et la progression mémorisée sont supprimés.
+  const handleDeleteCatalogExercise = (ex: ConfiguredExercise) => {
+    const hasLoggedSetsThisSession = completedExercises.some((c) => c.exerciseId === ex.id);
+    if (hasLoggedSetsThisSession) {
+      Alert.alert(
+        'Action impossible',
+        'Tu as déjà validé des séries sur cet exercice dans cette séance.'
+      );
+      return;
+    }
+
+    triggerWarningHaptic();
+    Alert.alert(
+      'Supprimer cet exercice ?',
+      `« ${ex.name} » sera retiré du catalogue ${workoutName}. Ton historique de séances passées le concernant est conservé.`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: () => {
+            deleteExercise(ex.id);
+            setCatalogExercises((prev) => {
+              const updated = prev.filter((c) => c.id !== ex.id);
+              if (currentExercise?.id === ex.id) {
+                const next = updated[0] || null;
+                setCurrentExercise(next);
+                setCurrentWeight(next?.plannedWeights?.[0] || 40);
+                setCurrentReps(next?.targetReps || 8);
+              }
+              return updated;
+            });
+          },
+        },
+      ]
+    );
   };
 
   const handleCreateCustomExercise = () => {
@@ -701,6 +743,14 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                     ))}
                   </View>
                 )}
+                <TouchableOpacity
+                  style={styles.catalogDeleteBtn}
+                  onPress={() => handleDeleteCatalogExercise(catEx)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  activeOpacity={0.6}
+                >
+                  <Icon name="x" size={14} color={THEME.colors.textSecondary} />
+                </TouchableOpacity>
               </TouchableOpacity>
             );
           })}
@@ -1310,6 +1360,14 @@ const styles = StyleSheet.create({
   catalogDoneDots: {
     flexDirection: 'row',
     gap: 3,
+  },
+  catalogDeleteBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 6,
   },
   inputMiniLabel: {
     fontFamily: THEME.fonts.sans,
