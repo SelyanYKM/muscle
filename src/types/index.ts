@@ -5,6 +5,11 @@ export type EquipmentCategory = 'HAMMER_STRENGTH' | 'FREE_WEIGHT' | 'CABLE';
 // Mode de progression de l'algorithme v2 (double progression) — voir plus bas pour le détail.
 export type ProgressionMode = 'CHARGE' | 'REPS_PUIS_CHARGE';
 
+// Groupe musculaire principal ciblé par un exercice — utilisé pour la répartition du volume
+// hebdomadaire par groupe dans le tiroir de stats. Absent sur les exercices personnalisés
+// (créés depuis l'appli) : ils tombent dans le seau "Autre" côté agrégation.
+export type MuscleGroup = 'PECTORAUX' | 'DOS' | 'EPAULES' | 'BICEPS' | 'TRICEPS' | 'QUADRICEPS' | 'ISCHIOS' | 'MOLLETS';
+
 export interface Exercise {
   id: number;
   workoutId: number;
@@ -20,6 +25,7 @@ export interface Exercise {
   repsMax?: number; // défaut = defaultTargetReps (mode CHARGE : repsMax = repsMin)
   minWeightKg?: number; // défaut = baseWeight
   restSeconds?: number; // défaut selon catégorie (poulie 60 / machine 90 / barre libre 150)
+  muscleGroup?: MuscleGroup; // absent sur les exercices personnalisés
 }
 
 export interface ConfiguredExercise {

@@ -46,6 +46,7 @@ interface FreeWorkoutScreenProps {
   onFinishSession: (summary: {
     workoutId: number;
     workoutName: string;
+    date: string;
     durationMinutes: number;
     totalVolume: number;
     exerciseSummaries: {
@@ -468,6 +469,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     onFinishSession({
       workoutId,
       workoutName,
+      date: todayStr,
       durationMinutes,
       totalVolume,
       exerciseSummaries,

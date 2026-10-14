@@ -194,6 +194,66 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
             formatValue={(v) => `${v} séance${v > 1 ? 's' : ''}`}
           />
 
+          {/* Répartition du volume par groupe musculaire (4 dernières semaines) */}
+          {summary.volumeByMuscleGroup.length > 0 && (
+            <>
+              <Text style={[styles.sectionLabel, { marginTop: 18 }]}>RÉPARTITION PAR GROUPE · 4 SEM.</Text>
+              <View style={styles.muscleGroupList}>
+                {(() => {
+                  const maxVolume = Math.max(1, ...summary.volumeByMuscleGroup.map((g) => g.volume));
+                  return summary.volumeByMuscleGroup.map((g, idx) => (
+                    <View key={g.muscleGroup} style={[styles.muscleGroupRow, idx > 0 && styles.muscleGroupRowDivider]}>
+                      <View style={styles.muscleGroupTextRow}>
+                        <Text style={styles.muscleGroupLabel}>{g.label}</Text>
+                        <Text style={styles.muscleGroupValue}>{g.volume.toLocaleString('fr-FR')} kg</Text>
+                      </View>
+                      <View style={styles.muscleGroupBarTrack}>
+                        <View
+                          style={[
+                            styles.muscleGroupBarFill,
+                            { width: `${Math.max(4, (g.volume / maxVolume) * 100)}%` },
+                          ]}
+                        />
+                      </View>
+                    </View>
+                  ));
+                })()}
+              </View>
+            </>
+          )}
+
+          {/* Force estimée (1RM, formule Epley) sur les exercices barre libre */}
+          {summary.strengthCurves.length > 0 && (
+            <>
+              <Text style={[styles.sectionLabel, { marginTop: 18 }]}>FORCE ESTIMÉE (1RM)</Text>
+              {summary.strengthCurves.map((curve) => {
+                const lastPoint = curve.points[curve.points.length - 1];
+                return (
+                  <View key={curve.exerciseId} style={styles.strengthCurveBlock}>
+                    <View style={styles.strengthCurveHeaderRow}>
+                      <Text style={styles.strengthCurveName} numberOfLines={1}>
+                        {curve.exerciseName}
+                      </Text>
+                      {lastPoint && (
+                        <Text style={styles.strengthCurveLast}>~{Math.round(lastPoint.estimated1RM)} kg</Text>
+                      )}
+                    </View>
+                    {curve.points.length >= 2 ? (
+                      <BarChart
+                        data={curve.points.map((p) => ({ label: formatWeekLabel(p.date), value: p.estimated1RM }))}
+                        color={THEME.colors.accentStrong}
+                        height={70}
+                        formatValue={(v) => `~${Math.round(v)} kg estimés`}
+                      />
+                    ) : (
+                      <Text style={styles.strengthCurveHint}>Encore une séance ou deux pour voir la tendance.</Text>
+                    )}
+                  </View>
+                );
+              })}
+            </>
+          )}
+
           {/* Records personnels */}
           {summary.personalRecords.length > 0 && (
             <>
@@ -350,6 +410,76 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary,
     letterSpacing: 0.8,
     marginBottom: 8,
+  },
+  muscleGroupList: {
+    backgroundColor: THEME.colors.cardInner,
+    borderRadius: THEME.radius.card,
+    paddingHorizontal: 14,
+  },
+  muscleGroupRow: {
+    paddingVertical: 10,
+    gap: 6,
+  },
+  muscleGroupRowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: THEME.colors.hairline,
+  },
+  muscleGroupTextRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  muscleGroupLabel: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 13,
+    fontWeight: '700',
+    color: THEME.colors.textPrimary,
+  },
+  muscleGroupValue: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 13,
+    fontWeight: '800',
+    color: THEME.colors.accentStrong,
+  },
+  muscleGroupBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(0, 41, 107, 0.08)',
+    overflow: 'hidden',
+  },
+  muscleGroupBarFill: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: THEME.colors.accent,
+  },
+  strengthCurveBlock: {
+    marginBottom: 14,
+  },
+  strengthCurveHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  strengthCurveName: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 13,
+    fontWeight: '700',
+    color: THEME.colors.textPrimary,
+    flex: 1,
+    marginRight: 8,
+  },
+  strengthCurveLast: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 13,
+    fontWeight: '800',
+    color: THEME.colors.accentStrong,
+  },
+  strengthCurveHint: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    fontStyle: 'italic',
   },
   prList: {
     backgroundColor: THEME.colors.cardInner,

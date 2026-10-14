@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   ScrollView,
@@ -11,8 +11,10 @@ import {
 import { Dot } from '../components/Dot';
 import { Icon } from '../components/Icon';
 import { SPLIT_SUBTITLES } from '../constants/splits';
+import { saveSessionFeedback } from '../database/db';
 import { THEME } from '../theme';
 import { Feeling, ProgressionDecision, SessionStatus, SetResult } from '../types';
+import { triggerLightHaptic } from '../utils/haptics';
 
 interface ExerciseSummaryItem {
   exerciseName: string;
@@ -24,12 +26,15 @@ interface WorkoutSummaryProps {
   summary: {
     workoutId: number;
     workoutName: string;
+    date: string;
     durationMinutes: number;
     totalVolume: number;
     exerciseSummaries: ExerciseSummaryItem[];
   };
   onClose: () => void;
 }
+
+const FEELING_SCALE = [1, 2, 3, 4, 5];
 
 const STATUS_LABEL: Record<SessionStatus, string> = {
   EASY_SUCCESS: 'Réussie facile',
@@ -41,11 +46,6 @@ const STATUS_LABEL: Record<SessionStatus, string> = {
   RESUMED_AFTER_BREAK: 'Reprise',
 };
 
-const FEELING_INK: Record<Feeling, string> = {
-  EASY: THEME.colors.feelingEasyText,
-  MEDIUM: THEME.colors.feelingMediumText,
-  HARD: THEME.colors.feelingHardText,
-};
 // Pastille pleine (Dot) : couleurs "bordure", plus vives que le texte — cohérent avec la carte
 // de séance en direct.
 const FEELING_DOT: Record<Feeling, string> = {
@@ -78,6 +78,19 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const split = THEME.splits[summary.workoutId];
+
+  // Ressenti mental/physique + étirements : tout optionnel, saisi ici et jamais utilisé par le
+  // moteur de progression (purement un journal pour l'utilisateur).
+  const [physicalFeeling, setPhysicalFeeling] = useState<number | null>(null);
+  const [mentalFeeling, setMentalFeeling] = useState<number | null>(null);
+  const [stretched, setStretched] = useState(false);
+
+  const handleClose = () => {
+    if (physicalFeeling !== null || mentalFeeling !== null || stretched) {
+      saveSessionFeedback(summary.date, summary.workoutId, physicalFeeling, mentalFeeling, stretched);
+    }
+    onClose();
+  };
 
   useEffect(() => {
     Animated.parallel([
@@ -203,8 +216,79 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
           </View>
         </View>
 
+        {/* Ressenti mental/physique + étirements (optionnel) */}
+        <View style={{ gap: 10 }}>
+          <Text style={styles.sectionHeading}>RESSENTI DE LA SÉANCE</Text>
+
+          <View style={styles.feelingCard}>
+            <View style={styles.feelingScaleBlock}>
+              <Text style={styles.feelingScaleLabel}>ÉNERGIE PHYSIQUE</Text>
+              <View style={styles.feelingScaleRow}>
+                {FEELING_SCALE.map((n) => (
+                  <TouchableOpacity
+                    key={n}
+                    style={[styles.feelingPill, physicalFeeling === n && styles.feelingPillActive]}
+                    onPress={() => {
+                      triggerLightHaptic();
+                      setPhysicalFeeling(physicalFeeling === n ? null : n);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.feelingPillText, physicalFeeling === n && styles.feelingPillTextActive]}>
+                      {n}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.feelingScaleEndsRow}>
+                <Text style={styles.feelingScaleEndText}>Épuisé</Text>
+                <Text style={styles.feelingScaleEndText}>En forme</Text>
+              </View>
+            </View>
+
+            <View style={styles.feelingScaleBlock}>
+              <Text style={styles.feelingScaleLabel}>MOTIVATION MENTALE</Text>
+              <View style={styles.feelingScaleRow}>
+                {FEELING_SCALE.map((n) => (
+                  <TouchableOpacity
+                    key={n}
+                    style={[styles.feelingPill, mentalFeeling === n && styles.feelingPillActive]}
+                    onPress={() => {
+                      triggerLightHaptic();
+                      setMentalFeeling(mentalFeeling === n ? null : n);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.feelingPillText, mentalFeeling === n && styles.feelingPillTextActive]}>
+                      {n}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.feelingScaleEndsRow}>
+                <Text style={styles.feelingScaleEndText}>Difficile</Text>
+                <Text style={styles.feelingScaleEndText}>Au top</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.stretchRow}
+              onPress={() => {
+                triggerLightHaptic();
+                setStretched((prev) => !prev);
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.stretchCheckbox, stretched && styles.stretchCheckboxChecked]}>
+                {stretched && <Icon name="check" size={14} color="#FFFFFF" />}
+              </View>
+              <Text style={styles.stretchText}>Étirements faits</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Bouton de Fermeture */}
-        <TouchableOpacity style={styles.closeButton} onPress={onClose} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.closeButton} onPress={handleClose} activeOpacity={0.85}>
           <Text style={styles.closeButtonText}>Enregistrer & revenir</Text>
         </TouchableOpacity>
       </Animated.View>
@@ -368,6 +452,80 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: THEME.colors.textSecondary,
     lineHeight: 18,
+  },
+  feelingCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    borderRadius: THEME.radius.card,
+    padding: 16,
+    gap: 16,
+  },
+  feelingScaleBlock: {
+    gap: 8,
+  },
+  feelingScaleLabel: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
+    fontWeight: '800',
+    color: THEME.colors.textSecondary,
+    letterSpacing: 0.6,
+  },
+  feelingScaleRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  feelingPill: {
+    flex: 1,
+    height: 40,
+    borderRadius: THEME.radius.inner,
+    backgroundColor: THEME.colors.cardInner,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feelingPillActive: {
+    backgroundColor: THEME.colors.textPrimary,
+  },
+  feelingPillText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 15,
+    fontWeight: '800',
+    color: THEME.colors.textSecondary,
+  },
+  feelingPillTextActive: {
+    color: '#FFFFFF',
+  },
+  feelingScaleEndsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  feelingScaleEndText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
+    fontWeight: '600',
+    color: THEME.colors.textMuted,
+  },
+  stretchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  stretchCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    borderWidth: 1.5,
+    borderColor: THEME.colors.cardBorder,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stretchCheckboxChecked: {
+    backgroundColor: THEME.colors.textPrimary,
+    borderColor: THEME.colors.textPrimary,
+  },
+  stretchText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 13,
+    fontWeight: '600',
+    color: THEME.colors.textSecondary,
   },
   closeButton: {
     height: 56,

@@ -39,6 +39,7 @@ type ScreenState = 'SPLIT_SELECT' | 'LIVE' | 'SUMMARY' | 'HISTORY';
 interface WorkoutSummaryData {
   workoutId: number;
   workoutName: string;
+  date: string;
   durationMinutes: number;
   totalVolume: number;
   exerciseSummaries: {

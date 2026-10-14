@@ -18,6 +18,7 @@ export const SEED_EXERCISES: Exercise[] = [
     orderIndex: 1,
     defaultTargetReps: 8,
     defaultStartingWeight: 40,
+    muscleGroup: 'PECTORAUX',
   },
   {
     id: 2,
@@ -29,6 +30,7 @@ export const SEED_EXERCISES: Exercise[] = [
     orderIndex: 2,
     defaultTargetReps: 8,
     defaultStartingWeight: 40,
+    muscleGroup: 'PECTORAUX',
   },
   {
     id: 3,
@@ -40,6 +42,7 @@ export const SEED_EXERCISES: Exercise[] = [
     orderIndex: 3,
     defaultTargetReps: 8,
     defaultStartingWeight: 40,
+    muscleGroup: 'PECTORAUX',
   },
   {
     id: 4,
@@ -51,6 +54,7 @@ export const SEED_EXERCISES: Exercise[] = [
     orderIndex: 4,
     defaultTargetReps: 8,
     defaultStartingWeight: 30,
+    muscleGroup: 'EPAULES',
   },
   {
     id: 15,
@@ -64,6 +68,7 @@ export const SEED_EXERCISES: Exercise[] = [
     defaultStartingWeight: 20,
     mode: 'REPS_PUIS_CHARGE',
     repsMax: 15,
+    muscleGroup: 'TRICEPS',
   },
   {
     id: 16,
@@ -77,6 +82,7 @@ export const SEED_EXERCISES: Exercise[] = [
     defaultStartingWeight: 10,
     mode: 'REPS_PUIS_CHARGE',
     repsMax: 15,
+    muscleGroup: 'EPAULES',
   },
   {
     id: 5,
@@ -88,6 +94,7 @@ export const SEED_EXERCISES: Exercise[] = [
     orderIndex: 7,
     defaultTargetReps: 6,
     defaultStartingWeight: 60,
+    muscleGroup: 'PECTORAUX',
   },
 
   // --- PULL (100% Polyarticulaires) ---
@@ -101,6 +108,7 @@ export const SEED_EXERCISES: Exercise[] = [
     orderIndex: 1,
     defaultTargetReps: 8,
     defaultStartingWeight: 45,
+    muscleGroup: 'DOS',
   },
   {
     id: 7,
@@ -112,6 +120,7 @@ export const SEED_EXERCISES: Exercise[] = [
     orderIndex: 2,
     defaultTargetReps: 8,
     defaultStartingWeight: 45,
+    muscleGroup: 'DOS',
   },
   {
     id: 8,
@@ -123,6 +132,7 @@ export const SEED_EXERCISES: Exercise[] = [
     orderIndex: 3,
     defaultTargetReps: 8,
     defaultStartingWeight: 45,
+    muscleGroup: 'DOS',
   },
   {
     id: 17,
@@ -136,6 +146,7 @@ export const SEED_EXERCISES: Exercise[] = [
     defaultStartingWeight: 15,
     mode: 'REPS_PUIS_CHARGE',
     repsMax: 15,
+    muscleGroup: 'EPAULES',
   },
   {
     id: 18,
@@ -149,6 +160,7 @@ export const SEED_EXERCISES: Exercise[] = [
     defaultStartingWeight: 15,
     mode: 'REPS_PUIS_CHARGE',
     repsMax: 15,
+    muscleGroup: 'BICEPS',
   },
   {
     id: 9,
@@ -160,6 +172,7 @@ export const SEED_EXERCISES: Exercise[] = [
     orderIndex: 6,
     defaultTargetReps: 5,
     defaultStartingWeight: 80,
+    muscleGroup: 'DOS',
   },
 
   // --- LEGS ---
@@ -173,6 +186,7 @@ export const SEED_EXERCISES: Exercise[] = [
     orderIndex: 1,
     defaultTargetReps: 8,
     defaultStartingWeight: 100,
+    muscleGroup: 'QUADRICEPS',
   },
   {
     id: 11,
@@ -184,6 +198,7 @@ export const SEED_EXERCISES: Exercise[] = [
     orderIndex: 2,
     defaultTargetReps: 8,
     defaultStartingWeight: 40,
+    muscleGroup: 'QUADRICEPS',
   },
   {
     id: 12,
@@ -195,6 +210,7 @@ export const SEED_EXERCISES: Exercise[] = [
     orderIndex: 3,
     defaultTargetReps: 8,
     defaultStartingWeight: 35,
+    muscleGroup: 'ISCHIOS',
   },
   {
     id: 13,
@@ -206,6 +222,7 @@ export const SEED_EXERCISES: Exercise[] = [
     orderIndex: 4,
     defaultTargetReps: 10,
     defaultStartingWeight: 30,
+    muscleGroup: 'MOLLETS',
   },
   {
     id: 14,
@@ -217,5 +234,6 @@ export const SEED_EXERCISES: Exercise[] = [
     orderIndex: 5,
     defaultTargetReps: 6,
     defaultStartingWeight: 70,
+    muscleGroup: 'QUADRICEPS',
   },
 ];
