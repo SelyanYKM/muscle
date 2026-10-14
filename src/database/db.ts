@@ -610,6 +610,39 @@ export function saveSessionFeedback(
   }
 }
 
+export interface SessionFeedbackRow {
+  date: string;
+  workoutId: number;
+  physicalFeeling: number | null;
+  mentalFeeling: number | null;
+  stretched: boolean;
+}
+
+/**
+ * Tous les ressentis de fin de séance enregistrés — une requête groupée plutôt qu'une par
+ * séance, à indexer côté appelant par `${date}_${workoutId}` (ex : mini bilan de l'historique).
+ */
+export function getAllSessionFeedback(): SessionFeedbackRow[] {
+  if (!db || Platform.OS === 'web') return [];
+
+  try {
+    return db
+      .getAllSync<{ date: string; workout_id: number; physical_feeling: number | null; mental_feeling: number | null; stretched: number }>(
+        'SELECT date, workout_id, physical_feeling, mental_feeling, stretched FROM session_feedback;'
+      )
+      .map((r) => ({
+        date: r.date,
+        workoutId: r.workout_id,
+        physicalFeeling: r.physical_feeling,
+        mentalFeeling: r.mental_feeling,
+        stretched: !!r.stretched,
+      }));
+  } catch (error) {
+    console.error('Erreur getAllSessionFeedback:', error);
+    return [];
+  }
+}
+
 /**
  * Persiste l'état de progression v2 d'un exercice (charge/objectif reps actuels, compteurs,
  * date et raison de la dernière décision, calibration) — à appeler avec le `newState` renvoyé

@@ -19,7 +19,9 @@ import {
   clearAllWorkoutLogs,
   deleteExerciseFromSession,
   deleteWorkoutSession,
+  getAllSessionFeedback,
   getRecentLogs,
+  SessionFeedbackRow,
   updateExerciseLogsForSession,
   updateWorkoutSessionType,
 } from '../database/db';
@@ -49,6 +51,28 @@ interface GroupedSession {
 interface MonthGroup {
   label: string;
   sessions: GroupedSession[];
+}
+
+// État d'édition "brouillon" d'une séance entière, construit à l'ouverture de la feuille unique
+// de modification et persisté d'un bloc au clic sur "Enregistrer".
+interface EditableSet {
+  setNumber: number;
+  weight: number;
+  repsTarget: number;
+  repsDone: number;
+  feeling: Feeling;
+}
+interface EditableExercise {
+  originalName: string;
+  name: string;
+  sets: EditableSet[];
+}
+interface EditableSessionState {
+  date: string;
+  originalWorkoutId: number;
+  workoutId: number;
+  exercises: EditableExercise[];
+  removedExerciseNames: string[];
 }
 
 const FEELING_LABEL: Record<Feeling, string> = { EASY: 'Facile', MEDIUM: 'Juste', HARD: 'Échec' };
@@ -95,6 +119,30 @@ function groupByMonth(sessions: GroupedSession[]): MonthGroup[] {
   return groups;
 }
 
+/**
+ * Mini phrase bilan d'une séance, dérivée des ressentis déjà enregistrés (pas d'IA) : part de
+ * ratée des séries, enrichie du ressenti de fin de séance (énergie, étirements) quand disponible.
+ */
+function buildSessionBilan(session: GroupedSession, feedback?: SessionFeedbackRow): string {
+  const allSets = session.exercises.flatMap((e) => e.sets);
+  if (allSets.length === 0) return '';
+
+  const notMetCount = allSets.filter((s) => s.feeling !== 'EASY').length;
+  const ratio = notMetCount / allSets.length;
+
+  let perf: string;
+  if (ratio === 0) perf = 'Séance solide, tout réussi';
+  else if (ratio <= 0.25) perf = 'Bonne séance, presque tout réussi';
+  else if (ratio <= 0.5) perf = 'Séance correcte, quelques séries sous l’objectif';
+  else perf = 'Séance difficile, plusieurs séries sous l’objectif';
+
+  const extras: string[] = [];
+  if (feedback?.physicalFeeling != null) extras.push(`énergie ${feedback.physicalFeeling}/5`);
+  if (feedback?.stretched) extras.push('étirements faits');
+
+  return extras.length > 0 ? `${perf} · ${extras.join(' · ')}` : `${perf}.`;
+}
+
 // Flèche pivotante (200ms) pour le chevron de chaque séance : un Animated.Value par
 // sessionKey, créé à la demande et conservé dans un ref pour survivre aux re-renders.
 function useChevronAnim() {
@@ -121,18 +169,14 @@ function useChevronAnim() {
 
 export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
   const [sessions, setSessions] = useState<GroupedSession[]>([]);
+  const [feedbackByKey, setFeedbackByKey] = useState<Record<string, SessionFeedbackRow>>({});
   const [expandedSessions, setExpandedSessions] = useState<{ [sessionKey: string]: boolean }>({});
   const [isExporting, setIsExporting] = useState(false);
   const chevronAnim = useChevronAnim();
 
-  // Feuille 1 : Édition globale de la séance (Programme Push / Pull / Legs)
-  const [editingSession, setEditingSession] = useState<GroupedSession | null>(null);
-  const [selectedTargetWorkoutId, setSelectedTargetWorkoutId] = useState<number>(1);
-
-  // Feuille 2 : Édition détaillée d'un exercice dans une séance passée
-  const [editingExSession, setEditingExSession] = useState<{ session: GroupedSession; ex: GroupedExerciseLogs } | null>(null);
-  const [editExName, setEditExName] = useState<string>('');
-  const [editExSets, setEditExSets] = useState<{ setNumber: number; weight: number; repsTarget: number; repsDone: number; feeling: Feeling }[]>([]);
+  // Édition unifiée d'une séance passée : programme + tous ses exercices/séries en un seul
+  // endroit, plutôt que deux feuilles séparées avec un bouton "Modifier" différent chacune.
+  const [editingSession, setEditingSession] = useState<EditableSessionState | null>(null);
 
   useEffect(() => {
     loadHierarchicalLogs();
@@ -140,6 +184,12 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
 
   const loadHierarchicalLogs = () => {
     const rawLogs = getRecentLogs(300);
+
+    const feedbackMap: Record<string, SessionFeedbackRow> = {};
+    for (const f of getAllSessionFeedback()) {
+      feedbackMap[`${f.date}_${f.workoutId}`] = f;
+    }
+    setFeedbackByKey(feedbackMap);
 
     const sessionMap = new Map<string, GroupedSession>();
 
@@ -228,25 +278,145 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
     }
   };
 
+  // Ouvre la feuille d'édition unique d'une séance : copie "brouillon" locale (programme +
+  // tous les exercices/séries), rien n'est écrit en base avant "Enregistrer les modifications".
   const openEditSessionModal = (session: GroupedSession) => {
     triggerLightHaptic();
-    setEditingSession(session);
-    setSelectedTargetWorkoutId(session.workoutId);
+    setEditingSession({
+      date: session.date,
+      originalWorkoutId: session.workoutId,
+      workoutId: session.workoutId,
+      exercises: session.exercises.map((ex) => ({
+        originalName: ex.exerciseName,
+        name: ex.exerciseName,
+        sets: ex.sets.map((s, idx) => ({
+          setNumber: idx + 1,
+          weight: s.weight,
+          repsTarget: s.repsTarget || 8,
+          repsDone: s.repsDone,
+          feeling: s.feeling as Feeling,
+        })),
+      })),
+      removedExerciseNames: [],
+    });
   };
 
-  const saveEditedSessionType = () => {
+  const updateEditingExerciseName = (exIdx: number, name: string) => {
+    setEditingSession((prev) => {
+      if (!prev) return prev;
+      const exercises = [...prev.exercises];
+      exercises[exIdx] = { ...exercises[exIdx], name };
+      return { ...prev, exercises };
+    });
+  };
+
+  const adjustEditingSetWeight = (exIdx: number, setIdx: number, delta: number) => {
+    triggerLightHaptic();
+    setEditingSession((prev) => {
+      if (!prev) return prev;
+      const exercises = [...prev.exercises];
+      const sets = [...exercises[exIdx].sets];
+      sets[setIdx] = { ...sets[setIdx], weight: Math.max(0, Math.round((sets[setIdx].weight + delta) * 100) / 100) };
+      exercises[exIdx] = { ...exercises[exIdx], sets };
+      return { ...prev, exercises };
+    });
+  };
+
+  const adjustEditingSetReps = (exIdx: number, setIdx: number, delta: number) => {
+    triggerLightHaptic();
+    setEditingSession((prev) => {
+      if (!prev) return prev;
+      const exercises = [...prev.exercises];
+      const sets = [...exercises[exIdx].sets];
+      sets[setIdx] = { ...sets[setIdx], repsDone: Math.max(0, sets[setIdx].repsDone + delta) };
+      exercises[exIdx] = { ...exercises[exIdx], sets };
+      return { ...prev, exercises };
+    });
+  };
+
+  const setEditingSetFeeling = (exIdx: number, setIdx: number, feeling: Feeling) => {
+    triggerLightHaptic();
+    setEditingSession((prev) => {
+      if (!prev) return prev;
+      const exercises = [...prev.exercises];
+      const sets = [...exercises[exIdx].sets];
+      sets[setIdx] = { ...sets[setIdx], feeling };
+      exercises[exIdx] = { ...exercises[exIdx], sets };
+      return { ...prev, exercises };
+    });
+  };
+
+  const addEditingSet = (exIdx: number) => {
+    triggerLightHaptic();
+    setEditingSession((prev) => {
+      if (!prev) return prev;
+      const exercises = [...prev.exercises];
+      const sets = exercises[exIdx].sets;
+      const last = sets[sets.length - 1] || { weight: 40, repsTarget: 8, repsDone: 8, feeling: 'EASY' as Feeling };
+      exercises[exIdx] = {
+        ...exercises[exIdx],
+        sets: [
+          ...sets,
+          { setNumber: sets.length + 1, weight: last.weight, repsTarget: last.repsTarget, repsDone: last.repsDone, feeling: last.feeling },
+        ],
+      };
+      return { ...prev, exercises };
+    });
+  };
+
+  const removeEditingSet = (exIdx: number, setIdx: number) => {
+    triggerLightHaptic();
+    setEditingSession((prev) => {
+      if (!prev) return prev;
+      if (prev.exercises[exIdx].sets.length <= 1) {
+        Alert.alert('Action impossible', 'Un exercice doit comporter au moins 1 série.');
+        return prev;
+      }
+      const exercises = [...prev.exercises];
+      const sets = exercises[exIdx].sets.filter((_, idx) => idx !== setIdx).map((s, idx) => ({ ...s, setNumber: idx + 1 }));
+      exercises[exIdx] = { ...exercises[exIdx], sets };
+      return { ...prev, exercises };
+    });
+  };
+
+  const removeEditingExercise = (exIdx: number) => {
+    triggerWarningHaptic();
+    setEditingSession((prev) => {
+      if (!prev) return prev;
+      const removedName = prev.exercises[exIdx].originalName;
+      return {
+        ...prev,
+        exercises: prev.exercises.filter((_, idx) => idx !== exIdx),
+        removedExerciseNames: [...prev.removedExerciseNames, removedName],
+      };
+    });
+  };
+
+  // Enregistre tout d'un coup : programme, séries de chaque exercice modifié, et suppression
+  // des exercices retirés — dans cet ordre, pour que le changement de programme (qui déplace
+  // toutes les lignes de la séance) précède les écritures ciblées par exercice.
+  const saveAllSessionChanges = () => {
     if (!editingSession) return;
+    const { date, originalWorkoutId, workoutId, exercises, removedExerciseNames } = editingSession;
+
+    if (exercises.some((ex) => !ex.name.trim())) {
+      Alert.alert('Nom requis', 'Chaque exercice doit avoir un nom.');
+      return;
+    }
     triggerMediumHaptic();
 
-    if (selectedTargetWorkoutId !== editingSession.workoutId) {
-      updateWorkoutSessionType(
-        editingSession.date,
-        editingSession.workoutId,
-        selectedTargetWorkoutId
-      );
-      loadHierarchicalLogs();
+    if (workoutId !== originalWorkoutId) {
+      updateWorkoutSessionType(date, originalWorkoutId, workoutId);
     }
+    for (const ex of exercises) {
+      updateExerciseLogsForSession(date, workoutId, ex.originalName, ex.name.trim(), ex.sets);
+    }
+    for (const name of removedExerciseNames) {
+      deleteExerciseFromSession(date, workoutId, name);
+    }
+
     setEditingSession(null);
+    loadHierarchicalLogs();
   };
 
   const confirmDeleteSession = () => {
@@ -262,130 +432,8 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
           text: 'Supprimer',
           style: 'destructive',
           onPress: () => {
-            deleteWorkoutSession(editingSession.date, editingSession.workoutId);
+            deleteWorkoutSession(editingSession.date, editingSession.originalWorkoutId);
             setEditingSession(null);
-            loadHierarchicalLogs();
-          },
-        },
-      ]
-    );
-  };
-
-  // Ouvrir la feuille d'édition d'un exercice dans l'historique
-  const openEditExerciseModal = (session: GroupedSession, ex: GroupedExerciseLogs) => {
-    triggerLightHaptic();
-    setEditingExSession({ session, ex });
-    setEditExName(ex.exerciseName);
-    setEditExSets(
-      ex.sets.map((s, idx) => ({
-        setNumber: idx + 1,
-        weight: s.weight,
-        repsTarget: s.repsTarget || 8,
-        repsDone: s.repsDone,
-        feeling: s.feeling as Feeling,
-      }))
-    );
-  };
-
-  const adjustSetWeight = (setIdx: number, delta: number) => {
-    triggerLightHaptic();
-    setEditExSets((prev) => {
-      const updated = [...prev];
-      updated[setIdx] = {
-        ...updated[setIdx],
-        weight: Math.max(0, Math.round(((updated[setIdx].weight || 0) + delta) * 100) / 100),
-      };
-      return updated;
-    });
-  };
-
-  const adjustSetReps = (setIdx: number, delta: number) => {
-    triggerLightHaptic();
-    setEditExSets((prev) => {
-      const updated = [...prev];
-      updated[setIdx] = {
-        ...updated[setIdx],
-        repsDone: Math.max(0, (updated[setIdx].repsDone || 0) + delta),
-      };
-      return updated;
-    });
-  };
-
-  const setSetFeeling = (setIdx: number, feeling: Feeling) => {
-    triggerLightHaptic();
-    setEditExSets((prev) => {
-      const updated = [...prev];
-      updated[setIdx] = { ...updated[setIdx], feeling };
-      return updated;
-    });
-  };
-
-  const addSetToEx = () => {
-    triggerLightHaptic();
-    setEditExSets((prev) => {
-      const last = prev[prev.length - 1] || { weight: 40, repsTarget: 8, repsDone: 8, feeling: 'MEDIUM' as Feeling };
-      return [
-        ...prev,
-        {
-          setNumber: prev.length + 1,
-          weight: last.weight,
-          repsTarget: last.repsTarget,
-          repsDone: last.repsDone,
-          feeling: last.feeling,
-        },
-      ];
-    });
-  };
-
-  const removeSetFromEx = (setIdx: number) => {
-    triggerLightHaptic();
-    if (editExSets.length <= 1) {
-      Alert.alert('Action impossible', 'Un exercice doit comporter au moins 1 série.');
-      return;
-    }
-    const updated = editExSets.filter((_, idx) => idx !== setIdx).map((s, idx) => ({ ...s, setNumber: idx + 1 }));
-    setEditExSets(updated);
-  };
-
-  const saveEditedExercise = () => {
-    if (!editingExSession) return;
-    if (!editExName.trim()) {
-      Alert.alert('Nom requis', 'Renseigne un nom pour l’exercice.');
-      return;
-    }
-    triggerMediumHaptic();
-
-    updateExerciseLogsForSession(
-      editingExSession.session.date,
-      editingExSession.session.workoutId,
-      editingExSession.ex.exerciseName,
-      editExName.trim(),
-      editExSets
-    );
-
-    setEditingExSession(null);
-    loadHierarchicalLogs();
-  };
-
-  const confirmDeleteExerciseFromSession = () => {
-    if (!editingExSession) return;
-    triggerWarningHaptic();
-
-    Alert.alert(
-      'Supprimer cet exercice ?',
-      `L'exercice "${editingExSession.ex.exerciseName}" sera retiré de la séance du ${formatDate(editingExSession.session.date)}.`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: () => {
-            deleteExerciseFromSession(
-              editingExSession.session.date,
-              editingExSession.session.workoutId,
-              editingExSession.ex.exerciseName
-            );
-            setEditingExSession(null);
             loadHierarchicalLogs();
           },
         },
@@ -470,6 +518,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                     const sessionKey = `${session.date}_${session.workoutId}`;
                     const isExpanded = !!expandedSessions[sessionKey];
                     const split = THEME.splits[session.workoutId];
+                    const bilan = buildSessionBilan(session, feedbackByKey[sessionKey]);
                     const rotation = chevronAnim.get(sessionKey, isExpanded).interpolate({
                       inputRange: [0, 1],
                       outputRange: ['0deg', '180deg'],
@@ -477,53 +526,61 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
 
                     return (
                       <View key={sIdx} style={[styles.sessionRow, sIdx > 0 && styles.sessionRowDivider]}>
-                        <TouchableOpacity
-                          style={styles.sessionHeader}
-                          onPress={() => toggleSessionExpand(sessionKey)}
-                          activeOpacity={0.8}
-                        >
-                          <LinearGradient
-                            colors={split.gradient}
-                            start={{ x: 0.1, y: 0 }}
-                            end={{ x: 0.9, y: 1 }}
-                            style={styles.letterBadge}
+                        <View style={styles.sessionHeader}>
+                          <TouchableOpacity
+                            style={styles.sessionHeaderTappable}
+                            onPress={() => toggleSessionExpand(sessionKey)}
+                            activeOpacity={0.8}
                           >
-                            <Text style={[styles.letterBadgeText, { color: split.fg }]}>
-                              {session.workoutName.charAt(0)}
-                            </Text>
-                          </LinearGradient>
+                            <LinearGradient
+                              colors={split.gradient}
+                              start={{ x: 0.1, y: 0 }}
+                              end={{ x: 0.9, y: 1 }}
+                              style={styles.letterBadge}
+                            >
+                              <Text style={[styles.letterBadgeText, { color: split.fg }]}>
+                                {session.workoutName.charAt(0)}
+                              </Text>
+                            </LinearGradient>
 
-                          <View style={styles.sessionHeaderLeft}>
-                            <Text style={styles.dateText}>{formatDate(session.date)}</Text>
-                            <Text style={styles.sessionWorkoutTitle} numberOfLines={1}>
-                              {session.workoutName.split(' (')[0]}
-                            </Text>
-                            <Text style={styles.sessionMetricsSummary}>
-                              {session.exercises.length} exos · {session.totalSets} séries ·{' '}
-                              <Text style={styles.volumeHighlight}>{Math.round(session.totalVolume).toLocaleString('fr-FR')} kg</Text>
-                            </Text>
-                          </View>
+                            <View style={styles.sessionHeaderLeft}>
+                              <Text style={styles.dateText}>{formatDate(session.date)}</Text>
+                              <Text style={styles.sessionWorkoutTitle} numberOfLines={1}>
+                                {session.workoutName.split(' (')[0]}
+                              </Text>
+                              <Text style={styles.sessionMetricsSummary}>
+                                {session.exercises.length} exos · {session.totalSets} séries ·{' '}
+                                <Text style={styles.volumeHighlight}>{Math.round(session.totalVolume).toLocaleString('fr-FR')} kg</Text>
+                              </Text>
+                              {!!bilan && (
+                                <Text style={styles.sessionBilanText} numberOfLines={1}>
+                                  {bilan}
+                                </Text>
+                              )}
+                            </View>
+                          </TouchableOpacity>
 
-                          <Animated.View style={[styles.chevronCircle, { transform: [{ rotate: rotation }] }]}>
-                            <Icon name="chevron-down" size={16} color={THEME.colors.textSecondary} />
-                          </Animated.View>
-                        </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.editSessionBtn}
+                            onPress={() => openEditSessionModal(session)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.editSessionBtnText}>Modifier</Text>
+                          </TouchableOpacity>
 
-                        {/* Contenu détaillé */}
+                          <TouchableOpacity onPress={() => toggleSessionExpand(sessionKey)} activeOpacity={0.8}>
+                            <Animated.View style={[styles.chevronCircle, { transform: [{ rotate: rotation }] }]}>
+                              <Icon name="chevron-down" size={16} color={THEME.colors.textSecondary} />
+                            </Animated.View>
+                          </TouchableOpacity>
+                        </View>
+
+                        {/* Contenu détaillé (lecture seule — "Modifier" ouvre la feuille unique) */}
                         {isExpanded && (
                           <View style={styles.sessionDetailsBox}>
                             {session.exercises.map((ex, exIdx) => (
                               <View key={exIdx} style={styles.exerciseDetailRow}>
-                                <View style={styles.exerciseHeaderRow}>
-                                  <Text style={styles.exerciseDetailName}>{ex.exerciseName}</Text>
-                                  <TouchableOpacity
-                                    onPress={() => openEditExerciseModal(session, ex)}
-                                    activeOpacity={0.7}
-                                  >
-                                    <Text style={styles.editExLink}>Modifier</Text>
-                                  </TouchableOpacity>
-                                </View>
-
+                                <Text style={styles.exerciseDetailName}>{ex.exerciseName}</Text>
                                 <View style={styles.setsChipsRow}>
                                   {ex.sets.map((set, setIdx) => (
                                     <View key={setIdx} style={styles.setChip}>
@@ -536,14 +593,6 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                                 </View>
                               </View>
                             ))}
-
-                            <TouchableOpacity
-                              style={styles.editSessionFooterBtn}
-                              onPress={() => openEditSessionModal(session)}
-                              activeOpacity={0.7}
-                            >
-                              <Text style={styles.editSessionFooterText}>Modifier la séance</Text>
-                            </TouchableOpacity>
                           </View>
                         )}
                       </View>
@@ -566,31 +615,111 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
         </View>
       )}
 
-      {/* FEUILLE : MODIFIER LE PROGRAMME DE LA SÉANCE (PUSH / PULL / LEGS) */}
-      <BottomSheet visible={!!editingSession} onClose={() => setEditingSession(null)} maxHeightPercent={60}>
+      {/* FEUILLE UNIQUE : MODIFIER LA SÉANCE — programme, tous les exercices et toutes les
+          séries d'un coup (remplace les deux feuilles séparées d'avant, chacune avec son
+          propre bouton "Modifier"). */}
+      <BottomSheet visible={!!editingSession} onClose={() => setEditingSession(null)} maxHeightPercent={88}>
         <Text style={styles.sheetTitle}>Modifier la séance</Text>
         <Text style={styles.sheetSubtitle}>
           Séance du {editingSession ? formatDate(editingSession.date) : ''}
         </Text>
 
-        <Text style={styles.inputSectionLabel}>PROGRAMME ASSOCIÉ</Text>
-        <View style={styles.programToggleRow}>
-          {[{ id: 1, label: 'Push' }, { id: 2, label: 'Pull' }, { id: 3, label: 'Legs' }].map((p) => (
-            <TouchableOpacity
-              key={p.id}
-              style={[styles.programBtn, selectedTargetWorkoutId === p.id && styles.programBtnActive]}
-              onPress={() => setSelectedTargetWorkoutId(p.id)}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.programBtnText, selectedTargetWorkoutId === p.id && styles.programBtnTextActive]}>
-                {p.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <ScrollView style={styles.sessionEditScroll} showsVerticalScrollIndicator={false}>
+          <Text style={styles.inputSectionLabel}>PROGRAMME ASSOCIÉ</Text>
+          <View style={styles.programToggleRow}>
+            {[{ id: 1, label: 'Push' }, { id: 2, label: 'Pull' }, { id: 3, label: 'Legs' }].map((p) => (
+              <TouchableOpacity
+                key={p.id}
+                style={[styles.programBtn, editingSession?.workoutId === p.id && styles.programBtnActive]}
+                onPress={() => setEditingSession((prev) => (prev ? { ...prev, workoutId: p.id } : prev))}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.programBtnText, editingSession?.workoutId === p.id && styles.programBtnTextActive]}>
+                  {p.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-        <TouchableOpacity style={styles.primaryBtn} onPress={saveEditedSessionType} activeOpacity={0.85}>
-          <Text style={styles.primaryBtnText}>Enregistrer la modification</Text>
+          {editingSession?.exercises.map((ex, exIdx) => (
+            <View key={exIdx} style={styles.exEditCard}>
+              <View style={styles.exEditHeaderRow}>
+                <TextInput
+                  style={styles.exNameInput}
+                  value={ex.name}
+                  onChangeText={(text) => updateEditingExerciseName(exIdx, text)}
+                  placeholderTextColor={THEME.colors.textMuted}
+                />
+                <TouchableOpacity onPress={() => removeEditingExercise(exIdx)}>
+                  <Text style={styles.deleteSetLink}>Retirer</Text>
+                </TouchableOpacity>
+              </View>
+
+              {ex.sets.map((s, setIdx) => (
+                <View key={setIdx} style={styles.setEditCard}>
+                  <View style={styles.setEditTop}>
+                    <Text style={styles.setNumberBadge}>Série {s.setNumber}</Text>
+                    {ex.sets.length > 1 && (
+                      <TouchableOpacity onPress={() => removeEditingSet(exIdx, setIdx)}>
+                        <Text style={styles.deleteSetLink}>Retirer</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  <View style={styles.steppersRow}>
+                    <View style={styles.stepperBlock}>
+                      <Text style={styles.stepperLabel}>POIDS</Text>
+                      <View style={styles.stepperWrap}>
+                        <TouchableOpacity style={styles.stepBtn} onPress={() => adjustEditingSetWeight(exIdx, setIdx, -2.5)}>
+                          <Text style={styles.stepBtnText}>−2,5</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.stepValText}>{fmtKg(s.weight)}kg</Text>
+                        <TouchableOpacity style={styles.stepBtn} onPress={() => adjustEditingSetWeight(exIdx, setIdx, 2.5)}>
+                          <Text style={styles.stepBtnText}>+2,5</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    <View style={styles.stepperBlock}>
+                      <Text style={styles.stepperLabel}>REPS</Text>
+                      <View style={styles.stepperWrap}>
+                        <TouchableOpacity style={styles.stepBtn} onPress={() => adjustEditingSetReps(exIdx, setIdx, -1)}>
+                          <Text style={styles.stepBtnText}>−1</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.stepValText}>{s.repsDone}</Text>
+                        <TouchableOpacity style={styles.stepBtn} onPress={() => adjustEditingSetReps(exIdx, setIdx, 1)}>
+                          <Text style={styles.stepBtnText}>+1</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.feelingRow}>
+                    {(['EASY', 'MEDIUM', 'HARD'] as Feeling[]).map((f) => (
+                      <TouchableOpacity
+                        key={f}
+                        style={[styles.feelBtn, s.feeling === f && { backgroundColor: FEELING_BG[f] }]}
+                        onPress={() => setEditingSetFeeling(exIdx, setIdx, f)}
+                      >
+                        <Dot color={FEELING_DOT[f]} size={7} />
+                        <Text style={[styles.feelBtnText, s.feeling === f && { color: FEELING_INK[f] }]}>
+                          {FEELING_LABEL[f]}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              ))}
+
+              <TouchableOpacity style={styles.addSetBtn} onPress={() => addEditingSet(exIdx)} activeOpacity={0.8}>
+                <Text style={styles.addSetBtnText}>+ Ajouter une série</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </ScrollView>
+
+        <TouchableOpacity style={styles.primaryBtn} onPress={saveAllSessionChanges} activeOpacity={0.85}>
+          <Text style={styles.primaryBtnText}>Enregistrer les modifications</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.destructiveBtn} onPress={confirmDeleteSession} activeOpacity={0.8}>
@@ -598,100 +727,6 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.outlineBtn} onPress={() => setEditingSession(null)} activeOpacity={0.8}>
-          <Text style={styles.outlineBtnText}>Fermer</Text>
-        </TouchableOpacity>
-      </BottomSheet>
-
-      {/* FEUILLE : MODIFIER L'EXERCICE & LES SÉRIES DANS L'HISTORIQUE */}
-      <BottomSheet visible={!!editingExSession} onClose={() => setEditingExSession(null)}>
-        <Text style={styles.sheetTitle}>Modifier l'exercice</Text>
-        <Text style={styles.sheetSubtitle}>
-          Séance du {editingExSession ? formatDate(editingExSession.session.date) : ''}
-        </Text>
-
-        <Text style={styles.inputSectionLabel}>NOM DE L'EXERCICE</Text>
-        <TextInput
-          style={styles.modalTextInput}
-          value={editExName}
-          onChangeText={setEditExName}
-          placeholder="Nom de l'exercice"
-          placeholderTextColor={THEME.colors.textMuted}
-        />
-
-        <Text style={styles.inputSectionLabel}>SÉRIES EFFECTUÉES</Text>
-        <ScrollView style={styles.setsEditScroll} showsVerticalScrollIndicator={false}>
-          {editExSets.map((s, idx) => (
-            <View key={idx} style={styles.setEditCard}>
-              <View style={styles.setEditTop}>
-                <Text style={styles.setNumberBadge}>Série {s.setNumber}</Text>
-                {editExSets.length > 1 && (
-                  <TouchableOpacity onPress={() => removeSetFromEx(idx)}>
-                    <Text style={styles.deleteSetLink}>Retirer</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* Ligne Poids & Reps */}
-              <View style={styles.steppersRow}>
-                <View style={styles.stepperBlock}>
-                  <Text style={styles.stepperLabel}>POIDS</Text>
-                  <View style={styles.stepperWrap}>
-                    <TouchableOpacity style={styles.stepBtn} onPress={() => adjustSetWeight(idx, -2.5)}>
-                      <Text style={styles.stepBtnText}>−2,5</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.stepValText}>{fmtKg(s.weight)}kg</Text>
-                    <TouchableOpacity style={styles.stepBtn} onPress={() => adjustSetWeight(idx, 2.5)}>
-                      <Text style={styles.stepBtnText}>+2,5</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <View style={styles.stepperBlock}>
-                  <Text style={styles.stepperLabel}>REPS</Text>
-                  <View style={styles.stepperWrap}>
-                    <TouchableOpacity style={styles.stepBtn} onPress={() => adjustSetReps(idx, -1)}>
-                      <Text style={styles.stepBtnText}>−1</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.stepValText}>{s.repsDone}</Text>
-                    <TouchableOpacity style={styles.stepBtn} onPress={() => adjustSetReps(idx, 1)}>
-                      <Text style={styles.stepBtnText}>+1</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-
-              {/* Ressenti */}
-              <View style={styles.feelingRow}>
-                {(['EASY', 'MEDIUM', 'HARD'] as Feeling[]).map((f) => (
-                  <TouchableOpacity
-                    key={f}
-                    style={[styles.feelBtn, s.feeling === f && { backgroundColor: FEELING_BG[f] }]}
-                    onPress={() => setSetFeeling(idx, f)}
-                  >
-                    <Dot color={FEELING_DOT[f]} size={7} />
-                    <Text style={[styles.feelBtnText, s.feeling === f && { color: FEELING_INK[f] }]}>
-                      {FEELING_LABEL[f]}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          ))}
-        </ScrollView>
-
-        <TouchableOpacity style={styles.addSetBtn} onPress={addSetToEx} activeOpacity={0.8}>
-          <Text style={styles.addSetBtnText}>+ Ajouter une série</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.primaryBtn} onPress={saveEditedExercise} activeOpacity={0.85}>
-          <Text style={styles.primaryBtnText}>Enregistrer l'exercice</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.destructiveBtn} onPress={confirmDeleteExerciseFromSession} activeOpacity={0.8}>
-          <Text style={styles.destructiveBtnText}>Retirer cet exercice de la séance</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.outlineBtn} onPress={() => setEditingExSession(null)} activeOpacity={0.8}>
           <Text style={styles.outlineBtnText}>Fermer</Text>
         </TouchableOpacity>
       </BottomSheet>
@@ -808,8 +843,27 @@ const styles = StyleSheet.create({
   sessionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
     padding: 14,
+  },
+  sessionHeaderTappable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  editSessionBtn: {
+    height: 34,
+    justifyContent: 'center',
+    backgroundColor: THEME.colors.cardInner,
+    paddingHorizontal: 13,
+    borderRadius: THEME.radius.pill,
+  },
+  editSessionBtnText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
+    fontWeight: '700',
+    color: THEME.colors.accentStrong,
   },
   letterBadge: {
     width: 46,
@@ -844,6 +898,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2,
   },
+  sessionBilanText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
+    color: THEME.colors.accentStrong,
+    fontWeight: '600',
+    fontStyle: 'italic',
+    marginTop: 3,
+  },
   volumeHighlight: {
     color: THEME.colors.textPrimary,
     fontWeight: '800',
@@ -867,23 +929,12 @@ const styles = StyleSheet.create({
   exerciseDetailRow: {
     gap: 6,
   },
-  exerciseHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
   exerciseDetailName: {
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
     fontWeight: '700',
     color: THEME.colors.textPrimary,
     flex: 1,
-  },
-  editExLink: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 12,
-    fontWeight: '700',
-    color: THEME.colors.accentStrong,
   },
   setsChipsRow: {
     flexDirection: 'row',
@@ -904,16 +955,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: THEME.colors.textSecondary,
-  },
-  editSessionFooterBtn: {
-    alignSelf: 'flex-start',
-    marginTop: 2,
-  },
-  editSessionFooterText: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 12,
-    fontWeight: '700',
-    color: THEME.colors.accentStrong,
   },
   legendRow: {
     flexDirection: 'row',
@@ -953,19 +994,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     marginBottom: 6,
   },
-  modalTextInput: {
-    height: 52,
-    backgroundColor: THEME.colors.bg,
-    color: THEME.colors.textPrimary,
-    fontFamily: THEME.fonts.sans,
-    fontSize: 14,
-    fontWeight: '700',
-    paddingHorizontal: 14,
-    borderRadius: THEME.radius.inner,
-    borderWidth: 1,
-    borderColor: THEME.colors.cardBorder,
-    marginBottom: 14,
-  },
   programToggleRow: {
     flexDirection: 'row',
     backgroundColor: THEME.colors.cardInner,
@@ -996,9 +1024,34 @@ const styles = StyleSheet.create({
   programBtnTextActive: {
     color: THEME.colors.textPrimary,
   },
-  setsEditScroll: {
-    maxHeight: 220,
+  sessionEditScroll: {
+    maxHeight: 440,
     marginBottom: 8,
+  },
+  exEditCard: {
+    backgroundColor: THEME.colors.bg,
+    borderRadius: THEME.radius.card,
+    padding: 10,
+    marginBottom: 12,
+  },
+  exEditHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  exNameInput: {
+    flex: 1,
+    height: 40,
+    backgroundColor: THEME.colors.cardBg,
+    color: THEME.colors.textPrimary,
+    fontFamily: THEME.fonts.sans,
+    fontSize: 13,
+    fontWeight: '700',
+    paddingHorizontal: 12,
+    borderRadius: THEME.radius.inner,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
   },
   setEditCard: {
     backgroundColor: THEME.colors.cardInner,
