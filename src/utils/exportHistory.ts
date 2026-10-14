@@ -1,7 +1,9 @@
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { Alert } from 'react-native';
+import { FEELING_LABEL } from '../constants/feeling';
 import { formatLocalDate, getAllSessionsForExport } from '../database/db';
+import { parseLocalDate } from './format';
 
 const WORKOUT_NAMES: Record<number, string> = {
   1: 'Push (Pectoraux / Épaules / Triceps)',
@@ -9,17 +11,9 @@ const WORKOUT_NAMES: Record<number, string> = {
   3: 'Legs (Quadriceps / Ischios / Mollets)',
 };
 
-const FEELING_LABELS: Record<string, string> = {
-  EASY: 'Facile',
-  MEDIUM: 'Juste',
-  HARD: 'Échec',
-};
-
 function formatDateLong(dateStr: string): string {
   try {
-    const [year, month, day] = dateStr.split('-');
-    const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-    return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    return parseLocalDate(dateStr).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   } catch {
     return dateStr;
   }
@@ -63,7 +57,7 @@ function buildExportText(): string {
       lines.push(`   ${formatSets(ex.sets)}`);
       const lastFeeling = ex.sets[ex.sets.length - 1]?.feeling;
       if (lastFeeling) {
-        lines.push(`   Ressenti (dernière série) : ${FEELING_LABELS[lastFeeling] || lastFeeling}`);
+        lines.push(`   Ressenti (dernière série) : ${FEELING_LABEL[lastFeeling] || lastFeeling}`);
       }
       lines.push('');
     });

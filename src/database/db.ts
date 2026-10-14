@@ -8,10 +8,33 @@ let db: SQLite.SQLiteDatabase | null = null;
 let memoryLogs: WorkoutLogEntry[] = [];
 let memoryExercises: ConfiguredExercise[] = [];
 
+// Valeurs par défaut par catégorie d'équipement — une seule source de vérité au lieu d'un
+// if/else répété à chaque endroit qui en a besoin (repos, poids de base d'un exercice créé).
+const EQUIPMENT_DEFAULTS: Record<EquipmentCategory, { restSeconds: number; baseWeight: number }> = {
+  CABLE: { restSeconds: 60, baseWeight: 0 },
+  FREE_WEIGHT: { restSeconds: 150, baseWeight: 20 }, // barre olympique
+  HAMMER_STRENGTH: { restSeconds: 90, baseWeight: 0 },
+};
+
 function defaultRestSecondsFor(category: EquipmentCategory): number {
-  if (category === 'CABLE') return 60;
-  if (category === 'FREE_WEIGHT') return 150;
-  return 90; // HAMMER_STRENGTH
+  return EQUIPMENT_DEFAULTS[category].restSeconds;
+}
+
+// Ajoute les colonnes manquantes d'une table existante — idempotent via PRAGMA table_info
+// plutôt qu'un try/catch qui masquerait d'autres erreurs réelles. `columns` : paires
+// [nom_colonne, DDL complet de la colonne pour ALTER TABLE ... ADD COLUMN].
+function ensureColumns(database: SQLite.SQLiteDatabase, table: string, columns: [string, string][]): void {
+  try {
+    const existing = database.getAllSync<{ name: string }>(`PRAGMA table_info(${table});`);
+    const existingNames = new Set(existing.map((c) => c.name));
+    for (const [name, ddl] of columns) {
+      if (!existingNames.has(name)) {
+        database.execSync(`ALTER TABLE ${table} ADD COLUMN ${ddl};`);
+      }
+    }
+  } catch (error) {
+    console.error(`Erreur migration ${table}:`, error);
+  }
 }
 
 // Construit un ConfiguredExercise "de calibration" à partir d'une définition de catalogue
@@ -86,41 +109,25 @@ export async function initDatabase(): Promise<void> {
     // Migrations additives pour l'algorithme de suggestion v2 (double progression) : réglages
     // par exercice (mode, plage de reps, plancher, repos) sur `exercises`, et état mémorisé
     // complet (charge/reps actuels, compteurs, date, raison, calibration) sur
-    // `exercise_progression_state`. Toujours exécutées (idempotentes via PRAGMA table_info),
+    // `exercise_progression_state`. Toujours exécutées (idempotentes via ensureColumns),
     // indépendamment du re-seed versionné plus bas.
-    try {
-      const exerciseColumns = db.getAllSync<{ name: string }>('PRAGMA table_info(exercises);');
-      const addExerciseColumnIfMissing = (name: string, ddl: string) => {
-        if (!exerciseColumns.some((c) => c.name === name)) {
-          db!.execSync(`ALTER TABLE exercises ADD COLUMN ${ddl};`);
-        }
-      };
-      addExerciseColumnIfMissing('mode', "mode TEXT DEFAULT 'CHARGE'");
-      addExerciseColumnIfMissing('reps_min', 'reps_min INTEGER');
-      addExerciseColumnIfMissing('reps_max', 'reps_max INTEGER');
-      addExerciseColumnIfMissing('min_weight_kg', 'min_weight_kg REAL');
-      addExerciseColumnIfMissing('rest_seconds', 'rest_seconds INTEGER DEFAULT 90');
-      addExerciseColumnIfMissing('muscle_group', 'muscle_group TEXT');
-    } catch (error) {
-      console.error('Erreur migration exercises (v2 progression):', error);
-    }
+    ensureColumns(db, 'exercises', [
+      ['mode', "mode TEXT DEFAULT 'CHARGE'"],
+      ['reps_min', 'reps_min INTEGER'],
+      ['reps_max', 'reps_max INTEGER'],
+      ['min_weight_kg', 'min_weight_kg REAL'],
+      ['rest_seconds', 'rest_seconds INTEGER DEFAULT 90'],
+      ['muscle_group', 'muscle_group TEXT'],
+    ]);
 
-    try {
-      const stateColumns = db.getAllSync<{ name: string }>('PRAGMA table_info(exercise_progression_state);');
-      const addStateColumnIfMissing = (name: string, ddl: string) => {
-        if (!stateColumns.some((c) => c.name === name)) {
-          db!.execSync(`ALTER TABLE exercise_progression_state ADD COLUMN ${ddl};`);
-        }
-      };
-      addStateColumnIfMissing('current_weight', 'current_weight REAL');
-      addStateColumnIfMissing('current_target_reps', 'current_target_reps INTEGER');
-      addStateColumnIfMissing('sessions_without_success', 'sessions_without_success INTEGER DEFAULT 0');
-      addStateColumnIfMissing('last_session_date', 'last_session_date TEXT');
-      addStateColumnIfMissing('last_decision_reason', 'last_decision_reason TEXT');
-      addStateColumnIfMissing('is_calibrating', 'is_calibrating INTEGER DEFAULT 0');
-    } catch (error) {
-      console.error('Erreur migration exercise_progression_state (v2 progression):', error);
-    }
+    ensureColumns(db, 'exercise_progression_state', [
+      ['current_weight', 'current_weight REAL'],
+      ['current_target_reps', 'current_target_reps INTEGER'],
+      ['sessions_without_success', 'sessions_without_success INTEGER DEFAULT 0'],
+      ['last_session_date', 'last_session_date TEXT'],
+      ['last_decision_reason', 'last_decision_reason TEXT'],
+      ['is_calibrating', 'is_calibrating INTEGER DEFAULT 0'],
+    ]);
 
     db.execSync(`
       CREATE TABLE IF NOT EXISTS workout_logs (
@@ -139,17 +146,7 @@ export async function initDatabase(): Promise<void> {
 
     // Migration additive : la colonne "mode" (GUIDED/FREE) a été ajoutée après coup, pour
     // savoir dans quel mode une séance passée a été faite (utile pour "Reprendre"/"Relancer").
-    // Sur une base déjà existante, ALTER TABLE échoue si la colonne existe déjà : on vérifie
-    // d'abord via PRAGMA table_info plutôt que de se fier à un try/catch qui masquerait
-    // d'autres erreurs réelles.
-    try {
-      const columns = db.getAllSync<{ name: string }>('PRAGMA table_info(workout_logs);');
-      if (!columns.some((c) => c.name === 'mode')) {
-        db.execSync('ALTER TABLE workout_logs ADD COLUMN mode TEXT;');
-      }
-    } catch (error) {
-      console.error('Erreur migration workout_logs.mode:', error);
-    }
+    ensureColumns(db, 'workout_logs', [['mode', 'mode TEXT']]);
 
     db.execSync(`
       CREATE TABLE IF NOT EXISTS app_metadata (
@@ -247,54 +244,60 @@ export async function initDatabase(): Promise<void> {
       db.runSync("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('seed_version_v5', '1');");
     }
 
-    // Rétro-remplissage de l'état v2 pour les exercices déjà en cours avant cette migration
-    // (créés via l'ancien chemin planned_weights). Idempotent : ne touche que les lignes où
-    // current_weight est encore vide, donc ne s'exécute réellement qu'une fois par exercice.
-    try {
-      const toBackfill = db.getAllSync<{
-        exercise_id: number;
-        planned_weights: string;
-        default_target_reps: number;
-      }>(
-        `SELECT p.exercise_id, p.planned_weights, e.default_target_reps
-         FROM exercise_progression_state p
-         JOIN exercises e ON e.id = p.exercise_id
-         WHERE p.current_weight IS NULL;`
-      );
-      for (const row of toBackfill) {
-        let startingWeight = 40;
-        try {
-          const parsed = JSON.parse(row.planned_weights);
-          if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'number') {
-            startingWeight = parsed[0];
-          }
-        } catch {}
-
-        db.runSync(
-          `UPDATE exercise_progression_state
-           SET current_weight = ?, current_target_reps = ?, sessions_without_success = 0, is_calibrating = 0
-           WHERE exercise_id = ?;`,
-          [startingWeight, row.default_target_reps, row.exercise_id]
+    // Rétro-remplissages v2 (état de progression + groupe musculaire) : chacun est idempotent
+    // via sa propre clause WHERE ... IS NULL, mais sans verrou devient définitivement un no-op
+    // qui continue de coûter une requête (JOIN pour l'un, ~18 UPDATE pour l'autre) à CHAQUE
+    // lancement, pour toujours. Un simple drapeau dans app_metadata les fait tourner une
+    // dernière fois sur les installs qui ne l'ont pas encore (neuves ou déjà à jour, peu
+    // importe : le WHERE ne touche que ce qui reste à faire), puis plus jamais.
+    const backfillDone = db.getFirstSync<{ value: string }>(
+      "SELECT value FROM app_metadata WHERE key = 'migrations_v2_backfill_done';"
+    );
+    if (!backfillDone) {
+      try {
+        const toBackfill = db.getAllSync<{
+          exercise_id: number;
+          planned_weights: string;
+          default_target_reps: number;
+        }>(
+          `SELECT p.exercise_id, p.planned_weights, e.default_target_reps
+           FROM exercise_progression_state p
+           JOIN exercises e ON e.id = p.exercise_id
+           WHERE p.current_weight IS NULL;`
         );
-      }
-    } catch (error) {
-      console.error('Erreur rétro-remplissage progression v2:', error);
-    }
+        for (const row of toBackfill) {
+          let startingWeight = 40;
+          try {
+            const parsed = JSON.parse(row.planned_weights);
+            if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'number') {
+              startingWeight = parsed[0];
+            }
+          } catch {}
 
-    // Rétro-remplissage du groupe musculaire (ajouté après le gate seed_version_v5, donc pas
-    // rejoué par le bloc de seed pour les installations qui l'ont déjà passé) : toujours
-    // exécuté, idempotent via la clause muscle_group IS NULL. Ne touche jamais les exercices
-    // personnalisés (hors SEED_EXERCISES, sans muscleGroup).
-    try {
-      for (const ex of SEED_EXERCISES) {
-        if (!ex.muscleGroup) continue;
-        db.runSync(
-          'UPDATE exercises SET muscle_group = ? WHERE id = ? AND muscle_group IS NULL;',
-          [ex.muscleGroup, ex.id]
-        );
+          db.runSync(
+            `UPDATE exercise_progression_state
+             SET current_weight = ?, current_target_reps = ?, sessions_without_success = 0, is_calibrating = 0
+             WHERE exercise_id = ?;`,
+            [startingWeight, row.default_target_reps, row.exercise_id]
+          );
+        }
+      } catch (error) {
+        console.error('Erreur rétro-remplissage progression v2:', error);
       }
-    } catch (error) {
-      console.error('Erreur rétro-remplissage muscle_group:', error);
+
+      try {
+        for (const ex of SEED_EXERCISES) {
+          if (!ex.muscleGroup) continue;
+          db.runSync(
+            'UPDATE exercises SET muscle_group = ? WHERE id = ? AND muscle_group IS NULL;',
+            [ex.muscleGroup, ex.id]
+          );
+        }
+      } catch (error) {
+        console.error('Erreur rétro-remplissage muscle_group:', error);
+      }
+
+      db.runSync("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('migrations_v2_backfill_done', '1');");
     }
   } catch (error) {
     console.warn('Erreur initialisation SQLite, utilisation du mode mémoire de secours:', error);
@@ -472,7 +475,7 @@ export function addCustomExercise(
   targetReps: number,
   setsCount: number = 3
 ): ConfiguredExercise {
-  const baseWeight = category === 'FREE_WEIGHT' ? 20 : 0;
+  const baseWeight = EQUIPMENT_DEFAULTS[category].baseWeight;
   const restSeconds = defaultRestSecondsFor(category);
   // Les exercices créés depuis l'appli sont toujours en mode CHARGE (séries identiques à la
   // même charge) : le formulaire ne propose pas de choisir une plage de reps en mode
@@ -812,6 +815,12 @@ export function deleteWorkoutSession(date: string, workoutId: number): void {
  * boucle, causait une perte de données si deux exercices finissaient sous le même nom (l'un
  * renommé vers le nom d'origine de l'autre) : le DELETE du second effaçait les lignes tout
  * juste insérées par le premier.
+ *
+ * Résout exercise_id en retrouvant l'exercice du catalogue par son nom (sinon 0, comme pour un
+ * exercice purement personnalisé) : sans ça, toute séance passée par cet éditeur perdait son
+ * lien vers le catalogue, et disparaissait silencieusement de getLastExercisePerformance(),
+ * buildStrengthCurves() et de la répartition par groupe musculaire (tous filtrent/joignent sur
+ * exercise_id).
  */
 export function insertExerciseLogsForSession(
   date: string,
@@ -820,10 +829,12 @@ export function insertExerciseLogsForSession(
   sets: { setNumber: number; weight: number; repsTarget: number; repsDone: number; feeling: 'EASY' | 'MEDIUM' | 'HARD' }[]
 ): void {
   if (!db || Platform.OS === 'web') {
+    const matched = memoryExercises.find((e) => e.name === exerciseName);
+    const exerciseId = matched ? matched.id : 0;
     for (const s of sets) {
       memoryLogs.push({
         workoutId,
-        exerciseId: 0,
+        exerciseId,
         exerciseName,
         date,
         setNumber: s.setNumber,
@@ -837,12 +848,14 @@ export function insertExerciseLogsForSession(
   }
 
   try {
+    const matched = db.getFirstSync<{ id: number }>('SELECT id FROM exercises WHERE name = ?;', [exerciseName]);
+    const exerciseId = matched?.id ?? 0;
     for (const s of sets) {
       db.runSync(
         `INSERT INTO workout_logs
         (workout_id, exercise_id, exercise_name, date, set_number, weight, reps_target, reps_done, feeling)
-        VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?);`,
-        [workoutId, exerciseName, date, s.setNumber, s.weight, s.repsTarget, s.repsDone, s.feeling]
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [workoutId, exerciseId, exerciseName, date, s.setNumber, s.weight, s.repsTarget, s.repsDone, s.feeling]
       );
     }
   } catch (error) {
@@ -1103,7 +1116,7 @@ function buildStrengthCurves(
 export function getDashboardSummary(weeksCount: number = 10): DashboardSummary {
   let rawLogs: { date: string; workoutId: number; weight: number; repsDone: number }[];
   let prRows: { exercise_name: string; max_weight: number }[];
-  let fullRows: { date: string; exerciseId: number; exerciseName: string; muscleGroup: string | null; category: string | null; weight: number; repsDone: number }[];
+  let fullRows: { date: string; workoutId: number; exerciseId: number; exerciseName: string; muscleGroup: string | null; category: string | null; weight: number; repsDone: number }[];
 
   if (!db || Platform.OS === 'web') {
     rawLogs = memoryLogs.map((l) => ({ date: l.date, workoutId: l.workoutId, weight: l.weight, repsDone: l.repsDone }));
@@ -1119,6 +1132,7 @@ export function getDashboardSummary(weeksCount: number = 10): DashboardSummary {
       const category = meta?.category ?? memoryExercises.find((e) => e.id === l.exerciseId)?.category ?? null;
       return {
         date: l.date,
+        workoutId: l.workoutId,
         exerciseId: l.exerciseId,
         exerciseName: l.exerciseName,
         muscleGroup: meta?.muscleGroup ?? null,
@@ -1129,19 +1143,12 @@ export function getDashboardSummary(weeksCount: number = 10): DashboardSummary {
     });
   } else {
     try {
-      rawLogs = db
-        .getAllSync<{ date: string; workout_id: number; weight: number; reps_done: number }>(
-          'SELECT date, workout_id, weight, reps_done FROM workout_logs;'
-        )
-        .map((r) => ({ date: r.date, workoutId: r.workout_id, weight: r.weight, repsDone: r.reps_done }));
-
-      prRows = db.getAllSync<{ exercise_name: string; max_weight: number }>(
-        'SELECT exercise_name, MAX(weight) as max_weight FROM workout_logs GROUP BY exercise_name ORDER BY max_weight DESC LIMIT 5;'
-      );
-
+      // Une seule requête (fullRows, via LEFT JOIN) : rawLogs n'en est qu'un sous-ensemble de
+      // colonnes, pas besoin d'un second scan de workout_logs pour l'obtenir.
       fullRows = db
         .getAllSync<{
           date: string;
+          workout_id: number;
           exercise_id: number;
           exercise_name: string;
           muscle_group: string | null;
@@ -1149,12 +1156,13 @@ export function getDashboardSummary(weeksCount: number = 10): DashboardSummary {
           weight: number;
           reps_done: number;
         }>(
-          `SELECT l.date, l.exercise_id, l.exercise_name, e.muscle_group, e.category, l.weight, l.reps_done
+          `SELECT l.date, l.workout_id, l.exercise_id, l.exercise_name, e.muscle_group, e.category, l.weight, l.reps_done
            FROM workout_logs l
            LEFT JOIN exercises e ON e.id = l.exercise_id;`
         )
         .map((r) => ({
           date: r.date,
+          workoutId: r.workout_id,
           exerciseId: r.exercise_id,
           exerciseName: r.exercise_name,
           muscleGroup: r.muscle_group,
@@ -1162,6 +1170,12 @@ export function getDashboardSummary(weeksCount: number = 10): DashboardSummary {
           weight: r.weight,
           repsDone: r.reps_done,
         }));
+
+      rawLogs = fullRows.map((r) => ({ date: r.date, workoutId: r.workoutId, weight: r.weight, repsDone: r.repsDone }));
+
+      prRows = db.getAllSync<{ exercise_name: string; max_weight: number }>(
+        'SELECT exercise_name, MAX(weight) as max_weight FROM workout_logs GROUP BY exercise_name ORDER BY max_weight DESC LIMIT 5;'
+      );
     } catch (error) {
       console.error('Erreur getDashboardSummary:', error);
       rawLogs = [];

@@ -66,12 +66,6 @@ export interface SetResult {
   feeling: Feeling;
 }
 
-export interface NextSessionPlan {
-  weightsPerSet: number[];
-  progressionVerdict: 'FULL_INCREASE' | 'PARTIAL_INCREASE' | 'MAINTAIN' | 'DELOAD';
-  message: string;
-}
-
 export type SessionMode = 'GUIDED' | 'FREE';
 
 export interface WorkoutLogEntry {

@@ -16,6 +16,7 @@ import { SPLIT_LETTERS, SPLIT_SUBTITLES } from '../constants/splits';
 import { clearAllWorkoutLogs, getDashboardSummary, getExercisesForWorkout, getRecentLogs, getWorkouts } from '../database/db';
 import { THEME } from '../theme';
 import { Workout } from '../types';
+import { parseLocalDate } from '../utils/format';
 import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
 
 interface SplitMeta {
@@ -24,8 +25,7 @@ interface SplitMeta {
 }
 
 function daysSince(dateStr: string): number {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const past = new Date(y, m - 1, d);
+  const past = parseLocalDate(dateStr);
   const today = new Date();
   const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const diffMs = todayMidnight.getTime() - past.getTime();

@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomSheet } from '../components/BottomSheet';
 import { Dot } from '../components/Dot';
 import { Icon } from '../components/Icon';
+import { FEELING_BG, FEELING_DOT, FEELING_INK, FEELING_LABEL } from '../constants/feeling';
 import {
   clearAllWorkoutLogs,
   deleteExerciseFromSession,
@@ -28,6 +29,7 @@ import {
 import { THEME } from '../theme';
 import { Feeling, WorkoutLogEntry } from '../types';
 import { exportHistoryAsText } from '../utils/exportHistory';
+import { fmtKg, parseLocalDate } from '../utils/format';
 import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
 
 interface HistoryScreenProps {
@@ -73,30 +75,6 @@ interface EditableSessionState {
   workoutId: number;
   exercises: EditableExercise[];
   removedExerciseNames: string[];
-}
-
-const FEELING_LABEL: Record<Feeling, string> = { EASY: 'Facile', MEDIUM: 'Juste', HARD: 'Échec' };
-const FEELING_BG: Record<Feeling, string> = {
-  EASY: THEME.colors.feelingEasyBg,
-  MEDIUM: THEME.colors.feelingMediumBg,
-  HARD: THEME.colors.feelingHardBg,
-};
-const FEELING_INK: Record<Feeling, string> = {
-  EASY: THEME.colors.feelingEasyText,
-  MEDIUM: THEME.colors.feelingMediumText,
-  HARD: THEME.colors.feelingHardText,
-};
-// Couleurs "bordure" (plus vives que le texte, pensé pour rester lisible sur fond clair) :
-// utilisées pour les pastilles pleines (Dot), comme sur la carte de séance en direct — le texte
-// garde FEELING_INK, plus sombre/mat, pour le contraste.
-const FEELING_DOT: Record<Feeling, string> = {
-  EASY: THEME.colors.feelingEasyBorder,
-  MEDIUM: THEME.colors.feelingMediumBorder,
-  HARD: THEME.colors.feelingHardBorder,
-};
-
-function fmtKg(w: number): string {
-  return w % 1 === 0 ? String(w) : String(w).replace('.', ',');
 }
 
 function groupByMonth(sessions: GroupedSession[]): MonthGroup[] {
@@ -310,40 +288,33 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
     });
   };
 
-  const adjustEditingSetWeight = (exIdx: number, setIdx: number, delta: number) => {
-    triggerLightHaptic();
+  // Mutation partagée d'une série en édition : les 3 handlers ci-dessous ne différaient que par
+  // le champ patché, calculé à partir de la valeur courante de la série (lue dans l'updater,
+  // jamais depuis une closure, pour rester correct même avec plusieurs taps rapprochés).
+  const patchEditingSet = (exIdx: number, setIdx: number, patch: (current: EditableSet) => Partial<EditableSet>) => {
     setEditingSession((prev) => {
       if (!prev) return prev;
       const exercises = [...prev.exercises];
       const sets = [...exercises[exIdx].sets];
-      sets[setIdx] = { ...sets[setIdx], weight: Math.max(0, Math.round((sets[setIdx].weight + delta) * 100) / 100) };
+      sets[setIdx] = { ...sets[setIdx], ...patch(sets[setIdx]) };
       exercises[exIdx] = { ...exercises[exIdx], sets };
       return { ...prev, exercises };
     });
+  };
+
+  const adjustEditingSetWeight = (exIdx: number, setIdx: number, delta: number) => {
+    triggerLightHaptic();
+    patchEditingSet(exIdx, setIdx, (s) => ({ weight: Math.max(0, Math.round((s.weight + delta) * 100) / 100) }));
   };
 
   const adjustEditingSetReps = (exIdx: number, setIdx: number, delta: number) => {
     triggerLightHaptic();
-    setEditingSession((prev) => {
-      if (!prev) return prev;
-      const exercises = [...prev.exercises];
-      const sets = [...exercises[exIdx].sets];
-      sets[setIdx] = { ...sets[setIdx], repsDone: Math.max(0, sets[setIdx].repsDone + delta) };
-      exercises[exIdx] = { ...exercises[exIdx], sets };
-      return { ...prev, exercises };
-    });
+    patchEditingSet(exIdx, setIdx, (s) => ({ repsDone: Math.max(0, s.repsDone + delta) }));
   };
 
   const setEditingSetFeeling = (exIdx: number, setIdx: number, feeling: Feeling) => {
     triggerLightHaptic();
-    setEditingSession((prev) => {
-      if (!prev) return prev;
-      const exercises = [...prev.exercises];
-      const sets = [...exercises[exIdx].sets];
-      sets[setIdx] = { ...sets[setIdx], feeling };
-      exercises[exIdx] = { ...exercises[exIdx], sets };
-      return { ...prev, exercises };
-    });
+    patchEditingSet(exIdx, setIdx, () => ({ feeling }));
   };
 
   const addEditingSet = (exIdx: number) => {
@@ -464,9 +435,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
 
   const formatDate = (dateStr: string) => {
     try {
-      const [year, month, day] = dateStr.split('-');
-      const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      return d.toLocaleDateString('fr-FR', {
+      return parseLocalDate(dateStr).toLocaleDateString('fr-FR', {
         weekday: 'short',
         day: 'numeric',
         month: 'short',

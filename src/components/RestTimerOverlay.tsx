@@ -13,6 +13,7 @@ import {
 import Svg, { Circle } from 'react-native-svg';
 import { THEME } from '../theme';
 import { playRestTimerAlarm } from '../utils/audio';
+import { fmtKg } from '../utils/format';
 import { triggerLightHaptic, triggerTimerEndHaptic, triggerWarningHaptic } from '../utils/haptics';
 import {
   armSystemBackupTimer,
@@ -38,10 +39,6 @@ const RING_SIZE = 264;
 const RING_STROKE = 13;
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-
-function fmtKg(w: number): string {
-  return w % 1 === 0 ? String(w) : String(w).replace('.', ',');
-}
 
 export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   initialSeconds,

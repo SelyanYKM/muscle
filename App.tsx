@@ -89,12 +89,14 @@ export default function App() {
           }
         }
 
-        await initDatabase();
-        await configureAppAudio();
-        await configureRestTimerChannel();
+        // Les trois touchent des sous-systèmes indépendants (SQLite, session audio, canal de
+        // notification) : aucune raison de les attendre en séquence au démarrage.
+        await Promise.all([initDatabase(), configureAppAudio(), configureRestTimerChannel()]);
         // Demandée ici, avant tout écran en <Modal> (le minuteur de repos inclus) :
         // le popup système Android pour autoriser les notifications peut ne jamais
         // s'afficher correctement s'il est demandé pendant qu'une Modal RN est ouverte.
+        // Après le Promise.all ci-dessus : le canal de notification doit exister avant de
+        // demander la permission qui s'y rattache.
         await requestRestTimerPermission();
       } catch (e) {
         console.error('Erreur init database / audio:', e);

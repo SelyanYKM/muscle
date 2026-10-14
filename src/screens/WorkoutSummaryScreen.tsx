@@ -10,10 +10,11 @@ import {
 } from 'react-native';
 import { Dot } from '../components/Dot';
 import { Icon } from '../components/Icon';
-import { SPLIT_SUBTITLES } from '../constants/splits';
+import { FEELING_DOT } from '../constants/feeling';
 import { saveSessionFeedback } from '../database/db';
 import { THEME } from '../theme';
-import { Feeling, ProgressionDecision, SessionStatus, SetResult } from '../types';
+import { ProgressionDecision, SessionStatus, SetResult } from '../types';
+import { fmtKg } from '../utils/format';
 import { triggerLightHaptic } from '../utils/haptics';
 
 interface ExerciseSummaryItem {
@@ -36,6 +37,39 @@ interface WorkoutSummaryProps {
 
 const FEELING_SCALE = [1, 2, 3, 4, 5];
 
+// Une échelle 1-5 à taper (énergie physique / motivation mentale, mêmes pastilles pour les
+// deux), extraite en composant plutôt que dupliquée deux fois avec seulement le libellé et
+// l'état lié qui changent.
+const FeelingScaleRow: React.FC<{
+  label: string;
+  endLabels: [string, string];
+  value: number | null;
+  onChange: (n: number | null) => void;
+}> = ({ label, endLabels, value, onChange }) => (
+  <View style={styles.feelingScaleBlock}>
+    <Text style={styles.feelingScaleLabel}>{label}</Text>
+    <View style={styles.feelingScaleRow}>
+      {FEELING_SCALE.map((n) => (
+        <TouchableOpacity
+          key={n}
+          style={[styles.feelingPill, value === n && styles.feelingPillActive]}
+          onPress={() => {
+            triggerLightHaptic();
+            onChange(value === n ? null : n);
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.feelingPillText, value === n && styles.feelingPillTextActive]}>{n}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+    <View style={styles.feelingScaleEndsRow}>
+      <Text style={styles.feelingScaleEndText}>{endLabels[0]}</Text>
+      <Text style={styles.feelingScaleEndText}>{endLabels[1]}</Text>
+    </View>
+  </View>
+);
+
 const STATUS_LABEL: Record<SessionStatus, string> = {
   EASY_SUCCESS: 'Réussie facile',
   SUCCESS: 'Réussie',
@@ -44,14 +78,6 @@ const STATUS_LABEL: Record<SessionStatus, string> = {
   CALIBRATION: 'Calibration',
   INCOMPLETE: 'Incomplète',
   RESUMED_AFTER_BREAK: 'Reprise',
-};
-
-// Pastille pleine (Dot) : couleurs "bordure", plus vives que le texte — cohérent avec la carte
-// de séance en direct.
-const FEELING_DOT: Record<Feeling, string> = {
-  EASY: THEME.colors.feelingEasyBorder,
-  MEDIUM: THEME.colors.feelingMediumBorder,
-  HARD: THEME.colors.feelingHardBorder,
 };
 
 function statusColors(status: SessionStatus) {
@@ -65,10 +91,6 @@ function statusColors(status: SessionStatus) {
     return { bg: THEME.colors.feelingHardBg, ink: THEME.colors.feelingHardText };
   }
   return { bg: THEME.colors.cardInner, ink: THEME.colors.textSecondary };
-}
-
-function fmtKg(w: number): string {
-  return w % 1 === 0 ? String(w) : String(w).replace('.', ',');
 }
 
 export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
@@ -221,55 +243,19 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
           <Text style={styles.sectionHeading}>RESSENTI DE LA SÉANCE</Text>
 
           <View style={styles.feelingCard}>
-            <View style={styles.feelingScaleBlock}>
-              <Text style={styles.feelingScaleLabel}>ÉNERGIE PHYSIQUE</Text>
-              <View style={styles.feelingScaleRow}>
-                {FEELING_SCALE.map((n) => (
-                  <TouchableOpacity
-                    key={n}
-                    style={[styles.feelingPill, physicalFeeling === n && styles.feelingPillActive]}
-                    onPress={() => {
-                      triggerLightHaptic();
-                      setPhysicalFeeling(physicalFeeling === n ? null : n);
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.feelingPillText, physicalFeeling === n && styles.feelingPillTextActive]}>
-                      {n}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <View style={styles.feelingScaleEndsRow}>
-                <Text style={styles.feelingScaleEndText}>Épuisé</Text>
-                <Text style={styles.feelingScaleEndText}>En forme</Text>
-              </View>
-            </View>
+            <FeelingScaleRow
+              label="ÉNERGIE PHYSIQUE"
+              endLabels={['Épuisé', 'En forme']}
+              value={physicalFeeling}
+              onChange={setPhysicalFeeling}
+            />
 
-            <View style={styles.feelingScaleBlock}>
-              <Text style={styles.feelingScaleLabel}>MOTIVATION MENTALE</Text>
-              <View style={styles.feelingScaleRow}>
-                {FEELING_SCALE.map((n) => (
-                  <TouchableOpacity
-                    key={n}
-                    style={[styles.feelingPill, mentalFeeling === n && styles.feelingPillActive]}
-                    onPress={() => {
-                      triggerLightHaptic();
-                      setMentalFeeling(mentalFeeling === n ? null : n);
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.feelingPillText, mentalFeeling === n && styles.feelingPillTextActive]}>
-                      {n}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <View style={styles.feelingScaleEndsRow}>
-                <Text style={styles.feelingScaleEndText}>Difficile</Text>
-                <Text style={styles.feelingScaleEndText}>Au top</Text>
-              </View>
-            </View>
+            <FeelingScaleRow
+              label="MOTIVATION MENTALE"
+              endLabels={['Difficile', 'Au top']}
+              value={mentalFeeling}
+              onChange={setMentalFeeling}
+            />
 
             <TouchableOpacity
               style={styles.stretchRow}

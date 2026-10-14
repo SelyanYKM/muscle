@@ -16,6 +16,7 @@ import { Dot } from '../components/Dot';
 import { Icon } from '../components/Icon';
 import { PlateBreakdown } from '../components/PlateBreakdown';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
+import { FEELING_BG, FEELING_DOT, FEELING_INK } from '../constants/feeling';
 import {
   addCustomExercise,
   deleteExercise,
@@ -38,6 +39,7 @@ import {
   SetResult,
   WorkoutLogEntry,
 } from '../types';
+import { fmtKg, parseLocalDate } from '../utils/format';
 import { triggerLightHaptic, triggerMediumHaptic, triggerSuccessHaptic, triggerWarningHaptic } from '../utils/haptics';
 
 interface FreeWorkoutScreenProps {
@@ -65,28 +67,6 @@ interface CompletedExerciseLog {
   sets: SetResult[];
 }
 
-// FEELING_* reste nécessaire pour l'affichage (pastilles "dernière fois" / "séries
-// effectuées"), y compris pour d'anciennes séances enregistrées avec un ressenti MEDIUM —
-// mais plus pour un choix de l'utilisateur : la validation d'une série ne dépend plus que
-// des répétitions réellement faites vs l'objectif (EASY si atteint, HARD sinon).
-const FEELING_INK: Record<Feeling, string> = {
-  EASY: THEME.colors.feelingEasyText,
-  MEDIUM: THEME.colors.feelingMediumText,
-  HARD: THEME.colors.feelingHardText,
-};
-// Couleur bordure des ressentis : utilisée pour rester visible sur la carte héro bleu nuit
-// (l'encre, trop sombre, se fondrait dans le fond).
-const FEELING_BORDER: Record<Feeling, string> = {
-  EASY: THEME.colors.feelingEasyBorder,
-  MEDIUM: THEME.colors.feelingMediumBorder,
-  HARD: THEME.colors.feelingHardBorder,
-};
-const FEELING_BG: Record<Feeling, string> = {
-  EASY: THEME.colors.feelingEasyBg,
-  MEDIUM: THEME.colors.feelingMediumBg,
-  HARD: THEME.colors.feelingHardBg,
-};
-
 const CATEGORY_LABEL: Record<EquipmentCategory, string> = {
   HAMMER_STRENGTH: 'HAMMER STRENGTH',
   FREE_WEIGHT: 'BARRE LIBRE · FINISHER',
@@ -98,10 +78,6 @@ const CATEGORY_SUB_LABEL: Record<EquipmentCategory, string> = {
   FREE_WEIGHT: 'Barre Libre',
   CABLE: 'Poulie',
 };
-
-function fmtKg(w: number): string {
-  return w % 1 === 0 ? String(w) : String(w).replace('.', ',');
-}
 
 // Échauffement suggéré (50% × 8, 70% × 4 de la charge de travail), arrondi au palier le plus
 // proche sans jamais descendre sous la charge à vide (barre/machine). Purement informatif : pas
@@ -206,9 +182,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
   const formatLastPerfDate = (dateStr: string) => {
     try {
-      const [year, month, day] = dateStr.split('-');
-      const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }).toUpperCase();
+      return parseLocalDate(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }).toUpperCase();
     } catch {
       return dateStr;
     }
@@ -593,7 +567,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
               <View style={styles.lastPerfChipsRow}>
                 {currentLastPerf.sets.map((s, idx) => (
                   <View key={idx} style={styles.lastPerfChip}>
-                    <Dot color={FEELING_BORDER[s.feeling]} size={8} />
+                    <Dot color={FEELING_DOT[s.feeling]} size={8} />
                     <Text style={styles.lastPerfChipText}>{fmtKg(s.weight)} × {s.repsDone}</Text>
                   </View>
                 ))}
@@ -712,7 +686,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                   <View style={styles.completedSetsRow}>
                     {cEx.sets.map((s, sIdx) => (
                       <View key={sIdx} style={[styles.setChip, { backgroundColor: FEELING_BG[s.feeling] }]}>
-                        <Dot color={FEELING_BORDER[s.feeling]} size={7} />
+                        <Dot color={FEELING_DOT[s.feeling]} size={7} />
                         <Text style={[styles.setChipText, { color: FEELING_INK[s.feeling] }]}>
                           S{s.setNumber} · {s.repsDone} × {fmtKg(s.weight)}kg
                         </Text>
@@ -796,7 +770,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 {doneSets.length > 0 && (
                   <View style={styles.catalogDoneDots}>
                     {doneSets.map((s, sIdx) => (
-                      <Dot key={sIdx} color={FEELING_BORDER[s.feeling]} size={7} />
+                      <Dot key={sIdx} color={FEELING_DOT[s.feeling]} size={7} />
                     ))}
                   </View>
                 )}

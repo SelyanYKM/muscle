@@ -12,6 +12,7 @@ import {
 import Svg, { Rect } from 'react-native-svg';
 import { DashboardSummary } from '../database/db';
 import { THEME } from '../theme';
+import { parseLocalDate } from '../utils/format';
 import { triggerLightHaptic } from '../utils/haptics';
 import { BarChart } from './BarChart';
 import { Icon } from './Icon';
@@ -31,9 +32,7 @@ interface DashboardSheetProps {
 
 function formatWeekLabel(weekStartISO: string): string {
   try {
-    const [year, month, day] = weekStartISO.split('-');
-    const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-    return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+    return parseLocalDate(weekStartISO).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
   } catch {
     return weekStartISO;
   }

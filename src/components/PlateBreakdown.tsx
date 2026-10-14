@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { getPlateBreakdownPerSide } from '../engine/plateCalculator';
 import { THEME } from '../theme';
 import { EquipmentCategory } from '../types';
+import { fmtKg } from '../utils/format';
 
 interface PlateBreakdownProps {
   totalWeight: number;
@@ -23,17 +24,13 @@ const PLATE_DIMENSIONS: Record<number, { width: number; height: number; border?:
   1.25: { width: 7, height: 28 },
 };
 
-function formatWeightFr(w: number): string {
-  return w % 1 === 0 ? String(w) : String(w).replace('.', ',');
-}
-
 export const PlateBreakdown: React.FC<PlateBreakdownProps> = ({ totalWeight, baseWeight = 0, category }) => {
   const plates = getPlateBreakdownPerSide(totalWeight, baseWeight);
   const weightToLoad = Math.max(0, totalWeight - baseWeight);
   const weightPerSide = Math.round((weightToLoad / 2) * 100) / 100;
   const isFreeWeight = category === 'FREE_WEIGHT';
 
-  const summaryText = plates.map((p) => `${p.count} × ${formatWeightFr(p.weight)}`).join(' + ');
+  const summaryText = plates.map((p) => `${p.count} × ${fmtKg(p.weight)}`).join(' + ');
 
   return (
     <View style={styles.container}>
@@ -68,7 +65,7 @@ export const PlateBreakdown: React.FC<PlateBreakdownProps> = ({ totalWeight, bas
 
         <View style={styles.valueCol}>
           <Text style={styles.valueLabel}>PAR CÔTÉ</Text>
-          <Text style={styles.valueText}>{formatWeightFr(weightPerSide)} kg</Text>
+          <Text style={styles.valueText}>{fmtKg(weightPerSide)} kg</Text>
           {plates.length > 0 && (
             <Text style={styles.summaryText} numberOfLines={1}>
               {summaryText}
