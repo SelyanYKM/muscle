@@ -46,6 +46,13 @@ const FEELING_INK: Record<Feeling, string> = {
   MEDIUM: THEME.colors.feelingMediumText,
   HARD: THEME.colors.feelingHardText,
 };
+// Pastille pleine (Dot) : couleurs "bordure", plus vives que le texte — cohérent avec la carte
+// de séance en direct.
+const FEELING_DOT: Record<Feeling, string> = {
+  EASY: THEME.colors.feelingEasyBorder,
+  MEDIUM: THEME.colors.feelingMediumBorder,
+  HARD: THEME.colors.feelingHardBorder,
+};
 
 function statusColors(status: SessionStatus) {
   if (status === 'EASY_SUCCESS' || status === 'SUCCESS') {
@@ -172,7 +179,7 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
                   <View style={styles.setsSummaryRow}>
                     {item.results.map((res, rIdx) => (
                       <View key={rIdx} style={styles.setResultBadge}>
-                        <Dot color={FEELING_INK[res.feeling]} size={7} />
+                        <Dot color={FEELING_DOT[res.feeling]} size={7} />
                         <Text style={styles.setResultText}>
                           S{res.setNumber} · {res.repsDone} × {fmtKg(res.weight)}kg
                         </Text>

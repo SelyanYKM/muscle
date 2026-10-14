@@ -62,6 +62,14 @@ const FEELING_INK: Record<Feeling, string> = {
   MEDIUM: THEME.colors.feelingMediumText,
   HARD: THEME.colors.feelingHardText,
 };
+// Couleurs "bordure" (plus vives que le texte, pensé pour rester lisible sur fond clair) :
+// utilisées pour les pastilles pleines (Dot), comme sur la carte de séance en direct — le texte
+// garde FEELING_INK, plus sombre/mat, pour le contraste.
+const FEELING_DOT: Record<Feeling, string> = {
+  EASY: THEME.colors.feelingEasyBorder,
+  MEDIUM: THEME.colors.feelingMediumBorder,
+  HARD: THEME.colors.feelingHardBorder,
+};
 
 function fmtKg(w: number): string {
   return w % 1 === 0 ? String(w) : String(w).replace('.', ',');
@@ -519,7 +527,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                                 <View style={styles.setsChipsRow}>
                                   {ex.sets.map((set, setIdx) => (
                                     <View key={setIdx} style={styles.setChip}>
-                                      <Dot color={FEELING_INK[set.feeling as Feeling]} size={7} />
+                                      <Dot color={FEELING_DOT[set.feeling as Feeling]} size={7} />
                                       <Text style={styles.setChipText}>
                                         S{set.setNumber} · {set.repsDone} × {fmtKg(set.weight)}kg
                                       </Text>
@@ -550,7 +558,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
           <View style={styles.legendRow}>
             {(['EASY', 'MEDIUM', 'HARD'] as Feeling[]).map((f) => (
               <View key={f} style={styles.legendItem}>
-                <Dot color={FEELING_INK[f]} size={8} />
+                <Dot color={FEELING_DOT[f]} size={8} />
                 <Text style={styles.legendText}>{FEELING_LABEL[f]}</Text>
               </View>
             ))}
@@ -660,7 +668,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                     style={[styles.feelBtn, s.feeling === f && { backgroundColor: FEELING_BG[f] }]}
                     onPress={() => setSetFeeling(idx, f)}
                   >
-                    <Dot color={FEELING_INK[f]} size={7} />
+                    <Dot color={FEELING_DOT[f]} size={7} />
                     <Text style={[styles.feelBtnText, s.feeling === f && { color: FEELING_INK[f] }]}>
                       {FEELING_LABEL[f]}
                     </Text>

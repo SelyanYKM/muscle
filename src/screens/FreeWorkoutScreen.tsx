@@ -710,7 +710,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                   <View style={styles.completedSetsRow}>
                     {cEx.sets.map((s, sIdx) => (
                       <View key={sIdx} style={[styles.setChip, { backgroundColor: FEELING_BG[s.feeling] }]}>
-                        <Dot color={FEELING_INK[s.feeling]} size={7} />
+                        <Dot color={FEELING_BORDER[s.feeling]} size={7} />
                         <Text style={[styles.setChipText, { color: FEELING_INK[s.feeling] }]}>
                           S{s.setNumber} · {s.repsDone} × {fmtKg(s.weight)}kg
                         </Text>
@@ -794,7 +794,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 {doneSets.length > 0 && (
                   <View style={styles.catalogDoneDots}>
                     {doneSets.map((s, sIdx) => (
-                      <Dot key={sIdx} color={FEELING_INK[s.feeling]} size={7} />
+                      <Dot key={sIdx} color={FEELING_BORDER[s.feeling]} size={7} />
                     ))}
                   </View>
                 )}
