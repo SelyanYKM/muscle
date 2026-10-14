@@ -2,17 +2,24 @@ export type Feeling = 'EASY' | 'MEDIUM' | 'HARD';
 
 export type EquipmentCategory = 'HAMMER_STRENGTH' | 'FREE_WEIGHT' | 'CABLE';
 
+// Mode de progression de l'algorithme v2 (double progression) — voir plus bas pour le détail.
+export type ProgressionMode = 'CHARGE' | 'REPS_PUIS_CHARGE';
+
 export interface Exercise {
   id: number;
   workoutId: number;
   name: string;
   category: EquipmentCategory;
-  minIncrement: number; // default 2.5
+  minIncrement: number; // default 2.5 (= palier_kg)
   baseWeight: number; // 0 for plate-loaded machines, 20 for barbell
   orderIndex: number;
-  defaultTargetReps: number; // default 8
+  defaultTargetReps: number; // default 8 (= repsMin au premier lancement)
   defaultStartingWeight: number; // default e.g. 40kg
   defaultSetsCount?: number; // default 3
+  mode?: ProgressionMode; // défaut CHARGE si absent
+  repsMax?: number; // défaut = defaultTargetReps (mode CHARGE : repsMax = repsMin)
+  minWeightKg?: number; // défaut = baseWeight
+  restSeconds?: number; // défaut selon catégorie (poulie 60 / machine 90 / barre libre 150)
 }
 
 export interface ConfiguredExercise {
@@ -22,10 +29,21 @@ export interface ConfiguredExercise {
   category: EquipmentCategory;
   minIncrement: number;
   baseWeight: number;
-  targetReps: number;
   numSets: number;
-  plannedWeights: number[];
-  consecutiveFailures?: number;
+  // Réglages de progression (catalogue)
+  mode: ProgressionMode;
+  repsMin: number;
+  repsMax: number;
+  minWeightKg: number;
+  restSeconds: number;
+  // État mémorisé (séance à séance)
+  currentWeight: number;
+  currentTargetReps: number;
+  consecutiveFailures: number;
+  sessionsWithoutSuccess: number;
+  lastSessionDate: string | null;
+  lastDecisionReason: string | null;
+  isCalibrating: boolean;
 }
 
 export interface Workout {
@@ -75,8 +93,6 @@ export interface PlateInfo {
 // --- Algorithme de suggestion de charges v2 (double progression) ---
 // Remplace le moteur ressenti EASY/MEDIUM/HARD par une classification basée uniquement sur
 // les répétitions réellement faites vs l'objectif, avec deux modes de progression par exercice.
-
-export type ProgressionMode = 'CHARGE' | 'REPS_PUIS_CHARGE';
 
 export type SessionStatus =
   | 'EASY_SUCCESS' // Réussie facile : toutes les séries ≥ objectif, case "facile" (ou ≥ objectif+2 partout)

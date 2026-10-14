@@ -12,11 +12,11 @@ import { Dot } from '../components/Dot';
 import { Icon } from '../components/Icon';
 import { SPLIT_SUBTITLES } from '../constants/splits';
 import { THEME } from '../theme';
-import { Feeling, NextSessionPlan, SetResult } from '../types';
+import { Feeling, ProgressionDecision, SessionStatus, SetResult } from '../types';
 
 interface ExerciseSummaryItem {
   exerciseName: string;
-  plan: NextSessionPlan;
+  decision: ProgressionDecision;
   results: SetResult[];
 }
 
@@ -31,11 +31,14 @@ interface WorkoutSummaryProps {
   onClose: () => void;
 }
 
-const VERDICT_LABEL: Record<NextSessionPlan['progressionVerdict'], string> = {
-  FULL_INCREASE: 'Augmentation',
-  PARTIAL_INCREASE: 'Intermédiaire',
-  MAINTAIN: 'Maintien',
-  DELOAD: 'Deload',
+const STATUS_LABEL: Record<SessionStatus, string> = {
+  EASY_SUCCESS: 'Réussie facile',
+  SUCCESS: 'Réussie',
+  PARTIAL: 'Partielle',
+  FAILED: 'Ratée',
+  CALIBRATION: 'Calibration',
+  INCOMPLETE: 'Incomplète',
+  RESUMED_AFTER_BREAK: 'Reprise',
 };
 
 const FEELING_INK: Record<Feeling, string> = {
@@ -44,11 +47,14 @@ const FEELING_INK: Record<Feeling, string> = {
   HARD: THEME.colors.feelingHardText,
 };
 
-function verdictColors(verdict: NextSessionPlan['progressionVerdict']) {
-  if (verdict === 'FULL_INCREASE') {
+function statusColors(status: SessionStatus) {
+  if (status === 'EASY_SUCCESS' || status === 'SUCCESS') {
     return { bg: THEME.colors.feelingEasyBg, ink: THEME.colors.feelingEasyText };
   }
-  if (verdict === 'DELOAD') {
+  if (status === 'PARTIAL') {
+    return { bg: THEME.colors.feelingMediumBg, ink: THEME.colors.feelingMediumText };
+  }
+  if (status === 'FAILED') {
     return { bg: THEME.colors.feelingHardBg, ink: THEME.colors.feelingHardText };
   }
   return { bg: THEME.colors.cardInner, ink: THEME.colors.textSecondary };
@@ -146,7 +152,7 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
 
           <View style={{ gap: 12 }}>
             {summary.exerciseSummaries.map((item, index) => {
-              const { bg, ink } = verdictColors(item.plan.progressionVerdict);
+              const { bg, ink } = statusColors(item.decision.status);
 
               return (
                 <View key={index} style={styles.exerciseCard}>
@@ -157,7 +163,7 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
                     </Text>
                     <View style={[styles.verdictBadge, { backgroundColor: bg }]}>
                       <Text style={[styles.verdictBadgeText, { color: ink }]}>
-                        {VERDICT_LABEL[item.plan.progressionVerdict]}
+                        {STATUS_LABEL[item.decision.status]}
                       </Text>
                     </View>
                   </View>
@@ -180,9 +186,9 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
                   <View>
                     <Text style={styles.nextSessionLabel}>PROCHAINE SÉANCE</Text>
                     <Text style={[styles.nextWeightsText, { color: ink }]}>
-                      {item.plan.weightsPerSet.map(fmtKg).join(' / ')} kg
+                      {fmtKg(item.decision.nextWeight)} kg × {item.decision.nextTargetReps}
                     </Text>
-                    <Text style={styles.planMessageText}>{item.plan.message}</Text>
+                    <Text style={styles.planMessageText}>{item.decision.reason}</Text>
                   </View>
                 </View>
               );

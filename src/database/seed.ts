@@ -60,8 +60,10 @@ export const SEED_EXERCISES: Exercise[] = [
     minIncrement: 2.5,
     baseWeight: 0,
     orderIndex: 5,
-    defaultTargetReps: 10,
+    defaultTargetReps: 10, // repsMin
     defaultStartingWeight: 20,
+    mode: 'REPS_PUIS_CHARGE',
+    repsMax: 15,
   },
   {
     id: 16,
@@ -71,8 +73,10 @@ export const SEED_EXERCISES: Exercise[] = [
     minIncrement: 2.5,
     baseWeight: 0,
     orderIndex: 6,
-    defaultTargetReps: 12,
+    defaultTargetReps: 12, // repsMin
     defaultStartingWeight: 10,
+    mode: 'REPS_PUIS_CHARGE',
+    repsMax: 15,
   },
   {
     id: 5,
@@ -128,8 +132,10 @@ export const SEED_EXERCISES: Exercise[] = [
     minIncrement: 2.5,
     baseWeight: 0,
     orderIndex: 4,
-    defaultTargetReps: 12,
+    defaultTargetReps: 12, // repsMin
     defaultStartingWeight: 15,
+    mode: 'REPS_PUIS_CHARGE',
+    repsMax: 15,
   },
   {
     id: 18,
@@ -139,8 +145,10 @@ export const SEED_EXERCISES: Exercise[] = [
     minIncrement: 2.5,
     baseWeight: 0,
     orderIndex: 5,
-    defaultTargetReps: 10,
+    defaultTargetReps: 10, // repsMin
     defaultStartingWeight: 15,
+    mode: 'REPS_PUIS_CHARGE',
+    repsMax: 15,
   },
   {
     id: 9,

@@ -1,12 +1,45 @@
 import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
-import { ConfiguredExercise, EquipmentCategory, Exercise, Workout, WorkoutLogEntry } from '../types';
+import { ConfiguredExercise, EquipmentCategory, Exercise, ExerciseProgressionState, ProgressionMode, Workout, WorkoutLogEntry } from '../types';
 import { SEED_EXERCISES, SEED_WORKOUTS } from './seed';
 
 let db: SQLite.SQLiteDatabase | null = null;
 
 let memoryLogs: WorkoutLogEntry[] = [];
-let memoryExercises: (Exercise & { plannedWeights: number[]; consecutiveFailures: number; numSets: number })[] = [];
+let memoryExercises: ConfiguredExercise[] = [];
+
+function defaultRestSecondsFor(category: EquipmentCategory): number {
+  if (category === 'CABLE') return 60;
+  if (category === 'FREE_WEIGHT') return 150;
+  return 90; // HAMMER_STRENGTH
+}
+
+// Construit un ConfiguredExercise "de calibration" à partir d'une définition de catalogue
+// (seed ou exercice personnalisé) : utilisé pour le repli mémoire (web) et comme valeurs par
+// défaut lors d'une création d'exercice.
+function exerciseToConfigured(ex: Exercise): ConfiguredExercise {
+  return {
+    id: ex.id,
+    workoutId: ex.workoutId,
+    name: ex.name,
+    category: ex.category,
+    minIncrement: ex.minIncrement,
+    baseWeight: ex.baseWeight,
+    numSets: ex.defaultSetsCount || 3,
+    mode: ex.mode || 'CHARGE',
+    repsMin: ex.defaultTargetReps,
+    repsMax: ex.repsMax || ex.defaultTargetReps,
+    minWeightKg: ex.minWeightKg ?? ex.baseWeight,
+    restSeconds: ex.restSeconds ?? defaultRestSecondsFor(ex.category),
+    currentWeight: ex.defaultStartingWeight,
+    currentTargetReps: ex.defaultTargetReps,
+    consecutiveFailures: 0,
+    sessionsWithoutSuccess: 0,
+    lastSessionDate: null,
+    lastDecisionReason: null,
+    isCalibrating: true,
+  };
+}
 
 export async function initDatabase(): Promise<void> {
   if (Platform.OS === 'web') {
@@ -50,6 +83,44 @@ export async function initDatabase(): Promise<void> {
       );
     `);
 
+    // Migrations additives pour l'algorithme de suggestion v2 (double progression) : réglages
+    // par exercice (mode, plage de reps, plancher, repos) sur `exercises`, et état mémorisé
+    // complet (charge/reps actuels, compteurs, date, raison, calibration) sur
+    // `exercise_progression_state`. Toujours exécutées (idempotentes via PRAGMA table_info),
+    // indépendamment du re-seed versionné plus bas.
+    try {
+      const exerciseColumns = db.getAllSync<{ name: string }>('PRAGMA table_info(exercises);');
+      const addExerciseColumnIfMissing = (name: string, ddl: string) => {
+        if (!exerciseColumns.some((c) => c.name === name)) {
+          db!.execSync(`ALTER TABLE exercises ADD COLUMN ${ddl};`);
+        }
+      };
+      addExerciseColumnIfMissing('mode', "mode TEXT DEFAULT 'CHARGE'");
+      addExerciseColumnIfMissing('reps_min', 'reps_min INTEGER');
+      addExerciseColumnIfMissing('reps_max', 'reps_max INTEGER');
+      addExerciseColumnIfMissing('min_weight_kg', 'min_weight_kg REAL');
+      addExerciseColumnIfMissing('rest_seconds', 'rest_seconds INTEGER DEFAULT 90');
+    } catch (error) {
+      console.error('Erreur migration exercises (v2 progression):', error);
+    }
+
+    try {
+      const stateColumns = db.getAllSync<{ name: string }>('PRAGMA table_info(exercise_progression_state);');
+      const addStateColumnIfMissing = (name: string, ddl: string) => {
+        if (!stateColumns.some((c) => c.name === name)) {
+          db!.execSync(`ALTER TABLE exercise_progression_state ADD COLUMN ${ddl};`);
+        }
+      };
+      addStateColumnIfMissing('current_weight', 'current_weight REAL');
+      addStateColumnIfMissing('current_target_reps', 'current_target_reps INTEGER');
+      addStateColumnIfMissing('sessions_without_success', 'sessions_without_success INTEGER DEFAULT 0');
+      addStateColumnIfMissing('last_session_date', 'last_session_date TEXT');
+      addStateColumnIfMissing('last_decision_reason', 'last_decision_reason TEXT');
+      addStateColumnIfMissing('is_calibrating', 'is_calibrating INTEGER DEFAULT 0');
+    } catch (error) {
+      console.error('Erreur migration exercise_progression_state (v2 progression):', error);
+    }
+
     db.execSync(`
       CREATE TABLE IF NOT EXISTS workout_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -86,11 +157,12 @@ export async function initDatabase(): Promise<void> {
       );
     `);
 
-    // v4 : ajout des exercices à la poulie (triceps, élévations latérales, face pull, curl
-    // biceps) — relance le bloc de seed pour les installations déjà passées par v3, sans
-    // toucher aux exercices personnalisés de l'utilisateur (hors de SEED_EXERCISES).
+    // v5 : ajout des réglages de l'algorithme de progression v2 (mode, plage de reps, plancher,
+    // repos) sur chaque exercice du catalogue — relance le bloc de seed pour les installations
+    // déjà passées par v3/v4, sans toucher aux exercices personnalisés de l'utilisateur (hors
+    // de SEED_EXERCISES) ni à leur état de progression déjà en cours.
     const catalogVersion = db.getFirstSync<{ value: string }>(
-      "SELECT value FROM app_metadata WHERE key = 'seed_version_v4';"
+      "SELECT value FROM app_metadata WHERE key = 'seed_version_v5';"
     );
 
     const workoutCount = db.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM workouts;');
@@ -105,19 +177,30 @@ export async function initDatabase(): Promise<void> {
 
     if (!catalogVersion) {
       for (const ex of SEED_EXERCISES) {
+        const mode = ex.mode || 'CHARGE';
+        const repsMax = ex.repsMax || ex.defaultTargetReps;
+        const minWeightKg = ex.minWeightKg ?? ex.baseWeight;
+        const restSeconds = ex.restSeconds ?? defaultRestSecondsFor(ex.category);
+
         const existing = db.getFirstSync<{ id: number }>('SELECT id FROM exercises WHERE id = ?;', [ex.id]);
         if (existing) {
           db.runSync(
-            `UPDATE exercises 
-             SET name = ?, category = ?, workout_id = ?, order_index = ?, base_weight = ?, default_target_reps = ?, default_starting_weight = ?
+            `UPDATE exercises
+             SET name = ?, category = ?, workout_id = ?, order_index = ?, base_weight = ?, default_target_reps = ?, default_starting_weight = ?,
+                 mode = ?, reps_min = ?, reps_max = ?, min_weight_kg = ?, rest_seconds = ?
              WHERE id = ?;`,
-            [ex.name, ex.category, ex.workoutId, ex.orderIndex, ex.baseWeight, ex.defaultTargetReps, ex.defaultStartingWeight, ex.id]
+            [
+              ex.name, ex.category, ex.workoutId, ex.orderIndex, ex.baseWeight, ex.defaultTargetReps, ex.defaultStartingWeight,
+              mode, ex.defaultTargetReps, repsMax, minWeightKg, restSeconds,
+              ex.id,
+            ]
           );
         } else {
           db.runSync(
-            `INSERT INTO exercises 
-            (id, workout_id, name, category, min_increment, base_weight, order_index, default_target_reps, default_starting_weight, default_sets_count) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+            `INSERT INTO exercises
+            (id, workout_id, name, category, min_increment, base_weight, order_index, default_target_reps, default_starting_weight, default_sets_count,
+             mode, reps_min, reps_max, min_weight_kg, rest_seconds)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
             [
               ex.id,
               ex.workoutId,
@@ -129,23 +212,58 @@ export async function initDatabase(): Promise<void> {
               ex.defaultTargetReps,
               ex.defaultStartingWeight,
               ex.defaultSetsCount || 3,
+              mode,
+              ex.defaultTargetReps,
+              repsMax,
+              minWeightKg,
+              restSeconds,
             ]
           );
 
-          const initialWeights = JSON.stringify([
-            ex.defaultStartingWeight,
-            ex.defaultStartingWeight,
-            ex.defaultStartingWeight,
-          ]);
-
           db.runSync(
-            'INSERT OR IGNORE INTO exercise_progression_state (exercise_id, planned_weights, consecutive_failures) VALUES (?, ?, 0);',
-            [ex.id, initialWeights]
+            `INSERT OR IGNORE INTO exercise_progression_state
+             (exercise_id, planned_weights, consecutive_failures, current_weight, current_target_reps, sessions_without_success, is_calibrating)
+             VALUES (?, ?, 0, ?, ?, 0, 1);`,
+            [ex.id, JSON.stringify([ex.defaultStartingWeight]), ex.defaultStartingWeight, ex.defaultTargetReps]
           );
         }
       }
 
-      db.runSync("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('seed_version_v4', '1');");
+      db.runSync("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('seed_version_v5', '1');");
+    }
+
+    // Rétro-remplissage de l'état v2 pour les exercices déjà en cours avant cette migration
+    // (créés via l'ancien chemin planned_weights). Idempotent : ne touche que les lignes où
+    // current_weight est encore vide, donc ne s'exécute réellement qu'une fois par exercice.
+    try {
+      const toBackfill = db.getAllSync<{
+        exercise_id: number;
+        planned_weights: string;
+        default_target_reps: number;
+      }>(
+        `SELECT p.exercise_id, p.planned_weights, e.default_target_reps
+         FROM exercise_progression_state p
+         JOIN exercises e ON e.id = p.exercise_id
+         WHERE p.current_weight IS NULL;`
+      );
+      for (const row of toBackfill) {
+        let startingWeight = 40;
+        try {
+          const parsed = JSON.parse(row.planned_weights);
+          if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'number') {
+            startingWeight = parsed[0];
+          }
+        } catch {}
+
+        db.runSync(
+          `UPDATE exercise_progression_state
+           SET current_weight = ?, current_target_reps = ?, sessions_without_success = 0, is_calibrating = 0
+           WHERE exercise_id = ?;`,
+          [startingWeight, row.default_target_reps, row.exercise_id]
+        );
+      }
+    } catch (error) {
+      console.error('Erreur rétro-remplissage progression v2:', error);
     }
   } catch (error) {
     console.warn('Erreur initialisation SQLite, utilisation du mode mémoire de secours:', error);
@@ -155,12 +273,7 @@ export async function initDatabase(): Promise<void> {
 
 function initMemoryFallback() {
   if (memoryExercises.length === 0) {
-    memoryExercises = SEED_EXERCISES.map((ex) => ({
-      ...ex,
-      plannedWeights: [ex.defaultStartingWeight, ex.defaultStartingWeight, ex.defaultStartingWeight],
-      consecutiveFailures: 0,
-      numSets: ex.defaultSetsCount || 3,
-    }));
+    memoryExercises = SEED_EXERCISES.map(exerciseToConfigured);
   }
 }
 
@@ -175,88 +288,76 @@ export function getWorkouts(): Workout[] {
   }
 }
 
+interface ExerciseRow {
+  id: number;
+  workout_id: number;
+  name: string;
+  category: EquipmentCategory;
+  min_increment: number;
+  base_weight: number;
+  order_index: number;
+  default_target_reps: number;
+  default_starting_weight: number;
+  default_sets_count: number | null;
+  mode: string | null;
+  reps_min: number | null;
+  reps_max: number | null;
+  min_weight_kg: number | null;
+  rest_seconds: number | null;
+  consecutive_failures: number | null;
+  current_weight: number | null;
+  current_target_reps: number | null;
+  sessions_without_success: number | null;
+  last_session_date: string | null;
+  last_decision_reason: string | null;
+  is_calibrating: number | null;
+}
+
+const EXERCISE_JOIN_SELECT = `
+  SELECT e.*, p.consecutive_failures, p.current_weight, p.current_target_reps,
+         p.sessions_without_success, p.last_session_date, p.last_decision_reason, p.is_calibrating
+  FROM exercises e
+  LEFT JOIN exercise_progression_state p ON e.id = p.exercise_id
+`;
+
+function rowToConfiguredExercise(r: ExerciseRow): ConfiguredExercise {
+  return {
+    id: r.id,
+    workoutId: r.workout_id,
+    name: r.name,
+    category: r.category,
+    minIncrement: r.min_increment,
+    baseWeight: r.base_weight,
+    numSets: r.default_sets_count || 3,
+    mode: (r.mode as ProgressionMode) || 'CHARGE',
+    repsMin: r.reps_min ?? r.default_target_reps,
+    repsMax: r.reps_max ?? r.default_target_reps,
+    minWeightKg: r.min_weight_kg ?? r.base_weight,
+    restSeconds: r.rest_seconds ?? defaultRestSecondsFor(r.category),
+    currentWeight: r.current_weight ?? r.default_starting_weight,
+    currentTargetReps: r.current_target_reps ?? r.default_target_reps,
+    consecutiveFailures: r.consecutive_failures || 0,
+    sessionsWithoutSuccess: r.sessions_without_success || 0,
+    lastSessionDate: r.last_session_date,
+    lastDecisionReason: r.last_decision_reason,
+    isCalibrating: !!r.is_calibrating,
+  };
+}
+
 export function getExercisesForWorkout(workoutId: number): ConfiguredExercise[] {
   if (!db || Platform.OS === 'web') {
-    return memoryExercises
-      .filter((e) => e.workoutId === workoutId)
-      .map((e) => ({
-        id: e.id,
-        workoutId: e.workoutId,
-        name: e.name,
-        category: e.category,
-        minIncrement: e.minIncrement,
-        baseWeight: e.baseWeight,
-        targetReps: e.defaultTargetReps,
-        numSets: e.numSets || 3,
-        plannedWeights: e.plannedWeights || [e.defaultStartingWeight, e.defaultStartingWeight, e.defaultStartingWeight],
-        consecutiveFailures: e.consecutiveFailures || 0,
-      }));
+    return memoryExercises.filter((e) => e.workoutId === workoutId);
   }
 
   try {
-    const rows = db.getAllSync<{
-      id: number;
-      workout_id: number;
-      name: string;
-      category: EquipmentCategory;
-      min_increment: number;
-      base_weight: number;
-      order_index: number;
-      default_target_reps: number;
-      default_starting_weight: number;
-      default_sets_count: number | null;
-      planned_weights: string | null;
-      consecutive_failures: number | null;
-    }>(
-      `SELECT e.*, p.planned_weights, p.consecutive_failures
-       FROM exercises e
-       LEFT JOIN exercise_progression_state p ON e.id = p.exercise_id
-       WHERE e.workout_id = ?
-       ORDER BY e.order_index ASC;`,
+    const rows = db.getAllSync<ExerciseRow>(
+      `${EXERCISE_JOIN_SELECT} WHERE e.workout_id = ? ORDER BY e.order_index ASC;`,
       [workoutId]
     );
-
-    return rows.map((r) => {
-      const numSets = r.default_sets_count || 3;
-      let planned: number[] = Array(numSets).fill(r.default_starting_weight);
-      if (r.planned_weights) {
-        try {
-          const parsed = JSON.parse(r.planned_weights);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            planned = parsed;
-          }
-        } catch {}
-      }
-
-      return {
-        id: r.id,
-        workoutId: r.workout_id,
-        name: r.name,
-        category: r.category,
-        minIncrement: r.min_increment,
-        baseWeight: r.base_weight,
-        targetReps: r.default_target_reps,
-        numSets,
-        plannedWeights: planned,
-        consecutiveFailures: r.consecutive_failures || 0,
-      };
-    });
+    return rows.map(rowToConfiguredExercise);
   } catch (error) {
     console.error('Erreur getExercisesForWorkout:', error);
-    return memoryExercises
-      .filter((e) => e.workoutId === workoutId)
-      .map((e) => ({
-        id: e.id,
-        workoutId: e.workoutId,
-        name: e.name,
-        category: e.category,
-        minIncrement: e.minIncrement,
-        baseWeight: e.baseWeight,
-        targetReps: e.defaultTargetReps,
-        numSets: e.numSets || 3,
-        plannedWeights: e.plannedWeights,
-        consecutiveFailures: e.consecutiveFailures || 0,
-      }));
+    return memoryExercises.filter((e) => e.workoutId === workoutId);
   }
 }
 
@@ -316,165 +417,19 @@ export function getLastExercisePerformance(exerciseId: number): LastExercisePerf
 
 export function getAllCatalogExercises(workoutId?: number): ConfiguredExercise[] {
   if (!db || Platform.OS === 'web') {
-    const list = workoutId ? memoryExercises.filter((e) => e.workoutId === workoutId) : memoryExercises;
-    return list.map((e) => ({
-      id: e.id,
-      workoutId: e.workoutId,
-      name: e.name,
-      category: e.category,
-      minIncrement: e.minIncrement,
-      baseWeight: e.baseWeight,
-      targetReps: e.defaultTargetReps,
-      numSets: e.numSets || 3,
-      plannedWeights: e.plannedWeights || [e.defaultStartingWeight, e.defaultStartingWeight, e.defaultStartingWeight],
-      consecutiveFailures: e.consecutiveFailures || 0,
-    }));
+    return workoutId ? memoryExercises.filter((e) => e.workoutId === workoutId) : memoryExercises;
   }
 
   try {
     const query = workoutId
-      ? `SELECT e.*, p.planned_weights, p.consecutive_failures
-         FROM exercises e
-         LEFT JOIN exercise_progression_state p ON e.id = p.exercise_id
-         WHERE e.workout_id = ?
-         ORDER BY e.name ASC;`
-      : `SELECT e.*, p.planned_weights, p.consecutive_failures
-         FROM exercises e
-         LEFT JOIN exercise_progression_state p ON e.id = p.exercise_id
-         ORDER BY e.workout_id ASC, e.order_index ASC;`;
-
+      ? `${EXERCISE_JOIN_SELECT} WHERE e.workout_id = ? ORDER BY e.name ASC;`
+      : `${EXERCISE_JOIN_SELECT} ORDER BY e.workout_id ASC, e.order_index ASC;`;
     const params = workoutId ? [workoutId] : [];
-    const rows = db.getAllSync<{
-      id: number;
-      workout_id: number;
-      name: string;
-      category: EquipmentCategory;
-      min_increment: number;
-      base_weight: number;
-      order_index: number;
-      default_target_reps: number;
-      default_starting_weight: number;
-      default_sets_count: number | null;
-      planned_weights: string | null;
-      consecutive_failures: number | null;
-    }>(query, params);
-
-    return rows.map((r) => {
-      const numSets = r.default_sets_count || 3;
-      let planned: number[] = Array(numSets).fill(r.default_starting_weight);
-      if (r.planned_weights) {
-        try {
-          const parsed = JSON.parse(r.planned_weights);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            planned = parsed;
-          }
-        } catch {}
-      }
-
-      return {
-        id: r.id,
-        workoutId: r.workout_id,
-        name: r.name,
-        category: r.category,
-        minIncrement: r.min_increment,
-        baseWeight: r.base_weight,
-        targetReps: r.default_target_reps,
-        numSets,
-        plannedWeights: planned,
-        consecutiveFailures: r.consecutive_failures || 0,
-      };
-    });
+    const rows = db.getAllSync<ExerciseRow>(query, params);
+    return rows.map(rowToConfiguredExercise);
   } catch (error) {
     console.error('Erreur getAllCatalogExercises:', error);
     return [];
-  }
-}
-
-export function updateExerciseCustomSettings(
-  exerciseId: number,
-  plannedWeights: number[],
-  targetReps: number,
-  numSets: number
-): void {
-  const defaultWeight = plannedWeights[0] || 40;
-  const plannedJson = JSON.stringify(plannedWeights);
-
-  if (!db || Platform.OS === 'web') {
-    const ex = memoryExercises.find((e) => e.id === exerciseId);
-    if (ex) {
-      ex.defaultStartingWeight = defaultWeight;
-      ex.defaultTargetReps = targetReps;
-      ex.numSets = numSets;
-      ex.plannedWeights = plannedWeights;
-    }
-    return;
-  }
-
-  try {
-    db.runSync(
-      `UPDATE exercises 
-       SET default_starting_weight = ?, default_target_reps = ?, default_sets_count = ?
-       WHERE id = ?;`,
-      [defaultWeight, targetReps, numSets, exerciseId]
-    );
-
-    db.runSync(
-      `INSERT INTO exercise_progression_state (exercise_id, planned_weights, consecutive_failures)
-       VALUES (?, ?, 0)
-       ON CONFLICT(exercise_id) DO UPDATE SET
-         planned_weights = excluded.planned_weights;`,
-      [exerciseId, plannedJson]
-    );
-  } catch (error) {
-    console.error('Erreur updateExerciseCustomSettings:', error);
-  }
-}
-
-export function updateExerciseFullDetails(
-  exerciseId: number,
-  workoutId: number,
-  name: string,
-  category: EquipmentCategory,
-  plannedWeights: number[],
-  targetReps: number,
-  numSets: number
-): void {
-  const defaultWeight = plannedWeights[0] || 40;
-  const baseWeight = category === 'FREE_WEIGHT' ? 20 : 0;
-  const plannedJson = JSON.stringify(plannedWeights);
-
-  if (!db || Platform.OS === 'web') {
-    const ex = memoryExercises.find((e) => e.id === exerciseId);
-    if (ex) {
-      ex.workoutId = workoutId;
-      ex.name = name;
-      ex.category = category;
-      ex.baseWeight = baseWeight;
-      ex.defaultStartingWeight = defaultWeight;
-      ex.defaultTargetReps = targetReps;
-      ex.numSets = numSets;
-      ex.plannedWeights = plannedWeights;
-    }
-    return;
-  }
-
-  try {
-    db.runSync(
-      `UPDATE exercises 
-       SET workout_id = ?, name = ?, category = ?, base_weight = ?, default_starting_weight = ?, default_target_reps = ?, default_sets_count = ?
-       WHERE id = ?;`,
-      [workoutId, name, category, baseWeight, defaultWeight, targetReps, numSets, exerciseId]
-    );
-
-    db.runSync(
-      `INSERT INTO exercise_progression_state (exercise_id, planned_weights, consecutive_failures)
-       VALUES (?, ?, 0)
-       ON CONFLICT(exercise_id) DO UPDATE SET
-         planned_weights = excluded.planned_weights;`,
-      [exerciseId, plannedJson]
-    );
-  } catch (error) {
-    console.error('Erreur updateExerciseFullDetails:', error);
   }
 }
 
@@ -487,38 +442,34 @@ export function addCustomExercise(
   setsCount: number = 3
 ): ConfiguredExercise {
   const baseWeight = category === 'FREE_WEIGHT' ? 20 : 0;
-  const newPlanned = Array(setsCount).fill(startingWeight);
-  const plannedJson = JSON.stringify(newPlanned);
+  const restSeconds = defaultRestSecondsFor(category);
+  // Les exercices créés depuis l'appli sont toujours en mode CHARGE (séries identiques à la
+  // même charge) : le formulaire ne propose pas de choisir une plage de reps en mode
+  // REPS_PUIS_CHARGE, réservé aux exercices du catalogue de base.
+  const base: Omit<ConfiguredExercise, 'id'> = {
+    workoutId,
+    name,
+    category,
+    minIncrement: 2.5,
+    baseWeight,
+    numSets: setsCount,
+    mode: 'CHARGE',
+    repsMin: targetReps,
+    repsMax: targetReps,
+    minWeightKg: baseWeight,
+    restSeconds,
+    currentWeight: startingWeight,
+    currentTargetReps: targetReps,
+    consecutiveFailures: 0,
+    sessionsWithoutSuccess: 0,
+    lastSessionDate: null,
+    lastDecisionReason: null,
+    isCalibrating: true,
+  };
 
   if (!db || Platform.OS === 'web') {
-    const newId = Date.now();
-    const created: ConfiguredExercise = {
-      id: newId,
-      workoutId,
-      name,
-      category,
-      minIncrement: 2.5,
-      baseWeight,
-      targetReps,
-      numSets: setsCount,
-      plannedWeights: newPlanned,
-      consecutiveFailures: 0,
-    };
-    memoryExercises.push({
-      id: newId,
-      workoutId,
-      name,
-      category,
-      minIncrement: 2.5,
-      baseWeight,
-      orderIndex: memoryExercises.length + 1,
-      defaultTargetReps: targetReps,
-      defaultStartingWeight: startingWeight,
-      defaultSetsCount: setsCount,
-      consecutiveFailures: 0,
-      numSets: setsCount,
-      plannedWeights: newPlanned,
-    });
+    const created: ConfiguredExercise = { id: Date.now(), ...base };
+    memoryExercises.push(created);
     return created;
   }
 
@@ -530,45 +481,25 @@ export function addCustomExercise(
     const nextOrder = (maxOrder?.max_order || 0) + 1;
 
     const result = db.runSync(
-      `INSERT INTO exercises 
-      (workout_id, name, category, min_increment, base_weight, order_index, default_target_reps, default_starting_weight, default_sets_count)
-      VALUES (?, ?, ?, 2.5, ?, ?, ?, ?, ?);`,
-      [workoutId, name, category, baseWeight, nextOrder, targetReps, startingWeight, setsCount]
+      `INSERT INTO exercises
+      (workout_id, name, category, min_increment, base_weight, order_index, default_target_reps, default_starting_weight, default_sets_count,
+       mode, reps_min, reps_max, min_weight_kg, rest_seconds)
+      VALUES (?, ?, ?, 2.5, ?, ?, ?, ?, ?, 'CHARGE', ?, ?, ?, ?);`,
+      [workoutId, name, category, baseWeight, nextOrder, targetReps, startingWeight, setsCount, targetReps, targetReps, baseWeight, restSeconds]
     );
 
     const newExerciseId = result.lastInsertRowId;
     db.runSync(
-      `INSERT INTO exercise_progression_state (exercise_id, planned_weights, consecutive_failures)
-       VALUES (?, ?, 0);`,
-      [newExerciseId, plannedJson]
+      `INSERT INTO exercise_progression_state
+       (exercise_id, planned_weights, consecutive_failures, current_weight, current_target_reps, sessions_without_success, is_calibrating)
+       VALUES (?, ?, 0, ?, ?, 0, 1);`,
+      [newExerciseId, JSON.stringify([startingWeight]), startingWeight, targetReps]
     );
 
-    return {
-      id: newExerciseId,
-      workoutId,
-      name,
-      category,
-      minIncrement: 2.5,
-      baseWeight,
-      targetReps,
-      numSets: setsCount,
-      plannedWeights: newPlanned,
-      consecutiveFailures: 0,
-    };
+    return { id: newExerciseId, ...base };
   } catch (error) {
     console.error('Erreur addCustomExercise:', error);
-    return {
-      id: Date.now(),
-      workoutId,
-      name,
-      category,
-      minIncrement: 2.5,
-      baseWeight,
-      targetReps,
-      numSets: setsCount,
-      plannedWeights: newPlanned,
-      consecutiveFailures: 0,
-    };
+    return { id: Date.now(), ...base };
   }
 }
 
@@ -619,32 +550,55 @@ export function saveWorkoutLogs(logs: WorkoutLogEntry[]): void {
   }
 }
 
-export function updateExerciseProgression(
-  exerciseId: number,
-  nextWeights: number[],
-  consecutiveFailures: number
-): void {
+/**
+ * Persiste l'état de progression v2 d'un exercice (charge/objectif reps actuels, compteurs,
+ * date et raison de la dernière décision, calibration) — à appeler avec le `newState` renvoyé
+ * par `suggestNextPrescription()` une fois une séance classée.
+ */
+export function saveExerciseProgressionState(exerciseId: number, state: ExerciseProgressionState): void {
   if (!db || Platform.OS === 'web') {
     const ex = memoryExercises.find((e) => e.id === exerciseId);
     if (ex) {
-      ex.plannedWeights = nextWeights;
-      ex.consecutiveFailures = consecutiveFailures;
+      ex.currentWeight = state.currentWeight;
+      ex.currentTargetReps = state.currentTargetReps;
+      ex.consecutiveFailures = state.consecutiveFailures;
+      ex.sessionsWithoutSuccess = state.sessionsWithoutSuccess;
+      ex.lastSessionDate = state.lastSessionDate;
+      ex.lastDecisionReason = state.lastDecisionReason;
+      ex.isCalibrating = state.isCalibrating;
     }
     return;
   }
 
   try {
-    const weightsJson = JSON.stringify(nextWeights);
     db.runSync(
-      `INSERT INTO exercise_progression_state (exercise_id, planned_weights, consecutive_failures)
-       VALUES (?, ?, ?)
+      `INSERT INTO exercise_progression_state
+       (exercise_id, planned_weights, consecutive_failures, current_weight, current_target_reps,
+        sessions_without_success, last_session_date, last_decision_reason, is_calibrating)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(exercise_id) DO UPDATE SET
          planned_weights = excluded.planned_weights,
-         consecutive_failures = excluded.consecutive_failures;`,
-      [exerciseId, weightsJson, consecutiveFailures]
+         consecutive_failures = excluded.consecutive_failures,
+         current_weight = excluded.current_weight,
+         current_target_reps = excluded.current_target_reps,
+         sessions_without_success = excluded.sessions_without_success,
+         last_session_date = excluded.last_session_date,
+         last_decision_reason = excluded.last_decision_reason,
+         is_calibrating = excluded.is_calibrating;`,
+      [
+        exerciseId,
+        JSON.stringify([state.currentWeight]),
+        state.consecutiveFailures,
+        state.currentWeight,
+        state.currentTargetReps,
+        state.sessionsWithoutSuccess,
+        state.lastSessionDate,
+        state.lastDecisionReason,
+        state.isCalibrating ? 1 : 0,
+      ]
     );
   } catch (error) {
-    console.error('Erreur updateExerciseProgression:', error);
+    console.error('Erreur saveExerciseProgressionState:', error);
   }
 }
 

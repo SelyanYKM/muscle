@@ -17,7 +17,7 @@ import { HistoryScreen } from './src/screens/HistoryScreen';
 import { SplitSelectScreen } from './src/screens/SplitSelectScreen';
 import { WorkoutSummaryScreen } from './src/screens/WorkoutSummaryScreen';
 import { THEME } from './src/theme';
-import { NextSessionPlan, SetResult } from './src/types';
+import { ProgressionDecision, SetResult } from './src/types';
 import { configureAppAudio } from './src/utils/audio';
 import {
   configureRestTimerChannel,
@@ -43,7 +43,7 @@ interface WorkoutSummaryData {
   totalVolume: number;
   exerciseSummaries: {
     exerciseName: string;
-    plan: NextSessionPlan;
+    decision: ProgressionDecision;
     results: SetResult[];
   }[];
 }

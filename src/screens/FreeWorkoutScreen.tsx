@@ -3,7 +3,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -25,16 +24,18 @@ import {
   getAllCatalogExercises,
   getLastExercisePerformance,
   LastExercisePerformance,
+  saveExerciseProgressionState,
   saveWorkoutLogs,
-  updateExerciseProgression,
 } from '../database/db';
-import { calculateNextSession } from '../engine/progression';
+import { resolveSessionWeight, suggestNextPrescription } from '../engine/progressionV2';
 import { THEME } from '../theme';
 import {
   ConfiguredExercise,
   EquipmentCategory,
+  ExerciseProgressionSettings,
+  ExerciseProgressionState,
   Feeling,
-  NextSessionPlan,
+  ProgressionDecision,
   SetResult,
   WorkoutLogEntry,
 } from '../types';
@@ -50,7 +51,7 @@ interface FreeWorkoutScreenProps {
     totalVolume: number;
     exerciseSummaries: {
       exerciseName: string;
-      plan: NextSessionPlan;
+      decision: ProgressionDecision;
       results: SetResult[];
     }[];
   }) => void;
@@ -64,15 +65,10 @@ interface CompletedExerciseLog {
   sets: SetResult[];
 }
 
-const FEELING_CONFIG: Record<
-  Feeling,
-  { label: string; sub: string; mark: string }
-> = {
-  EASY: { label: 'Facile', sub: '2+ reps en réserve', mark: '2+' },
-  MEDIUM: { label: 'Juste', sub: '0–1 rep en réserve', mark: '0–1' },
-  HARD: { label: 'Échec', sub: 'Reps non atteintes', mark: '×' },
-};
-
+// FEELING_* reste nécessaire pour l'affichage (pastilles "dernière fois" / "séries
+// effectuées"), y compris pour d'anciennes séances enregistrées avec un ressenti MEDIUM —
+// mais plus pour un choix de l'utilisateur : la validation d'une série ne dépend plus que
+// des répétitions réellement faites vs l'objectif (EASY si atteint, HARD sinon).
 const FEELING_INK: Record<Feeling, string> = {
   EASY: THEME.colors.feelingEasyText,
   MEDIUM: THEME.colors.feelingMediumText,
@@ -129,6 +125,10 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   const [currentWeight, setCurrentWeight] = useState<number>(40);
   const [currentReps, setCurrentReps] = useState<number>(8);
 
+  // Case "facile" (2+ reps en réserve), affichée uniquement sur la dernière série d'un
+  // exercice : par exercice, pour survivre à un "Changer d'exercice" en cours de séance.
+  const [easyByExerciseId, setEasyByExerciseId] = useState<Record<number, boolean>>({});
+
   // Minuteur de repos
   const [isResting, setIsResting] = useState<boolean>(false);
   const [restDuration, setRestDuration] = useState<number>(90);
@@ -165,8 +165,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     setCatalogExercises(list);
     if (list.length > 0 && !currentExercise) {
       setCurrentExercise(list[0]);
-      setCurrentWeight(list[0].plannedWeights?.[0] || 40);
-      setCurrentReps(list[0].targetReps || 8);
+      setCurrentWeight(list[0].currentWeight);
+      setCurrentReps(list[0].currentTargetReps);
     }
 
     const perfMap: Record<number, LastExercisePerformance | null> = {};
@@ -208,8 +208,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       setCurrentWeight(lastSet.weight);
       setCurrentReps(lastSet.repsDone);
     } else {
-      setCurrentWeight(ex.plannedWeights?.[0] || 40);
-      setCurrentReps(ex.targetReps || 8);
+      setCurrentWeight(ex.currentWeight);
+      setCurrentReps(ex.currentTargetReps);
     }
     setIsPickerSheetOpen(false);
   };
@@ -243,8 +243,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
               if (currentExercise?.id === ex.id) {
                 const next = updated[0] || null;
                 setCurrentExercise(next);
-                setCurrentWeight(next?.plannedWeights?.[0] || 40);
-                setCurrentReps(next?.targetReps || 8);
+                setCurrentWeight(next?.currentWeight || 40);
+                setCurrentReps(next?.currentTargetReps || 8);
               }
               return updated;
             });
@@ -297,18 +297,21 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     return existing ? existing.sets.length + 1 : 1;
   };
 
-  // Valider la série avec ressenti
-  const handleCompleteSet = (feeling: Feeling) => {
+  // Valide la série en cours : le ressenti n'est plus choisi à la main, il se déduit des
+  // répétitions réellement faites (currentReps) comparées à l'objectif de l'exercice.
+  const handleCompleteSet = () => {
     if (!currentExercise) return;
 
-    if (feeling === 'EASY') triggerLightHaptic();
-    else if (feeling === 'MEDIUM') triggerMediumHaptic();
+    const objective = currentExercise.currentTargetReps;
+    const metObjective = currentReps >= objective;
+    const feeling: Feeling = metObjective ? 'EASY' : 'HARD';
+    if (metObjective) triggerLightHaptic();
     else triggerWarningHaptic();
 
     const setNumber = getCurrentSetNumber();
     const newSet: SetResult = {
       setNumber,
-      targetReps: currentReps,
+      targetReps: objective,
       repsDone: currentReps,
       weight: currentWeight,
       feeling,
@@ -336,8 +339,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       }
     });
 
-    const isFinisherSet = currentExercise.category === 'FREE_WEIGHT';
-    setRestDuration(isFinisherSet ? 150 : 90);
+    setRestDuration(currentExercise.restSeconds);
     setIsResting(true);
   };
 
@@ -376,12 +378,13 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
     triggerSuccessHaptic();
     const durationMinutes = Math.max(1, Math.round(elapsedSeconds / 60));
-    const todayStr = formatLocalDate(new Date());
+    const today = new Date();
+    const todayStr = formatLocalDate(today);
 
     const logsToSave: WorkoutLogEntry[] = [];
     const exerciseSummaries: {
       exerciseName: string;
-      plan: NextSessionPlan;
+      decision: ProgressionDecision;
       results: SetResult[];
     }[] = [];
 
@@ -404,26 +407,43 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         });
       }
 
-      // Applique le même moteur de surcharge progressive qu'en mode guidé, pour que les
-      // charges proposées la prochaine fois tiennent compte de cette séance.
+      // Applique l'algorithme de double progression v2 pour que la charge/l'objectif de reps
+      // proposés la prochaine fois tiennent compte de cette séance.
       const catalogEx = catalogExercises.find((c) => c.id === exLog.exerciseId);
-      const plan = calculateNextSession(
-        exLog.sets,
-        catalogEx?.targetReps || 8,
-        catalogEx?.minIncrement || 2.5,
-        catalogEx?.consecutiveFailures || 0
+      if (!catalogEx) continue; // supprimé du catalogue entre temps : rien à mettre à jour
+
+      const settings: ExerciseProgressionSettings = {
+        mode: catalogEx.mode,
+        targetSets: catalogEx.numSets,
+        repsMin: catalogEx.repsMin,
+        repsMax: catalogEx.repsMax,
+        incrementKg: catalogEx.minIncrement,
+        minWeightKg: catalogEx.minWeightKg,
+        restSeconds: catalogEx.restSeconds,
+      };
+      const state: ExerciseProgressionState = {
+        currentWeight: catalogEx.currentWeight,
+        currentTargetReps: catalogEx.currentTargetReps,
+        consecutiveFailures: catalogEx.consecutiveFailures,
+        sessionsWithoutSuccess: catalogEx.sessionsWithoutSuccess,
+        lastSessionDate: catalogEx.lastSessionDate,
+        lastDecisionReason: catalogEx.lastDecisionReason,
+        isCalibrating: catalogEx.isCalibrating,
+      };
+      const weightUsed = resolveSessionWeight(exLog.sets.map((s) => s.weight));
+
+      const decision = suggestNextPrescription(
+        settings,
+        state,
+        { reps: exLog.sets.map((s) => s.repsDone), weightUsed, easy: easyByExerciseId[exLog.exerciseId] || false },
+        today
       );
 
-      const newFailureCount =
-        plan.progressionVerdict === 'MAINTAIN' && exLog.sets.some((s) => s.feeling === 'HARD')
-          ? (catalogEx?.consecutiveFailures || 0) + 1
-          : 0;
-
-      updateExerciseProgression(exLog.exerciseId, plan.weightsPerSet, newFailureCount);
+      saveExerciseProgressionState(exLog.exerciseId, decision.newState);
 
       exerciseSummaries.push({
         exerciseName: exLog.exerciseName,
-        plan,
+        decision,
         results: exLog.sets,
       });
     }
@@ -547,7 +567,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
             </Text>
           </TouchableOpacity>
 
-          {currentLastPerf && currentLastPerf.sets.length > 0 && (
+          {currentLastPerf && currentLastPerf.sets.length > 0 ? (
             <View style={styles.lastPerfBlock}>
               <Text style={styles.lastPerfLabel}>DERNIÈRE FOIS · {formatLastPerfDate(currentLastPerf.date)}</Text>
               <View style={styles.lastPerfChipsRow}>
@@ -558,7 +578,16 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                   </View>
                 ))}
               </View>
+              {!!currentExercise?.lastDecisionReason && !currentExercise.isCalibrating && (
+                <Text style={styles.suggestionReasonText}>→ {currentExercise.lastDecisionReason}</Text>
+              )}
             </View>
+          ) : (
+            currentExercise?.isCalibrating && (
+              <Text style={styles.calibrationHintText}>
+                Nouvel exercice : choisis ta charge de départ, la suggestion démarrera à la prochaine séance.
+              </Text>
+            )
           )}
 
           {/* Steppers pleine largeur */}
@@ -606,34 +635,29 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           )}
         </LinearGradient>
 
-        {/* Validation par ressenti */}
+        {/* Validation de la série */}
         <Text style={styles.sectionLabel}>VALIDER LA SÉRIE {currentSetNum}</Text>
-        <View style={styles.feelingRows}>
-          {(['EASY', 'MEDIUM', 'HARD'] as Feeling[]).map((feeling) => {
-            const cfg = FEELING_CONFIG[feeling];
-            const ink = FEELING_INK[feeling];
-            return (
-              <Pressable
-                key={feeling}
-                onPress={() => handleCompleteSet(feeling)}
-                style={({ pressed }) => [
-                  styles.feelRow,
-                  { backgroundColor: FEELING_BG[feeling], borderColor: FEELING_BORDER[feeling] },
-                  pressed && styles.feelRowPressed,
-                ]}
-              >
-                <View style={[styles.feelRowMark, { backgroundColor: FEELING_BORDER[feeling] }]}>
-                  <Text style={[styles.feelRowMarkText, { color: ink }]}>{cfg.mark}</Text>
-                </View>
-                <View style={styles.feelRowTextCol}>
-                  <Text style={[styles.feelRowTitle, { color: ink }]}>{cfg.label}</Text>
-                  <Text style={[styles.feelRowSub, { color: ink }]}>{cfg.sub}</Text>
-                </View>
-                <Icon name="arrow-right" size={20} color={ink} />
-              </Pressable>
-            );
-          })}
-        </View>
+
+        {!!currentExercise && currentSetNum === currentExercise.numSets && (
+          <TouchableOpacity
+            style={styles.easyToggleRow}
+            onPress={() => {
+              triggerLightHaptic();
+              setEasyByExerciseId((prev) => ({ ...prev, [currentExercise.id]: !prev[currentExercise.id] }));
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.easyCheckbox, easyByExerciseId[currentExercise.id] && styles.easyCheckboxChecked]}>
+              {!!easyByExerciseId[currentExercise.id] && <Icon name="check" size={14} color="#FFFFFF" />}
+            </View>
+            <Text style={styles.easyToggleText}>Dernière série facile (2+ reps en réserve)</Text>
+          </TouchableOpacity>
+        )}
+
+        <TouchableOpacity style={styles.validateBtn} onPress={handleCompleteSet} activeOpacity={0.85}>
+          <Text style={styles.validateBtnText}>Valider la série</Text>
+          <Icon name="arrow-right" size={18} color="#FFFFFF" />
+        </TouchableOpacity>
 
         {/* Récapitulatif en direct de la séance */}
         <View style={styles.liveLogSection}>
@@ -733,7 +757,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 <View style={{ flex: 1 }}>
                   <Text style={styles.catalogItemName}>{catEx.name}</Text>
                   <Text style={styles.catalogItemSub}>
-                    {CATEGORY_SUB_LABEL[catEx.category]} · conseillé {fmtKg(catEx.plannedWeights?.[0] || 40)} kg
+                    {CATEGORY_SUB_LABEL[catEx.category]} · conseillé {fmtKg(catEx.currentWeight)} kg
                   </Text>
                 </View>
                 {doneSets.length > 0 && (
@@ -1089,47 +1113,58 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary,
     letterSpacing: 1,
   },
-  feelingRows: {
-    gap: 8,
-  },
-  feelRow: {
-    height: 66,
-    borderRadius: THEME.radius.card,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingLeft: 11,
-    paddingRight: 18,
-  },
-  feelRowPressed: {
-    transform: [{ scale: 0.98 }],
-  },
-  feelRowMark: {
-    width: 44,
-    height: 44,
-    borderRadius: THEME.radius.inner,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  feelRowMarkText: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  feelRowTextCol: {
-    flex: 1,
-  },
-  feelRowTitle: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  feelRowSub: {
+  suggestionReasonText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
     fontWeight: '600',
+    color: THEME.colors.accent,
     marginTop: 2,
+  },
+  calibrationHintText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(242, 246, 252, 0.75)',
+    fontStyle: 'italic',
+  },
+  easyToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  easyCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    borderWidth: 1.5,
+    borderColor: THEME.colors.cardBorder,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  easyCheckboxChecked: {
+    backgroundColor: THEME.colors.textPrimary,
+    borderColor: THEME.colors.textPrimary,
+  },
+  easyToggleText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 13,
+    fontWeight: '600',
+    color: THEME.colors.textSecondary,
+  },
+  validateBtn: {
+    height: 56,
+    backgroundColor: THEME.colors.textPrimary,
+    borderRadius: THEME.radius.pill,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  validateBtnText: {
+    fontFamily: THEME.fonts.sans,
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
   },
   liveLogSection: {
     gap: 8,
