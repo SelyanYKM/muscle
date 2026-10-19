@@ -9,6 +9,18 @@ let memoryLogs: WorkoutLogEntry[] = [];
 let memoryExercises: ConfiguredExercise[] = [];
 let memoryBodyWeightLogs: BodyWeightEntry[] = [];
 
+// Plancher d'id pour les exercices créés depuis l'appli (addCustomExercise) : les isole dans
+// une plage totalement disjointe de SEED_EXERCISES (qui plafonne autour de 20 aujourd'hui, et
+// a vocation à grandir). Avant ce plancher, un exercice personnalisé prenait le prochain id
+// auto-incrémenté du catalogue (ex: 15, 16...) ; si une mise à jour ultérieure ajoutait un
+// nouvel exercice de SEED_EXERCISES avec CE MÊME id (seul critère : "le prochain numéro libre"
+// au moment où le code a été écrit), la synchro du catalogue au démarrage traitait l'exercice
+// personnalisé comme "l'exercice de seed déjà existant" et écrasait silencieusement son nom/
+// catégorie/ordre — tout en conservant son état de progression (poids, historique de réussite)
+// hérité de l'ancien exercice personnalisé, donnant une suggestion de charge totalement hors
+// sujet pour le nouvel exercice. Voir aussi la réparation ciblée plus bas (id_collision_repair_v1).
+const CUSTOM_EXERCISE_ID_FLOOR = 10000;
+
 // Valeurs par défaut par catégorie d'équipement — une seule source de vérité au lieu d'un
 // if/else répété à chaque endroit qui en a besoin (repos, poids de base d'un exercice créé).
 const EQUIPMENT_DEFAULTS: Record<EquipmentCategory, { restSeconds: number; baseWeight: number }> = {
@@ -311,6 +323,41 @@ export async function initDatabase(): Promise<void> {
 
       db.runSync("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('migrations_v2_backfill_done', '1');");
     }
+
+    // Répare les installs touchées par la collision d'id décrite au-dessus de
+    // CUSTOM_EXERCISE_ID_FLOOR : avant ce correctif, un exercice personnalisé pouvait se voir
+    // attribuer un id qu'une mise à jour ultérieure du catalogue réutilisait pour un nouvel
+    // exercice de SEED_EXERCISES, lui faisant hériter silencieusement de l'état de progression
+    // (poids, historique) de l'ancien exercice personnalisé. Détection sans ambiguïté : un
+    // historique enregistré sous ce même exercise_id mais sous un AUTRE nom prouve que l'id a
+    // déjà désigné autre chose — l'historique lui-même (workout_logs) n'est jamais touché,
+    // seul l'état de progression mémorisé est remis aux valeurs du catalogue.
+    const idCollisionRepairDone = db.getFirstSync<{ value: string }>(
+      "SELECT value FROM app_metadata WHERE key = 'id_collision_repair_v1';"
+    );
+    if (!idCollisionRepairDone) {
+      try {
+        for (const ex of SEED_EXERCISES) {
+          const mismatch = db.getFirstSync<{ cnt: number }>(
+            'SELECT COUNT(*) as cnt FROM workout_logs WHERE exercise_id = ? AND exercise_name != ?;',
+            [ex.id, ex.name]
+          );
+          if (mismatch && mismatch.cnt > 0) {
+            db.runSync(
+              `UPDATE exercise_progression_state
+               SET current_weight = ?, current_target_reps = ?, consecutive_failures = 0,
+                   sessions_without_success = 0, last_session_date = NULL, last_decision_reason = NULL,
+                   is_calibrating = 1, planned_weights = ?
+               WHERE exercise_id = ?;`,
+              [ex.defaultStartingWeight, ex.defaultTargetReps, JSON.stringify([ex.defaultStartingWeight]), ex.id]
+            );
+          }
+        }
+      } catch (error) {
+        console.error('Erreur réparation collision id:', error);
+      }
+      db.runSync("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('id_collision_repair_v1', '1');");
+    }
   } catch (error) {
     console.warn('Erreur initialisation SQLite, utilisation du mode mémoire de secours:', error);
     initMemoryFallback();
@@ -526,15 +573,20 @@ export function addCustomExercise(
     );
     const nextOrder = (maxOrder?.max_order || 0) + 1;
 
-    const result = db.runSync(
+    // Id explicite (plutôt que laisser SQLite auto-incrémenter) : garantit qu'il reste
+    // toujours au-dessus de CUSTOM_EXERCISE_ID_FLOOR, donc jamais réutilisable par un futur
+    // ajout à SEED_EXERCISES — voir le commentaire sur la constante.
+    const maxId = db.getFirstSync<{ max_id: number | null }>('SELECT MAX(id) as max_id FROM exercises;');
+    const newExerciseId = Math.max(CUSTOM_EXERCISE_ID_FLOOR, (maxId?.max_id || 0) + 1);
+
+    db.runSync(
       `INSERT INTO exercises
-      (workout_id, name, category, min_increment, base_weight, order_index, default_target_reps, default_starting_weight, default_sets_count,
+      (id, workout_id, name, category, min_increment, base_weight, order_index, default_target_reps, default_starting_weight, default_sets_count,
        mode, reps_min, reps_max, min_weight_kg, rest_seconds)
-      VALUES (?, ?, ?, 2.5, ?, ?, ?, ?, ?, 'CHARGE', ?, ?, ?, ?);`,
-      [workoutId, name, category, baseWeight, nextOrder, targetReps, startingWeight, setsCount, targetReps, targetReps, baseWeight, restSeconds]
+      VALUES (?, ?, ?, ?, 2.5, ?, ?, ?, ?, ?, 'CHARGE', ?, ?, ?, ?);`,
+      [newExerciseId, workoutId, name, category, baseWeight, nextOrder, targetReps, startingWeight, setsCount, targetReps, targetReps, baseWeight, restSeconds]
     );
 
-    const newExerciseId = result.lastInsertRowId;
     db.runSync(
       `INSERT INTO exercise_progression_state
        (exercise_id, planned_weights, consecutive_failures, current_weight, current_target_reps, sessions_without_success, is_calibrating)

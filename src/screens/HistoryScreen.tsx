@@ -210,7 +210,18 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
       exGroup.sets.push(log);
     }
 
+    // getRecentLogs() renvoie les logs du plus récent au plus ancien (nécessaire pour ne
+    // garder que les N derniers, tous séances confondues) ; regrouper en itérant cet ordre
+    // construit donc exercices et séries à l'envers À L'INTÉRIEUR de chaque séance (le dernier
+    // exercice/la dernière série faite apparaît en premier). On rétablit l'ordre chronologique
+    // ici, sans toucher à l'ordre des séances elles-mêmes (la plus récente doit rester en tête).
     const sessionList = Array.from(sessionMap.values());
+    for (const session of sessionList) {
+      session.exercises.reverse();
+      for (const ex of session.exercises) {
+        ex.sets.reverse();
+      }
+    }
     setSessions(sessionList);
 
     if (sessionList.length > 0) {
