@@ -3,7 +3,7 @@
     "name": "mooscles",
     "slug": "mooscles",
     "owner": "selyanykms-team",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -36,7 +36,10 @@
       "expo-status-bar",
       ["expo-splash-screen", { "image": "./assets/splash-icon.png", "imageWidth": 200, "backgroundColor": "#00296B" }],
       "expo-audio",
-      "expo-notifications",
+      ["expo-notifications", {
+        "icon": "./assets/android-icon-monochrome.png",
+        "color": "#FDC500"
+      }],
       "expo-file-system",
       ["expo-image-picker", {
         "photosPermission": "mooscles a besoin d'accéder à tes photos pour ajouter une photo de suivi à une pesée.",
@@ -47,7 +50,14 @@
           "foregroundService": {
             "types": ["specialUse"],
             "specialUseSubtype": "workout_rest_timer"
-          }
+          },
+          "icons": [
+            {
+              "name": "rest_timer_notification_icon",
+              "path": "assets/android-icon-monochrome.png",
+              "type": "small"
+            }
+          ]
         }
       }]
     ],

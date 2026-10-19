@@ -20,6 +20,10 @@ import { fmtKg } from './format';
 const CHANNEL_ID = 'rest-timer-live';
 const NOTIFICATION_ID = 'rest-timer-live';
 const FOREGROUND_SERVICE_TYPES = [AndroidForegroundServiceType.FOREGROUND_SERVICE_TYPE_SPECIAL_USE];
+// Doit correspondre au nom déclaré dans app.json (plugin react-native-notify-kit,
+// android.icons[].name) : une icône monochrome (silhouette blanche détourée) plutôt que
+// l'icône couleur de l'app — sinon Android l'aplatit en un simple carré.
+const NOTIFICATION_ICON_RESOURCE = 'rest_timer_notification_icon';
 
 export const ACTION_PAUSE = 'rest-timer-pause';
 export const ACTION_RESUME = 'rest-timer-resume';
@@ -39,10 +43,13 @@ interface SetInfo {
   nextReps: number;
 }
 
+// Reprend le même vocabulaire que l'écran de repos en appli (labels "RÉCUPÉRATION" et
+// "PROCHAINE SÉRIE"), pour que la notification se lise comme une extension de cet écran plutôt
+// que comme un texte générique.
 function buildBody({ exerciseName, nextSetNumber, nextWeight, nextReps }: SetInfo): { title: string; body: string } {
   return {
-    title: `Repos — ${exerciseName}`,
-    body: `Série ${nextSetNumber} · ${fmtKg(nextWeight)} kg × ${nextReps} reps`,
+    title: `Récupération · ${exerciseName}`,
+    body: `Prochaine série : ${nextSetNumber} · ${fmtKg(nextWeight)} kg × ${nextReps} reps`,
   };
 }
 
@@ -107,6 +114,7 @@ export async function showRestTimerRunningNotification(endTimeMs: number, info: 
       body,
       android: {
         channelId: CHANNEL_ID,
+        smallIcon: NOTIFICATION_ICON_RESOURCE,
         asForegroundService: true,
         foregroundServiceTypes: FOREGROUND_SERVICE_TYPES,
         ongoing: true,
@@ -142,6 +150,7 @@ export async function showRestTimerPausedNotification(remainingSeconds: number, 
       body: `${formatted} restant · ${body}`,
       android: {
         channelId: CHANNEL_ID,
+        smallIcon: NOTIFICATION_ICON_RESOURCE,
         asForegroundService: true,
         foregroundServiceTypes: FOREGROUND_SERVICE_TYPES,
         ongoing: true,
