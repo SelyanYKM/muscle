@@ -4,6 +4,7 @@ import {
   Animated,
   AppState,
   AppStateStatus,
+  DeviceEventEmitter,
   Modal,
   StyleSheet,
   Text,
@@ -16,8 +17,15 @@ import { playRestTimerAlarm } from '../utils/audio';
 import { fmtKg } from '../utils/format';
 import { triggerLightHaptic, triggerTimerEndHaptic, triggerWarningHaptic } from '../utils/haptics';
 import {
-  armSystemBackupTimer,
-  disarmSystemBackupTimer,
+  ACTION_PAUSE,
+  ACTION_RESUME,
+  ACTION_SKIP,
+  hideRestTimerLiveNotification,
+  REST_TIMER_ACTION_EVENT,
+  showRestTimerPausedNotification,
+  showRestTimerRunningNotification,
+} from '../utils/restTimerNotifee';
+import {
   requestRestTimerPermission,
   startRestTimerService,
   stopRestTimerService,
@@ -52,6 +60,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
 }) => {
   const [secondsRemaining, setSecondsRemaining] = useState(initialSeconds);
   const [totalSeconds, setTotalSeconds] = useState(initialSeconds);
+  const [isPaused, setIsPaused] = useState(false);
 
   // Timestamp cible absolu pour ne jamais perdre le temps en arrière-plan
   const targetTimeRef = useRef<number>(Date.now() + initialSeconds * 1000);
@@ -60,10 +69,17 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   const hasEndedRef = useRef<boolean>(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Source de vérité pour l'état pause, lue depuis des callbacks enregistrés une seule fois
+  // au montage (écouteur DeviceEventEmitter ci-dessous) : une ref ne se fige jamais, contrairement
+  // à une valeur de state capturée dans la fermeture au moment du montage.
+  const isPausedRef = useRef<boolean>(false);
+  const pauseRemainingMsRef = useRef<number>(0);
+
   // Animation de pulsation et d'entrée
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
+  const setInfo = { exerciseName, nextSetNumber, nextWeight, nextReps };
   const notificationBody = `${exerciseName} • Série ${nextSetNumber} • ${nextWeight} kg`;
 
   // Déclenche l'alerte de fin de repos une seule fois, quel que soit le chemin qui la détecte
@@ -73,101 +89,63 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     hasEndedRef.current = true;
     if (intervalRef.current) clearInterval(intervalRef.current);
     stopRestTimerService();
-    disarmSystemBackupTimer();
+    hideRestTimerLiveNotification();
     triggerTimerEndHaptic();
     playRestTimerAlarm();
     onFinish();
   };
 
-  useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 180,
-      useNativeDriver: true,
-    }).start();
+  // Un seul tick, réutilisé par l'intervalle initial et par la reprise après une pause.
+  const tick = () => {
+    const now = Date.now();
+    const remaining = Math.max(0, Math.ceil((targetTimeRef.current - now) / 1000));
+    setSecondsRemaining(remaining);
 
-    // Service au premier plan Android avec notification persistante : contrairement au
-    // son/vibration ci-dessus (qui dépendent du code JS en cours d'exécution), ça garde
-    // l'app active pendant tout le repos, donc l'alarme sonne fiablement même écran
-    // verrouillé ou app en arrière-plan.
-    let isMounted = true;
-    requestRestTimerPermission().then((granted) => {
-      if (granted && isMounted) {
-        startRestTimerService(targetTimeRef.current, notificationBody);
-      }
-    });
-
-    // Écouteur de changement de premier plan / arrière-plan (depuis Spotify / écran verrouillé).
-    // En plus de recalculer le temps restant au retour, on arme/désarme le filet de sécurité
-    // de l'appli Horloge du téléphone : seulement actif pendant qu'on est en arrière-plan, pour
-    // ne jamais dupliquer le son quand mooscles est ouvert au premier plan.
-    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-      const remaining = Math.max(0, Math.ceil((targetTimeRef.current - Date.now()) / 1000));
-
-      if (nextAppState === 'active') {
-        setSecondsRemaining(remaining);
-        disarmSystemBackupTimer();
-        if (remaining <= 0) {
-          finishNow();
-        }
-      } else if (!hasEndedRef.current && remaining > 0) {
-        armSystemBackupTimer(remaining, notificationBody);
-      }
-    });
-
-    // Intervalle régulier d'animation et de décompte
-    intervalRef.current = setInterval(() => {
-      const now = Date.now();
-      const remaining = Math.max(0, Math.ceil((targetTimeRef.current - now) / 1000));
-      setSecondsRemaining(remaining);
-
-      if (remaining <= 0) {
-        finishNow();
-        return;
-      }
-
-      // Micro-pulsation
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.04,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 150,
-          useNativeDriver: true,
-        }),
-      ]).start();
-
-      if (remaining === 4 || remaining === 3 || remaining === 2) {
-        triggerWarningHaptic();
-      }
-    }, 1000);
-
-    return () => {
-      isMounted = false;
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      subscription.remove();
-      stopRestTimerService();
-      disarmSystemBackupTimer();
-    };
-  }, []);
-
-  const addTime = (secs: number) => {
-    triggerLightHaptic();
-    targetTimeRef.current += secs * 1000;
-    const newRemaining = Math.max(0, Math.ceil((targetTimeRef.current - Date.now()) / 1000));
-    setSecondsRemaining(newRemaining);
-    // Le total (dénominateur de l'anneau) ne grandit que si on AJOUTE du temps ;
-    // retirer du temps raccourcit juste le repos restant sans faire "sauter" l'anneau.
-    if (secs > 0) {
-      setTotalSeconds((prev) => prev + secs);
+    if (remaining <= 0) {
+      finishNow();
+      return;
     }
 
-    // Met à jour le décompte affiché dans la notification persistante
-    if (newRemaining > 0) {
-      startRestTimerService(targetTimeRef.current, notificationBody);
+    // Micro-pulsation
+    Animated.sequence([
+      Animated.timing(pulseAnim, {
+        toValue: 1.04,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(pulseAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    if (remaining === 4 || remaining === 3 || remaining === 2) {
+      triggerWarningHaptic();
+    }
+  };
+
+  // Bascule Pause/Reprendre, déclenchable depuis le bouton en appli ou depuis la notification
+  // (voir l'écouteur DeviceEventEmitter ci-dessous) — ne lit/écrit que des refs, jamais de
+  // state capturé, pour rester correcte même appelée depuis un écouteur figé au montage.
+  const togglePause = () => {
+    if (hasEndedRef.current) return;
+    triggerLightHaptic();
+
+    if (isPausedRef.current) {
+      targetTimeRef.current = Date.now() + pauseRemainingMsRef.current;
+      isPausedRef.current = false;
+      setIsPaused(false);
+      intervalRef.current = setInterval(tick, 1000);
+      showRestTimerRunningNotification(targetTimeRef.current, setInfo);
+    } else {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      intervalRef.current = null;
+      pauseRemainingMsRef.current = Math.max(0, targetTimeRef.current - Date.now());
+      isPausedRef.current = true;
+      setIsPaused(true);
+      setSecondsRemaining(Math.ceil(pauseRemainingMsRef.current / 1000));
+      showRestTimerPausedNotification(Math.ceil(pauseRemainingMsRef.current / 1000), setInfo);
     }
   };
 
@@ -176,7 +154,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     hasEndedRef.current = true;
     if (intervalRef.current) clearInterval(intervalRef.current);
     stopRestTimerService();
-    disarmSystemBackupTimer();
+    hideRestTimerLiveNotification();
     triggerLightHaptic();
     onSkip();
   };
@@ -186,8 +164,97 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     hasEndedRef.current = true;
     if (intervalRef.current) clearInterval(intervalRef.current);
     stopRestTimerService();
-    disarmSystemBackupTimer();
+    hideRestTimerLiveNotification();
     onUndo();
+  };
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+
+    // Service au premier plan Android avec notification persistante (chronomètre natif +
+    // boutons Pause/Passer) : contrairement au son/vibration ci-dessus (qui dépendent du code
+    // JS en cours d'exécution), ça garde l'app active pendant tout le repos, donc l'alarme
+    // sonne fiablement même écran verrouillé ou app en arrière-plan. L'alerte programmée via
+    // expo-notifications (startRestTimerService) reste en plus comme filet de secours si ce
+    // service venait à être tué par un gestionnaire de batterie agressif (MIUI etc.).
+    let isMounted = true;
+    requestRestTimerPermission().then((granted) => {
+      if (granted && isMounted) {
+        startRestTimerService(targetTimeRef.current, notificationBody);
+        showRestTimerRunningNotification(targetTimeRef.current, setInfo);
+      }
+    });
+
+    // Appuis sur Pause/Reprendre/Passer depuis la notification, que l'app soit ouverte ou en
+    // arrière-plan (App.tsx et index.ts relaient les deux cas vers ce même événement).
+    const actionSubscription = DeviceEventEmitter.addListener(REST_TIMER_ACTION_EVENT, (actionId: string) => {
+      if (actionId === ACTION_PAUSE || actionId === ACTION_RESUME) {
+        togglePause();
+      } else if (actionId === ACTION_SKIP) {
+        handleSkip();
+      }
+    });
+
+    // Écouteur de changement de premier plan / arrière-plan (depuis Spotify / écran verrouillé) :
+    // recalcule juste le temps restant affiché au retour, la notification live reste à jour
+    // d'elle-même entre-temps (chronomètre natif).
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active' && !isPausedRef.current) {
+        const remaining = Math.max(0, Math.ceil((targetTimeRef.current - Date.now()) / 1000));
+        setSecondsRemaining(remaining);
+        if (remaining <= 0) {
+          finishNow();
+        }
+      }
+    });
+
+    // Intervalle régulier d'animation et de décompte
+    intervalRef.current = setInterval(tick, 1000);
+
+    return () => {
+      isMounted = false;
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      actionSubscription.remove();
+      subscription.remove();
+      stopRestTimerService();
+      hideRestTimerLiveNotification();
+    };
+  }, []);
+
+  const addTime = (secs: number) => {
+    triggerLightHaptic();
+
+    // En pause : on ajuste directement le temps gelé, sans toucher à targetTimeRef (qui ne
+    // redevient pertinent qu'à la reprise).
+    if (isPausedRef.current) {
+      pauseRemainingMsRef.current = Math.max(0, pauseRemainingMsRef.current + secs * 1000);
+      const newRemaining = Math.ceil(pauseRemainingMsRef.current / 1000);
+      setSecondsRemaining(newRemaining);
+      if (secs > 0) {
+        setTotalSeconds((prev) => prev + secs);
+      }
+      showRestTimerPausedNotification(newRemaining, setInfo);
+      return;
+    }
+
+    targetTimeRef.current += secs * 1000;
+    const newRemaining = Math.max(0, Math.ceil((targetTimeRef.current - Date.now()) / 1000));
+    setSecondsRemaining(newRemaining);
+    // Le total (dénominateur de l'anneau) ne grandit que si on AJOUTE du temps ;
+    // retirer du temps raccourcit juste le repos restant sans faire "sauter" l'anneau.
+    if (secs > 0) {
+      setTotalSeconds((prev) => prev + secs);
+    }
+
+    // Met à jour le décompte affiché dans les deux notifications
+    if (newRemaining > 0) {
+      startRestTimerService(targetTimeRef.current, notificationBody);
+      showRestTimerRunningNotification(targetTimeRef.current, setInfo);
+    }
   };
 
   const minutes = Math.floor(secondsRemaining / 60);
@@ -213,7 +280,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
         />
 
         <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-          <Text style={styles.topSub}>RÉCUPÉRATION</Text>
+          <Text style={styles.topSub}>{isPaused ? 'EN PAUSE' : 'RÉCUPÉRATION'}</Text>
 
           {/* Anneau de progression avec chronomètre centré */}
           <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
@@ -246,6 +313,11 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
               <Text style={styles.timeOf}>sur {formattedTotal}</Text>
             </View>
           </Animated.View>
+
+          {/* Pause/Reprendre — reflète et pilote le même état que les boutons de la notification */}
+          <TouchableOpacity style={styles.pauseToggleBtn} onPress={togglePause} activeOpacity={0.75}>
+            <Text style={styles.pauseToggleText}>{isPaused ? '▶  Reprendre' : '⏸  Pause'}</Text>
+          </TouchableOpacity>
 
           {/* Boutons d'ajustement du repos */}
           <View style={styles.adjustRow}>
@@ -326,6 +398,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: 'rgba(255, 255, 255, 0.72)',
     marginTop: 2,
+  },
+  pauseToggleBtn: {
+    height: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    borderRadius: THEME.radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  pauseToggleText: {
+    fontFamily: THEME.fonts.sans,
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
   adjustRow: {
     flexDirection: 'row',

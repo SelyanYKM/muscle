@@ -3,7 +3,7 @@
     "name": "mooscles",
     "slug": "mooscles",
     "owner": "selyanykms-team",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -41,6 +41,14 @@
       ["expo-image-picker", {
         "photosPermission": "mooscles a besoin d'accéder à tes photos pour ajouter une photo de suivi à une pesée.",
         "cameraPermission": "mooscles a besoin de l'appareil photo pour prendre une photo de suivi."
+      }],
+      ["react-native-notify-kit", {
+        "android": {
+          "foregroundService": {
+            "types": ["specialUse"],
+            "specialUseSubtype": "workout_rest_timer"
+          }
+        }
       }]
     ],
     "extra": {

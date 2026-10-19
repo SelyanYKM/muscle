@@ -10,6 +10,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as Updates from 'expo-updates';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, BackHandler, Platform, StyleSheet, Text, View } from 'react-native';
+import notifee from 'react-native-notify-kit';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { getAppMetadata, initDatabase, setAppMetadata } from './src/database/db';
 import { FreeWorkoutScreen } from './src/screens/FreeWorkoutScreen';
@@ -19,6 +20,11 @@ import { WorkoutSummaryScreen } from './src/screens/WorkoutSummaryScreen';
 import { THEME } from './src/theme';
 import { ProgressionDecision, SetResult } from './src/types';
 import { configureAppAudio } from './src/utils/audio';
+import {
+  configureRestTimerLiveChannel,
+  relayRestTimerNotifeeEvent,
+  requestRestTimerLivePermission,
+} from './src/utils/restTimerNotifee';
 import {
   configureRestTimerChannel,
   openBatteryOptimizationSettings,
@@ -89,15 +95,22 @@ export default function App() {
           }
         }
 
-        // Les trois touchent des sous-systèmes indépendants (SQLite, session audio, canal de
+        // Les quatre touchent des sous-systèmes indépendants (SQLite, session audio, canaux de
         // notification) : aucune raison de les attendre en séquence au démarrage.
-        await Promise.all([initDatabase(), configureAppAudio(), configureRestTimerChannel()]);
+        await Promise.all([
+          initDatabase(),
+          configureAppAudio(),
+          configureRestTimerChannel(),
+          configureRestTimerLiveChannel(),
+        ]);
         // Demandée ici, avant tout écran en <Modal> (le minuteur de repos inclus) :
         // le popup système Android pour autoriser les notifications peut ne jamais
         // s'afficher correctement s'il est demandé pendant qu'une Modal RN est ouverte.
-        // Après le Promise.all ci-dessus : le canal de notification doit exister avant de
-        // demander la permission qui s'y rattache.
+        // Après le Promise.all ci-dessus : les canaux de notification doivent exister avant de
+        // demander la permission qui s'y rattache. Les deux libs partagent la même permission
+        // système : la seconde demande retrouve directement l'état déjà accordé/refusé.
         await requestRestTimerPermission();
+        await requestRestTimerLivePermission();
       } catch (e) {
         console.error('Erreur init database / audio:', e);
       } finally {
@@ -105,6 +118,13 @@ export default function App() {
       }
     }
     setup();
+  }, []);
+
+  // Pendant que l'app est ouverte, les appuis sur Pause/Reprendre/Passer (notification de
+  // repos) arrivent ici plutôt que par onBackgroundEvent (voir index.ts) ; les deux relaient
+  // vers le même événement, que RestTimerOverlay écoute pour agir sur son propre minuteur.
+  useEffect(() => {
+    return notifee.onForegroundEvent((event) => relayRestTimerNotifeeEvent(event));
   }, []);
 
   // Conseils ponctuels (une seule fois chacun, au premier lancement où ils n'ont pas encore
