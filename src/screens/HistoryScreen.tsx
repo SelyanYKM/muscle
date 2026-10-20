@@ -620,7 +620,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                                 <Text style={styles.volumeHighlight}>{Math.round(session.totalVolume).toLocaleString('fr-FR')} kg</Text>
                               </Text>
                               {!!bilan && (
-                                <Text style={styles.sessionBilanText} numberOfLines={1}>
+                                <Text style={styles.sessionBilanText} numberOfLines={2}>
                                   {bilan}
                                 </Text>
                               )}
