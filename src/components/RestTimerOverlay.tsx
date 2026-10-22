@@ -41,6 +41,8 @@ interface RestTimerOverlayProps {
   onFinish: () => void;
   /** Ferme le repos et annule la dernière série validée (accessible directement depuis cet écran). */
   onUndo?: () => void;
+  /** Remplace "Série {nextSetNumber}" par ce texte (ex: "Échauffement") dans la carte "prochaine série". */
+  nextSetLabel?: string;
 }
 
 const RING_SIZE = 264;
@@ -57,6 +59,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   onSkip,
   onFinish,
   onUndo,
+  nextSetLabel,
 }) => {
   const [secondsRemaining, setSecondsRemaining] = useState(initialSeconds);
   const [totalSeconds, setTotalSeconds] = useState(initialSeconds);
@@ -341,7 +344,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
               {exerciseName}
             </Text>
             <Text style={styles.nextSetDetails}>
-              Série {nextSetNumber} · <Text style={styles.nextSetHighlight}>{fmtKg(nextWeight)} kg</Text> × {nextReps}
+              {nextSetLabel || `Série ${nextSetNumber}`} · <Text style={styles.nextSetHighlight}>{fmtKg(nextWeight)} kg</Text> × {nextReps}
             </Text>
           </View>
 
