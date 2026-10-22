@@ -575,7 +575,7 @@ export function getAllCatalogExercises(workoutId?: number): ConfiguredExercise[]
 
   try {
     const query = workoutId
-      ? `${EXERCISE_JOIN_SELECT} WHERE e.workout_id = ? ORDER BY e.name ASC;`
+      ? `${EXERCISE_JOIN_SELECT} WHERE e.workout_id = ? ORDER BY e.order_index ASC;`
       : `${EXERCISE_JOIN_SELECT} ORDER BY e.workout_id ASC, e.order_index ASC;`;
     const params = workoutId ? [workoutId] : [];
     const rows = db.getAllSync<ExerciseRow>(query, params);

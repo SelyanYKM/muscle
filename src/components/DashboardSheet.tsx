@@ -300,7 +300,7 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
                         {e.photoUri ? (
                           <Image source={{ uri: e.photoUri }} style={styles.bwEntryThumb} />
                         ) : (
-                          <View style={styles.bwEntryThumbPlaceholder} />
+                          <View style={styles.bwEntryThumb} />
                         )}
                         <View style={styles.bwEntryTextCol}>
                           <Text style={styles.bwEntryWeight}>{fmtKg(e.weight)} kg</Text>
@@ -723,12 +723,6 @@ const styles = StyleSheet.create({
     borderTopColor: THEME.colors.hairline,
   },
   bwEntryThumb: {
-    width: 34,
-    height: 44,
-    borderRadius: 8,
-    backgroundColor: THEME.colors.cardBg,
-  },
-  bwEntryThumbPlaceholder: {
     width: 34,
     height: 44,
     borderRadius: 8,

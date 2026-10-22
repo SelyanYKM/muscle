@@ -151,6 +151,12 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   const [emptyToastVisible, setEmptyToastVisible] = useState<boolean>(false);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Id de l'exercice dont on vient de valider une série — distinct de currentExercise, qui
+  // peut déjà pointer sur l'exercice SUIVANT si la série validée était la dernière (passage
+  // automatique). "Annuler la dernière série" depuis l'écran de repos doit toujours agir sur
+  // celui-ci, jamais sur l'exercice affiché pendant ce repos.
+  const lastLoggedExerciseIdRef = useRef<number | null>(null);
+
   const split = THEME.splits[workoutId];
 
   // Chronomètre global de séance
@@ -303,6 +309,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   const handleCompleteSet = () => {
     if (!currentExercise) return;
 
+    lastLoggedExerciseIdRef.current = currentExercise.id;
+
     const objective = currentExercise.currentTargetReps;
     const metObjective = currentReps >= objective;
     const feeling: Feeling = metObjective ? 'EASY' : 'HARD';
@@ -387,13 +395,16 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     setIsWarmupRest(false);
   };
 
-  // Annule la série qu'on vient de valider, appelée depuis l'écran de repos.
+  // Annule la série qu'on vient de valider, appelée depuis l'écran de repos. Cible toujours
+  // lastLoggedExerciseIdRef (l'exercice réellement loggé), jamais currentExercise : en cas de
+  // passage automatique au suivant, ce dernier pointe déjà sur l'exercice d'APRÈS.
   const handleUndoFromRest = () => {
-    if (!currentExercise) return;
+    const targetExerciseId = lastLoggedExerciseIdRef.current;
+    if (targetExerciseId == null) return;
     triggerLightHaptic();
     setIsResting(false);
     setCompletedExercises((prev) => {
-      const existingIdx = prev.findIndex((c) => c.exerciseId === currentExercise.id);
+      const existingIdx = prev.findIndex((c) => c.exerciseId === targetExerciseId);
       if (existingIdx < 0) return prev;
 
       const remainingSets = prev[existingIdx].sets.slice(0, -1);

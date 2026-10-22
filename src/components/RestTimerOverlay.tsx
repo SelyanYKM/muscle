@@ -138,6 +138,10 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
       setIsPaused(false);
       intervalRef.current = setInterval(tick, 1000);
       showRestTimerRunningNotification(targetTimeRef.current, setInfo);
+      // Reprogramme le filet de secours expo-notifications sur le nouveau temps cible — sinon
+      // il reste calé sur l'ancienne heure de fin (celle d'avant la pause) et peut sonner trop
+      // tôt (ou pendant la pause elle-même, voir ci-dessous).
+      startRestTimerService(targetTimeRef.current, notificationBody);
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -146,6 +150,8 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
       setIsPaused(true);
       setSecondsRemaining(Math.ceil(pauseRemainingMsRef.current / 1000));
       showRestTimerPausedNotification(Math.ceil(pauseRemainingMsRef.current / 1000), setInfo);
+      // Annule l'alerte programmée : tant qu'on est en pause, aucune alarme ne doit sonner.
+      stopRestTimerService();
     }
   };
 
