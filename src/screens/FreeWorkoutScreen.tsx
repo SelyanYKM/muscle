@@ -79,6 +79,11 @@ const CATEGORY_SUB_LABEL: Record<EquipmentCategory, string> = {
   CABLE: 'Poulie',
 };
 
+// Rallonge du repos quand il précède un changement de machine (dernière série d'un exercice,
+// passage automatique au suivant) plutôt qu'une série de plus sur la même machine — le temps
+// de s'y déplacer, en plus de la récupération.
+const EXERCISE_TRANSITION_REST_EXTRA_SECONDS = 30;
+
 // Échauffement suggéré (50% × 8, 70% × 4 de la charge de travail), arrondi au palier le plus
 // proche sans jamais descendre sous la charge à vide (barre/machine). Purement informatif : pas
 // de poulie (charges déjà légères, isolation) et uniquement avant la 1ère série de travail.
@@ -329,7 +334,31 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       }
     });
 
-    setRestDuration(currentExercise.restSeconds);
+    // Dernière série de l'exercice : passe automatiquement au suivant du catalogue pendant le
+    // repos (qui se trouve donc rallongé, le temps de rejoindre l'autre machine), comme si on
+    // avait fait "Changer d'exercice" soi-même. S'il n'y en a pas (dernier exercice du
+    // catalogue), ou si on continue sur le même (série bonus au-delà des N prévues), le
+    // comportement reste inchangé.
+    const isLastSetOfExercise = setNumber >= currentExercise.numSets;
+    const currentIndex = catalogExercises.findIndex((c) => c.id === currentExercise.id);
+    const nextExercise =
+      isLastSetOfExercise && currentIndex >= 0 ? catalogExercises[currentIndex + 1] : undefined;
+
+    if (nextExercise) {
+      const existingNext = completedExercises.find((c) => c.exerciseId === nextExercise.id);
+      if (existingNext && existingNext.sets.length > 0) {
+        const lastSet = existingNext.sets[existingNext.sets.length - 1];
+        setCurrentWeight(lastSet.weight);
+        setCurrentReps(lastSet.repsDone);
+      } else {
+        setCurrentWeight(nextExercise.currentWeight);
+        setCurrentReps(nextExercise.currentTargetReps);
+      }
+      setCurrentExercise(nextExercise);
+      setRestDuration(currentExercise.restSeconds + EXERCISE_TRANSITION_REST_EXTRA_SECONDS);
+    } else {
+      setRestDuration(currentExercise.restSeconds);
+    }
     setIsResting(true);
   };
 
