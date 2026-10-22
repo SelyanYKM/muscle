@@ -9,8 +9,9 @@ Application mobile Android, 100 % hors-ligne, pour suivre un programme Push / Pu
 **Séance en direct**
 - Sélection du split (Push / Pull / Legs) depuis l'accueil, qui affiche aussi le temps écoulé depuis la dernière séance de chaque split.
 - Un écran de série à la fois : charge et répétitions ajustables, validation en un geste.
-- Séries d'échauffement suggérées (barre libre et machines) et décomposition visuelle des disques à charger par côté (code couleur olympique).
-- Minuteur de repos plein écran avec alerte sonore, vibration et notification — durée automatique selon l'équipement (poulie / machine / barre libre).
+- Séries d'échauffement suggérées (barre libre et machines) et décomposition visuelle des disques à charger par côté (code couleur olympique) ; taper la dernière pastille d'échauffement lance un repos de 60s avant la série de travail.
+- Minuteur de repos plein écran (pause/reprise, erreur de saisie corrigible) et notification Android "vivante" — décompte natif, boutons Pause/Passer, exercice et charge de la prochaine série directement dedans — durée automatique selon l'équipement (poulie / machine / barre libre), rallongée lors d'un changement de machine.
+- Passage automatique à l'exercice suivant du catalogue une fois le nombre de séries prévu atteint.
 
 **Algorithme de progression (double progression)**
 - Deux modes par exercice : `CHARGE` (séries identiques, poids qui monte — compound/machine) et `REPS_PUIS_CHARGE` (les répétitions montent dans une plage avant que le poids augmente — isolation/poulie).
@@ -24,7 +25,7 @@ Application mobile Android, 100 % hors-ligne, pour suivre un programme Push / Pu
 
 **Suivi**
 - Tiroir de stats sur l'accueil : volume et régularité par semaine, répartition du volume par groupe musculaire, courbe de force estimée (formule Epley) sur les exercices barre libre, records personnels.
-- Suivi du poids de corps avec photo optionnelle (appareil photo ou galerie).
+- Suivi du poids de corps avec photo optionnelle (appareil photo ou galerie), entrées supprimables.
 
 **Catalogue**
 - Exercices Hammer Strength (machines), finishers barre libre, exercices poulie — catalogue géré en base, modifiable (ajout/suppression) directement dans l'app.
@@ -36,6 +37,7 @@ Application mobile Android, 100 % hors-ligne, pour suivre un programme Push / Pu
 - **Expo SDK 57** (React Native) + TypeScript
 - **expo-sqlite** : toute la donnée est locale, aucun compte ni backend
 - **expo-updates** (OTA) + **EAS Build** pour la distribution Android (voir ci-dessous)
+- **react-native-notify-kit** (fork maintenu de Notifee) : notification "vivante" du minuteur de repos (foreground service Android, décompte natif, boutons d'action) — `expo-notifications` reste en plus comme filet de secours (alerte programmée)
 
 ---
 
@@ -81,11 +83,14 @@ mooscles/
 │   ├── types/
 │   │   └── index.ts                # Modèles et interfaces TypeScript
 │   └── utils/
-│       ├── audio.ts / haptics.ts / restTimerService.ts
+│       ├── audio.ts / haptics.ts
+│       ├── restTimerService.ts     # Alerte de repos de secours (expo-notifications)
+│       ├── restTimerNotifee.ts     # Notification de repos live (react-native-notify-kit)
 │       ├── backup.ts               # Export/import JSON complet
 │       ├── bodyPhoto.ts            # Capture/copie de photo (poids de corps)
 │       ├── exportHistory.ts        # Export texte de l'historique
 │       └── format.ts               # Formatage poids/dates partagé
 ├── App.tsx                         # Point d'entrée principal
+├── index.ts                        # Enregistre le foreground service notifee + ses événements
 └── app.json                        # Config Expo (version, plugins, EAS)
 ```
