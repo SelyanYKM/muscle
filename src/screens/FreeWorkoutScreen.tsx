@@ -130,11 +130,11 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   const [isResting, setIsResting] = useState<boolean>(false);
   const [restDuration, setRestDuration] = useState<number>(90);
 
-  // Repos déclenché en tapant une pastille d'échauffement (60s fixes, pas la série suivante
-  // réelle) : warmupNext porte le poids/reps à afficher comme "prochaine" pendant ce repos
-  // (la 2e pastille, ou null pour revenir à la vraie 1ère série une fois les deux faites).
+  // Repos fixe de 60s déclenché en tapant la DERNIÈRE pastille d'échauffement (les
+  // échauffements s'enchaînent entre eux sans repos ; seule la pastille juste avant la vraie
+  // série de travail en justifie un) : juste assez pour masquer le lien "corriger la dernière
+  // série" côté écran de repos (rien à annuler, aucune série loguée pour un échauffement).
   const [isWarmupRest, setIsWarmupRest] = useState<boolean>(false);
-  const [warmupNext, setWarmupNext] = useState<{ weight: number; reps: number } | null>(null);
 
   // Logs déjà effectués dans la séance
   const [completedExercises, setCompletedExercises] = useState<CompletedExerciseLog[]>([]);
@@ -366,18 +366,16 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       setRestDuration(currentExercise.restSeconds);
     }
     setIsWarmupRest(false);
-    setWarmupNext(null);
     setIsResting(true);
   };
 
-  // Tap sur une pastille d'échauffement : lance un repos fixe de 60s (distinct du repos entre
-  // séries de travail), en affichant la pastille suivante comme "prochaine" — ou la vraie
-  // 1ère série si c'est la dernière pastille d'échauffement.
+  // Tap sur une pastille d'échauffement : les échauffements s'enchaînent entre eux (aucune
+  // conséquence à taper la 1ère), seule la DERNIÈRE pastille — juste avant la vraie série de
+  // travail — lance un repos fixe de 60s.
   const handleWarmupTap = (idx: number) => {
     if (!warmupSets) return;
     triggerLightHaptic();
-    const next = warmupSets[idx + 1];
-    setWarmupNext(next ? { weight: next.weight, reps: next.reps } : null);
+    if (idx !== warmupSets.length - 1) return;
     setIsWarmupRest(true);
     setRestDuration(60);
     setIsResting(true);
@@ -387,7 +385,6 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   const closeRestOverlay = () => {
     setIsResting(false);
     setIsWarmupRest(false);
-    setWarmupNext(null);
   };
 
   // Annule la série qu'on vient de valider, appelée depuis l'écran de repos.
@@ -643,7 +640,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
           {!!warmupSets && (
             <View style={styles.warmupBlock}>
-              <Text style={styles.warmupLabel}>ÉCHAUFFEMENT SUGGÉRÉ · TAPE UNE FOIS FAITE</Text>
+              <Text style={styles.warmupLabel}>ÉCHAUFFEMENT SUGGÉRÉ · TAPE LA 2E POUR REPOSER</Text>
               <View style={styles.warmupChipsRow}>
                 {warmupSets.map((w, idx) => (
                   <TouchableOpacity
@@ -784,9 +781,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           initialSeconds={restDuration}
           exerciseName={currentExercise?.name || 'Série suivante'}
           nextSetNumber={currentSetNum}
-          nextWeight={warmupNext ? warmupNext.weight : currentWeight}
-          nextReps={warmupNext ? warmupNext.reps : currentReps}
-          nextSetLabel={isWarmupRest ? 'Échauffement' : undefined}
+          nextWeight={currentWeight}
+          nextReps={currentReps}
           onSkip={closeRestOverlay}
           onFinish={closeRestOverlay}
           onUndo={isWarmupRest ? undefined : handleUndoFromRest}
