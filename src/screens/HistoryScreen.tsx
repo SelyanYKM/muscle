@@ -174,7 +174,12 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
 
     const sessionMap = new Map<string, GroupedSession>();
 
-    for (const log of rawLogs) {
+    // getRecentLogs() renvoie les logs du plus récent au plus ancien (nécessaire pour ne garder
+    // que les N derniers, tous séances confondues) ; on reparcourt ici en ordre chronologique
+    // (ascendant) pour que les exercices et séries s'empilent déjà dans le bon ordre à
+    // l'intérieur de chaque séance. Seul l'ordre des SÉANCES elles-mêmes doit rester
+    // récent-en-premier : il se rétablit d'un coup en inversant la liste finale, plus bas.
+    for (const log of [...rawLogs].reverse()) {
       const sessionKey = `${log.date}_${log.workoutId}`;
       const workoutName =
         log.workoutId === 1
@@ -210,18 +215,9 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
       exGroup.sets.push(log);
     }
 
-    // getRecentLogs() renvoie les logs du plus récent au plus ancien (nécessaire pour ne
-    // garder que les N derniers, tous séances confondues) ; regrouper en itérant cet ordre
-    // construit donc exercices et séries à l'envers À L'INTÉRIEUR de chaque séance (le dernier
-    // exercice/la dernière série faite apparaît en premier). On rétablit l'ordre chronologique
-    // ici, sans toucher à l'ordre des séances elles-mêmes (la plus récente doit rester en tête).
-    const sessionList = Array.from(sessionMap.values());
-    for (const session of sessionList) {
-      session.exercises.reverse();
-      for (const ex of session.exercises) {
-        ex.sets.reverse();
-      }
-    }
+    // L'itération ci-dessus était chronologique, donc Map a inséré les séances de la plus
+    // ancienne à la plus récente : on inverse pour retrouver la plus récente en tête.
+    const sessionList = Array.from(sessionMap.values()).reverse();
     setSessions(sessionList);
 
     if (sessionList.length > 0) {

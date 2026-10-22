@@ -9,7 +9,7 @@ import notifee, {
   EventType,
 } from 'react-native-notify-kit';
 import { THEME } from '../theme';
-import { fmtKg } from './format';
+import { fmtKg, formatMinSec } from './format';
 
 // Notification de repos "vivante" : contrairement à l'alerte unique programmée dans
 // restTimerService.ts (qui ne sonne qu'UNE fois, à la fin), celle-ci reste affichée tout le
@@ -50,6 +50,21 @@ function buildBody({ exerciseName, nextSetNumber, nextWeight, nextReps }: SetInf
   return {
     title: `Récupération · ${exerciseName}`,
     body: `Prochaine série : ${nextSetNumber} · ${fmtKg(nextWeight)} kg × ${nextReps} reps`,
+  };
+}
+
+// Partie commune aux deux états de la notification (en cours / en pause) : canal, icône,
+// foreground service, apparence. Seuls le chronomètre, le corps du texte et les actions varient.
+function baseAndroidConfig() {
+  return {
+    channelId: CHANNEL_ID,
+    smallIcon: NOTIFICATION_ICON_RESOURCE,
+    asForegroundService: true,
+    foregroundServiceTypes: FOREGROUND_SERVICE_TYPES,
+    ongoing: true,
+    category: AndroidCategory.PROGRESS,
+    color: THEME.colors.accent,
+    visibility: AndroidVisibility.PUBLIC,
   };
 }
 
@@ -113,14 +128,7 @@ export async function showRestTimerRunningNotification(endTimeMs: number, info: 
       title,
       body,
       android: {
-        channelId: CHANNEL_ID,
-        smallIcon: NOTIFICATION_ICON_RESOURCE,
-        asForegroundService: true,
-        foregroundServiceTypes: FOREGROUND_SERVICE_TYPES,
-        ongoing: true,
-        category: AndroidCategory.PROGRESS,
-        color: THEME.colors.accent,
-        visibility: AndroidVisibility.PUBLIC,
+        ...baseAndroidConfig(),
         showChronometer: true,
         chronometerDirection: 'down',
         timestamp: endTimeMs,
@@ -141,22 +149,13 @@ export async function showRestTimerPausedNotification(remainingSeconds: number, 
   if (Platform.OS !== 'android') return;
   try {
     const { title, body } = buildBody(info);
-    const minutes = Math.floor(remainingSeconds / 60);
-    const seconds = remainingSeconds % 60;
-    const formatted = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+    const formatted = formatMinSec(remainingSeconds);
     await notifee.displayNotification({
       id: NOTIFICATION_ID,
       title: `${title} — en pause`,
       body: `${formatted} restant · ${body}`,
       android: {
-        channelId: CHANNEL_ID,
-        smallIcon: NOTIFICATION_ICON_RESOURCE,
-        asForegroundService: true,
-        foregroundServiceTypes: FOREGROUND_SERVICE_TYPES,
-        ongoing: true,
-        category: AndroidCategory.PROGRESS,
-        color: THEME.colors.accent,
-        visibility: AndroidVisibility.PUBLIC,
+        ...baseAndroidConfig(),
         showChronometer: false,
         actions: [
           { title: 'Reprendre', pressAction: { id: ACTION_RESUME } },

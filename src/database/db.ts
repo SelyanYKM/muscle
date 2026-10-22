@@ -78,6 +78,27 @@ function exerciseToConfigured(ex: Exercise): ConfiguredExercise {
   };
 }
 
+// Fait tourner `fn` une seule fois, jamais plus : lit un drapeau dans app_metadata, et si
+// absent exécute `fn` (en avalant toute erreur, pour ne jamais bloquer le démarrage) puis pose
+// le drapeau. Factorise ce qui était recopié à chaque migration ponctuelle (synchro du
+// catalogue mise à part, de forme trop différente pour s'y prêter).
+function runOnceMigration(
+  database: SQLite.SQLiteDatabase,
+  key: string,
+  errorLabel: string,
+  fn: (database: SQLite.SQLiteDatabase) => void
+): void {
+  const done = database.getFirstSync<{ value: string }>('SELECT value FROM app_metadata WHERE key = ?;', [key]);
+  if (done) return;
+
+  try {
+    fn(database);
+  } catch (error) {
+    console.error(`Erreur ${errorLabel}:`, error);
+  }
+  database.runSync('INSERT OR REPLACE INTO app_metadata (key, value) VALUES (?, ?);', [key, '1']);
+}
+
 export async function initDatabase(): Promise<void> {
   if (Platform.OS === 'web') {
     initMemoryFallback();
@@ -333,32 +354,28 @@ export async function initDatabase(): Promise<void> {
     // historique enregistré sous ce même exercise_id mais sous un AUTRE nom prouve que l'id a
     // déjà désigné autre chose — l'historique lui-même (workout_logs) n'est jamais touché,
     // seul l'état de progression mémorisé est remis aux valeurs du catalogue.
-    const idCollisionRepairDone = db.getFirstSync<{ value: string }>(
-      "SELECT value FROM app_metadata WHERE key = 'id_collision_repair_v1';"
-    );
-    if (!idCollisionRepairDone) {
-      try {
-        for (const ex of SEED_EXERCISES) {
-          const mismatch = db.getFirstSync<{ cnt: number }>(
-            'SELECT COUNT(*) as cnt FROM workout_logs WHERE exercise_id = ? AND exercise_name != ?;',
-            [ex.id, ex.name]
-          );
-          if (mismatch && mismatch.cnt > 0) {
-            db.runSync(
-              `UPDATE exercise_progression_state
-               SET current_weight = ?, current_target_reps = ?, consecutive_failures = 0,
-                   sessions_without_success = 0, last_session_date = NULL, last_decision_reason = NULL,
-                   is_calibrating = 1, planned_weights = ?
-               WHERE exercise_id = ?;`,
-              [ex.defaultStartingWeight, ex.defaultTargetReps, JSON.stringify([ex.defaultStartingWeight]), ex.id]
-            );
-          }
-        }
-      } catch (error) {
-        console.error('Erreur réparation collision id:', error);
+    runOnceMigration(db, 'id_collision_repair_v1', 'réparation collision id', (database) => {
+      const mismatchedIds = database.getAllSync<{ exercise_id: number }>(
+        `SELECT DISTINCT l.exercise_id FROM workout_logs l
+         JOIN exercises e ON e.id = l.exercise_id
+         WHERE l.exercise_name != e.name;`
+      );
+      const seedById = new Map(SEED_EXERCISES.map((ex) => [ex.id, ex]));
+
+      for (const { exercise_id } of mismatchedIds) {
+        const ex = seedById.get(exercise_id);
+        if (!ex) continue; // id hors catalogue de base (exercice personnalisé) : rien à faire ici
+
+        database.runSync(
+          `UPDATE exercise_progression_state
+           SET current_weight = ?, current_target_reps = ?, consecutive_failures = 0,
+               sessions_without_success = 0, last_session_date = NULL, last_decision_reason = NULL,
+               is_calibrating = 1, planned_weights = ?
+           WHERE exercise_id = ?;`,
+          [ex.defaultStartingWeight, ex.defaultTargetReps, JSON.stringify([ex.defaultStartingWeight]), ex.id]
+        );
       }
-      db.runSync("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('id_collision_repair_v1', '1');");
-    }
+    });
 
     // Filet de sécurité complémentaire, indépendant de la cause exacte : un état de
     // progression en "calibration" (is_calibrating = 1, donc censé n'avoir AUCUNE séance
@@ -373,51 +390,43 @@ export async function initDatabase(): Promise<void> {
     // aucune migration : on reconstruit une charge cohérente depuis la toute dernière séance
     // réellement faite, plutôt que de laisser un poids de départ du catalogue sans rapport avec
     // le vécu réel de l'exercice.
-    const calibrationContradictionRepairDone = db.getFirstSync<{ value: string }>(
-      "SELECT value FROM app_metadata WHERE key = 'calibration_contradiction_repair_v1';"
-    );
-    if (!calibrationContradictionRepairDone) {
-      try {
-        const contradictions = db.getAllSync<{ exercise_id: number; default_target_reps: number; name: string }>(
-          `SELECT DISTINCT p.exercise_id, e.default_target_reps, e.name
-           FROM exercise_progression_state p
-           JOIN exercises e ON e.id = p.exercise_id
-           WHERE p.is_calibrating = 1
-           AND (
-             SELECT COUNT(DISTINCT l.date) FROM workout_logs l
-             WHERE l.exercise_id = p.exercise_id AND l.exercise_name = e.name
-           ) >= 2;`
+    runOnceMigration(db, 'calibration_contradiction_repair_v1', 'réparation contradiction calibration', (database) => {
+      const contradictions = database.getAllSync<{ exercise_id: number; default_target_reps: number; name: string }>(
+        `SELECT DISTINCT p.exercise_id, e.default_target_reps, e.name
+         FROM exercise_progression_state p
+         JOIN exercises e ON e.id = p.exercise_id
+         WHERE p.is_calibrating = 1
+         AND (
+           SELECT COUNT(DISTINCT l.date) FROM workout_logs l
+           WHERE l.exercise_id = p.exercise_id AND l.exercise_name = e.name
+         ) >= 2;`
+      );
+
+      for (const row of contradictions) {
+        const lastDateRow = database.getFirstSync<{ date: string }>(
+          'SELECT date FROM workout_logs WHERE exercise_id = ? AND exercise_name = ? ORDER BY date DESC, id DESC LIMIT 1;',
+          [row.exercise_id, row.name]
         );
+        if (!lastDateRow) continue;
 
-        for (const row of contradictions) {
-          const lastDateRow = db.getFirstSync<{ date: string }>(
-            'SELECT date FROM workout_logs WHERE exercise_id = ? AND exercise_name = ? ORDER BY date DESC, id DESC LIMIT 1;',
-            [row.exercise_id, row.name]
-          );
-          if (!lastDateRow) continue;
+        const lastSets = database.getAllSync<{ weight: number; reps_target: number }>(
+          'SELECT weight, reps_target FROM workout_logs WHERE exercise_id = ? AND exercise_name = ? AND date = ?;',
+          [row.exercise_id, row.name, lastDateRow.date]
+        );
+        if (lastSets.length === 0) continue;
 
-          const lastSets = db.getAllSync<{ weight: number; reps_target: number }>(
-            'SELECT weight, reps_target FROM workout_logs WHERE exercise_id = ? AND exercise_name = ? AND date = ?;',
-            [row.exercise_id, row.name, lastDateRow.date]
-          );
-          if (lastSets.length === 0) continue;
+        const resolvedWeight = resolveSessionWeight(lastSets.map((s) => s.weight));
+        const resolvedReps = lastSets[0].reps_target || row.default_target_reps;
 
-          const resolvedWeight = resolveSessionWeight(lastSets.map((s) => s.weight));
-          const resolvedReps = lastSets[0].reps_target || row.default_target_reps;
-
-          db.runSync(
-            `UPDATE exercise_progression_state
-             SET current_weight = ?, current_target_reps = ?, is_calibrating = 0,
-                 last_session_date = ?, planned_weights = ?
-             WHERE exercise_id = ?;`,
-            [resolvedWeight, resolvedReps, lastDateRow.date, JSON.stringify([resolvedWeight]), row.exercise_id]
-          );
-        }
-      } catch (error) {
-        console.error('Erreur réparation contradiction calibration:', error);
+        database.runSync(
+          `UPDATE exercise_progression_state
+           SET current_weight = ?, current_target_reps = ?, is_calibrating = 0,
+               last_session_date = ?, planned_weights = ?
+           WHERE exercise_id = ?;`,
+          [resolvedWeight, resolvedReps, lastDateRow.date, JSON.stringify([resolvedWeight]), row.exercise_id]
+        );
       }
-      db.runSync("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('calibration_contradiction_repair_v1', '1');");
-    }
+    });
   } catch (error) {
     console.warn('Erreur initialisation SQLite, utilisation du mode mémoire de secours:', error);
     initMemoryFallback();

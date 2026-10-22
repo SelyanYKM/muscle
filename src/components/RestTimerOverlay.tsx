@@ -14,7 +14,7 @@ import {
 import Svg, { Circle } from 'react-native-svg';
 import { THEME } from '../theme';
 import { playRestTimerAlarm } from '../utils/audio';
-import { fmtKg } from '../utils/format';
+import { fmtKg, formatMinSec } from '../utils/format';
 import { triggerLightHaptic, triggerTimerEndHaptic, triggerWarningHaptic } from '../utils/haptics';
 import {
   ACTION_PAUSE,
@@ -263,13 +263,8 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     }
   };
 
-  const minutes = Math.floor(secondsRemaining / 60);
-  const seconds = secondsRemaining % 60;
-  const formattedTime = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-
-  const totalMinutes = Math.floor(totalSeconds / 60);
-  const totalSecs = totalSeconds % 60;
-  const formattedTotal = `${totalMinutes}:${totalSecs < 10 ? '0' : ''}${totalSecs}`;
+  const formattedTime = formatMinSec(secondsRemaining);
+  const formattedTotal = formatMinSec(totalSeconds);
 
   const progressFraction = totalSeconds > 0 ? secondsRemaining / totalSeconds : 0;
   const dashOffset = RING_CIRCUMFERENCE * (1 - progressFraction);
