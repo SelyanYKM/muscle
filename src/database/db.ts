@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
+import { resolveSessionWeight } from '../engine/progressionV2';
 import { BodyWeightEntry, ConfiguredExercise, EquipmentCategory, Exercise, ExerciseProgressionState, ProgressionMode, Workout, WorkoutLogEntry } from '../types';
 import { SEED_EXERCISES, SEED_WORKOUTS } from './seed';
 
@@ -357,6 +358,65 @@ export async function initDatabase(): Promise<void> {
         console.error('Erreur réparation collision id:', error);
       }
       db.runSync("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('id_collision_repair_v1', '1');");
+    }
+
+    // Filet de sécurité complémentaire, indépendant de la cause exacte : un état de
+    // progression en "calibration" (is_calibrating = 1, donc censé n'avoir AUCUNE séance
+    // réelle) alors que workout_logs prouve le contraire pour ce même exercice, SOUS LE MÊME
+    // NOM que celui actuel, est une contradiction impossible — y compris un faux positif de la
+    // réparation ci-dessus (un exercice jamais renommé ni en collision peut, pour une raison
+    // non élucidée, se faire remettre à 1 par erreur). Exige au moins 2 dates de séance
+    // distinctes (pas 1 seule) : une vraie collision n'a jamais qu'une poignée de séances sous
+    // le nouveau nom (voire une seule, déjà fautive) avant sa propre réparation ci-dessus, alors
+    // qu'un exercice suivi depuis longtemps en a forcément beaucoup plus — ça évite d'annuler la
+    // réparation précédente sur un cas de collision réel. workout_logs n'est jamais modifié par
+    // aucune migration : on reconstruit une charge cohérente depuis la toute dernière séance
+    // réellement faite, plutôt que de laisser un poids de départ du catalogue sans rapport avec
+    // le vécu réel de l'exercice.
+    const calibrationContradictionRepairDone = db.getFirstSync<{ value: string }>(
+      "SELECT value FROM app_metadata WHERE key = 'calibration_contradiction_repair_v1';"
+    );
+    if (!calibrationContradictionRepairDone) {
+      try {
+        const contradictions = db.getAllSync<{ exercise_id: number; default_target_reps: number; name: string }>(
+          `SELECT DISTINCT p.exercise_id, e.default_target_reps, e.name
+           FROM exercise_progression_state p
+           JOIN exercises e ON e.id = p.exercise_id
+           WHERE p.is_calibrating = 1
+           AND (
+             SELECT COUNT(DISTINCT l.date) FROM workout_logs l
+             WHERE l.exercise_id = p.exercise_id AND l.exercise_name = e.name
+           ) >= 2;`
+        );
+
+        for (const row of contradictions) {
+          const lastDateRow = db.getFirstSync<{ date: string }>(
+            'SELECT date FROM workout_logs WHERE exercise_id = ? AND exercise_name = ? ORDER BY date DESC, id DESC LIMIT 1;',
+            [row.exercise_id, row.name]
+          );
+          if (!lastDateRow) continue;
+
+          const lastSets = db.getAllSync<{ weight: number; reps_target: number }>(
+            'SELECT weight, reps_target FROM workout_logs WHERE exercise_id = ? AND exercise_name = ? AND date = ?;',
+            [row.exercise_id, row.name, lastDateRow.date]
+          );
+          if (lastSets.length === 0) continue;
+
+          const resolvedWeight = resolveSessionWeight(lastSets.map((s) => s.weight));
+          const resolvedReps = lastSets[0].reps_target || row.default_target_reps;
+
+          db.runSync(
+            `UPDATE exercise_progression_state
+             SET current_weight = ?, current_target_reps = ?, is_calibrating = 0,
+                 last_session_date = ?, planned_weights = ?
+             WHERE exercise_id = ?;`,
+            [resolvedWeight, resolvedReps, lastDateRow.date, JSON.stringify([resolvedWeight]), row.exercise_id]
+          );
+        }
+      } catch (error) {
+        console.error('Erreur réparation contradiction calibration:', error);
+      }
+      db.runSync("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('calibration_contradiction_repair_v1', '1');");
     }
   } catch (error) {
     console.warn('Erreur initialisation SQLite, utilisation du mode mémoire de secours:', error);
