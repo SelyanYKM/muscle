@@ -79,11 +79,6 @@ const CATEGORY_SUB_LABEL: Record<EquipmentCategory, string> = {
   CABLE: 'Poulie',
 };
 
-// Rallonge du repos quand il précède un changement de machine (dernière série d'un exercice,
-// passage automatique au suivant) plutôt qu'une série de plus sur la même machine — le temps
-// de s'y déplacer, en plus de la récupération.
-const EXERCISE_TRANSITION_REST_EXTRA_SECONDS = 30;
-
 // Échauffement suggéré (50% × 8, 70% × 4 de la charge de travail), arrondi au palier le plus
 // proche sans jamais descendre sous la charge à vide (barre/machine). Purement informatif : pas
 // de poulie (charges déjà légères, isolation) et uniquement avant la 1ère série de travail.
@@ -145,12 +140,10 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   const [emptyToastVisible, setEmptyToastVisible] = useState<boolean>(false);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Id de l'exercice dont on vient de valider une série — distinct de currentExercise, qui
-  // peut déjà pointer sur l'exercice SUIVANT si la série validée était la dernière (passage
-  // automatique). "Annuler la dernière série" depuis l'écran de repos doit toujours agir sur
-  // celui-ci, jamais sur l'exercice affiché pendant ce repos. Vaut aussi pour null pendant un
-  // repos d'échauffement (aucune série loguée) : sert alors à masquer le lien d'annulation.
-  const lastLoggedExerciseIdRef = useRef<number | null>(null);
+  // Repos déclenché en tapant la dernière pastille d'échauffement (60s fixes) plutôt qu'en
+  // validant une vraie série : masque le lien "corriger la dernière série" côté écran de repos
+  // (rien à annuler, aucune série loguée pour un échauffement).
+  const [isWarmupRest, setIsWarmupRest] = useState<boolean>(false);
 
   const split = THEME.splits[workoutId];
 
@@ -309,8 +302,6 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   const handleCompleteSet = () => {
     if (!currentExercise) return;
 
-    lastLoggedExerciseIdRef.current = currentExercise.id;
-
     const objective = currentExercise.currentTargetReps;
     const metObjective = currentReps >= objective;
     const feeling: Feeling = metObjective ? 'EASY' : 'HARD';
@@ -348,25 +339,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       }
     });
 
-    // Dernière série de l'exercice : passe automatiquement au suivant du catalogue pendant le
-    // repos (qui se trouve donc rallongé, le temps de rejoindre l'autre machine), comme si on
-    // avait fait "Changer d'exercice" soi-même. S'il n'y en a pas (dernier exercice du
-    // catalogue), ou si on continue sur le même (série bonus au-delà des N prévues), le
-    // comportement reste inchangé.
-    const isLastSetOfExercise = setNumber >= currentExercise.numSets;
-    const currentIndex = catalogExercises.findIndex((c) => c.id === currentExercise.id);
-    const nextExercise =
-      isLastSetOfExercise && currentIndex >= 0 ? catalogExercises[currentIndex + 1] : undefined;
-
-    if (nextExercise) {
-      const { weight, reps } = resolveStartingWeightReps(nextExercise);
-      setCurrentWeight(weight);
-      setCurrentReps(reps);
-      setCurrentExercise(nextExercise);
-      setRestDuration(currentExercise.restSeconds + EXERCISE_TRANSITION_REST_EXTRA_SECONDS);
-    } else {
-      setRestDuration(currentExercise.restSeconds);
-    }
+    setRestDuration(currentExercise.restSeconds);
+    setIsWarmupRest(false);
     setIsResting(true);
   };
 
@@ -377,25 +351,23 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     if (!warmupSets) return;
     triggerLightHaptic();
     if (idx !== warmupSets.length - 1) return;
-    lastLoggedExerciseIdRef.current = null;
+    setIsWarmupRest(true);
     setRestDuration(60);
     setIsResting(true);
   };
 
   const closeRestOverlay = () => {
     setIsResting(false);
+    setIsWarmupRest(false);
   };
 
-  // Annule la série qu'on vient de valider, appelée depuis l'écran de repos. Cible toujours
-  // lastLoggedExerciseIdRef (l'exercice réellement loggé), jamais currentExercise : en cas de
-  // passage automatique au suivant, ce dernier pointe déjà sur l'exercice d'APRÈS.
+  // Annule la série qu'on vient de valider, appelée depuis l'écran de repos.
   const handleUndoFromRest = () => {
-    const targetExerciseId = lastLoggedExerciseIdRef.current;
-    if (targetExerciseId == null) return;
+    if (!currentExercise) return;
     triggerLightHaptic();
     setIsResting(false);
     setCompletedExercises((prev) => {
-      const existingIdx = prev.findIndex((c) => c.exerciseId === targetExerciseId);
+      const existingIdx = prev.findIndex((c) => c.exerciseId === currentExercise.id);
       if (existingIdx < 0) return prev;
 
       const remainingSets = prev[existingIdx].sets.slice(0, -1);
@@ -787,7 +759,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           nextReps={currentReps}
           onSkip={closeRestOverlay}
           onFinish={closeRestOverlay}
-          onUndo={lastLoggedExerciseIdRef.current != null ? handleUndoFromRest : undefined}
+          onUndo={isWarmupRest ? undefined : handleUndoFromRest}
         />
       )}
 
