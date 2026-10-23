@@ -3,7 +3,7 @@ import { Feeling } from '../types';
 
 // Tables de ressenti partagées (libellé + 2 jeux de couleurs), reprises identiques dans
 // FreeWorkoutScreen, HistoryScreen et WorkoutSummaryScreen avant cette extraction.
-export const FEELING_LABEL: Record<Feeling, string> = { EASY: 'Facile', MEDIUM: 'Juste', HARD: 'Échec' };
+export const FEELING_LABEL: Record<Feeling, string> = { EASY: 'Réussi', MEDIUM: 'Juste', HARD: 'Échec' };
 
 export const FEELING_BG: Record<Feeling, string> = {
   EASY: THEME.colors.feelingEasyBg,
