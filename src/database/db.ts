@@ -450,6 +450,39 @@ export async function initDatabase(): Promise<void> {
         database.runSync('UPDATE exercises SET default_sets_count = ? WHERE id = ?;', [ex.defaultSetsCount || 3, ex.id]);
       }
     });
+
+    // Nettoyage demandé par l'utilisateur, d'après son export d'historique : exercices jamais
+    // faits (retirés de SEED_EXERCISES, voir seed.ts) + doublons personnalisés devenus inutiles
+    // car remplacés par leur équivalent du catalogue. L'historique (workout_logs) n'est jamais
+    // touché, seuls l'exercice et son état de progression disparaissent de la liste active.
+    runOnceMigration(db, 'cleanup_unused_exercises_v1', 'nettoyage exercices inutilisés', (database) => {
+      const idsToRemove = [10, 13]; // HS Plate-Loaded Linear Leg Press, HS Plate-Loaded Seated Calf Raise
+      for (const id of idsToRemove) {
+        database.runSync('DELETE FROM exercise_progression_state WHERE exercise_id = ?;', [id]);
+        database.runSync('DELETE FROM exercises WHERE id = ?;', [id]);
+      }
+
+      const namesToRemove = ['face pull', 'Leg extension', 'Leg curl'];
+      for (const name of namesToRemove) {
+        const rows = database.getAllSync<{ id: number }>(
+          'SELECT id FROM exercises WHERE name = ? AND id >= ?;',
+          [name, CUSTOM_EXERCISE_ID_FLOOR]
+        );
+        for (const { id } of rows) {
+          database.runSync('DELETE FROM exercise_progression_state WHERE exercise_id = ?;', [id]);
+          database.runSync('DELETE FROM exercises WHERE id = ?;', [id]);
+        }
+      }
+    });
+
+    // order_index n'est mis à jour par la migration v5 que pour les installs qui ne l'ont pas
+    // encore passée (drapeau déjà posé pour les autres) : resynchronise l'ordre actuel du
+    // catalogue (demandé pour refléter l'ordre réel des séances) pour tout le monde.
+    runOnceMigration(db, 'reorder_push_legs_v1', 'réordonnancement push/legs', (database) => {
+      for (const ex of SEED_EXERCISES) {
+        database.runSync('UPDATE exercises SET order_index = ? WHERE id = ?;', [ex.orderIndex, ex.id]);
+      }
+    });
   } catch (error) {
     console.warn('Erreur initialisation SQLite, utilisation du mode mémoire de secours:', error);
     initMemoryFallback();
