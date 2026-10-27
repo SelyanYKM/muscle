@@ -112,9 +112,16 @@ const Shard: React.FC<{ kind: 'converge' | 'burst' }> = ({ kind }) => {
   const translateY = kind === 'converge' ? progress.interpolate({ inputRange: [0, 1], outputRange: [dy, 0] }) : progress.interpolate({ inputRange: [0, 1], outputRange: [0, dy] });
   const rotation = progress.interpolate({ inputRange: [0, 1], outputRange: [spec.startRotation, spec.endRotation] });
   const scale = kind === 'converge' ? progress.interpolate({ inputRange: [0, 1], outputRange: [1, 0.3] }) : progress.interpolate({ inputRange: [0, 1], outputRange: [1.2, 0.5] });
+  // Les éclats convergents doivent s'éteindre AVANT d'arriver au centre (effet "étincelles qui
+  // se consument en approchant"), pas pile dessus.
+  // Pour les deux types : `progress` vaut 0 aussi bien "avant que son delay ne s'écoule" (pas
+  // encore parti) qu'"au tout début de son animation" (vient de partir) — l'interpolation doit
+  // donc valoir 0 en 0, jamais 1, sinon l'éclat est pleinement visible, immobile à l'origine,
+  // pendant tout son delay. C'était le vrai bug : les 18 éclats du burst (delay fixe 530ms)
+  // restaient tous visibles et superposés à l'origine jusqu'à 530ms, lus comme un triangle figé.
   const opacity = kind === 'converge'
-    ? progress.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, 1, 0] })
-    : progress.interpolate({ inputRange: [0, 0.6, 1], outputRange: [1, 1, 0] });
+    ? progress.interpolate({ inputRange: [0, 0.25, 0.7, 1], outputRange: [0, 1, 0, 0] })
+    : progress.interpolate({ inputRange: [0, 0.05, 0.6, 1], outputRange: [0, 1, 1, 0] });
 
   return (
     <Animated.View
@@ -201,8 +208,6 @@ export const BuffRequin: React.FC<{ active: boolean; children: React.ReactNode }
 
   const silScale = useRef(new Animated.Value(0.3)).current;
   const silOpacity = useRef(new Animated.Value(0)).current;
-  const silJitterX = useRef(new Animated.Value(0)).current;
-  const silJitterY = useRef(new Animated.Value(0)).current;
 
   const flashOpacity = useRef(new Animated.Value(0)).current;
   const flashGoldOpacity = useRef(new Animated.Value(0)).current;
@@ -255,8 +260,6 @@ export const BuffRequin: React.FC<{ active: boolean; children: React.ReactNode }
       timeline(ringOpacity, [{ t: 150, v: 0, e: EASE_IN }, { t: 250, v: 0.9 }, { t: 450, v: 1 }, { t: 460, v: 0 }]),
       timeline(silScale, [{ t: 150, v: 0.3 }, { t: 230, v: 0.34 }, { t: 449, v: 0.36 }]),
       timeline(silOpacity, [{ t: 150, v: 0 }, { t: 230, v: 1 }, { t: 449, v: 1 }, { t: 450, v: 0 }]),
-      timeline(silJitterX, microShakeSteps(silJitterX, 4, 300).map((kf) => ({ ...kf, t: kf.t + 150, e: Easing.step0 }))),
-      timeline(silJitterY, microShakeSteps(silJitterY, 4, 300).map((kf) => ({ ...kf, t: kf.t + 150, e: Easing.step0 }))),
       timeline(flashOpacity, [{ t: 450, v: 1 }, { t: 510, v: 1 }, { t: 520, v: 0 }]),
       timeline(flashGoldOpacity, [{ t: 510, v: 0.9, e: EASE_OUT }, { t: 900, v: 0 }]),
       timeline(sharkOpacity, [{ t: 450, v: 1 }, { t: 1800, v: 1 }]),
@@ -296,7 +299,9 @@ export const BuffRequin: React.FC<{ active: boolean; children: React.ReactNode }
     Animated.parallel(anims).start();
 
     const stopTimer = setTimeout(() => setPlaying(false), 1900);
-    return () => clearTimeout(stopTimer);
+    return () => {
+      clearTimeout(stopTimer);
+    };
   }, [active]);
 
   if (!playing) return <>{children}</>;
@@ -331,11 +336,7 @@ export const BuffRequin: React.FC<{ active: boolean; children: React.ReactNode }
             { left: ORIGIN.x - 150, top: ORIGIN.y - 97, opacity: silOpacity, transform: [{ scale: silScale }] },
           ]}
         >
-          <Animated.Image
-            source={SHARK_SOURCE}
-            style={[styles.sharkImg, { tintColor: '#000', transform: [{ translateX: silJitterX }, { translateY: silJitterY }] }]}
-            resizeMode="contain"
-          />
+          <Image source={SHARK_SOURCE} style={styles.sharkImg} tintColor="#000" resizeMode="contain" />
         </Animated.View>
 
         <Animated.View style={[styles.shock, { left: ORIGIN.x - 100, top: ORIGIN.y - 100, opacity: shockOpacity, transform: [{ scale: shockScale }] }]} />
