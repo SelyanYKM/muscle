@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomSheet } from '../components/BottomSheet';
 import { Dot } from '../components/Dot';
 import { Icon } from '../components/Icon';
-import { FEELING_BG, FEELING_DOT, FEELING_INK, FEELING_LABEL } from '../constants/feeling';
+import { FEELING_BG, FEELING_DOT, FEELING_INK, FEELING_LABEL, resolveFeelingLabel } from '../constants/feeling';
 import {
   clearAllWorkoutLogs,
   deleteExerciseFromSession,
@@ -64,6 +64,10 @@ interface EditableSet {
   repsTarget: number;
   repsDone: number;
   feeling: Feeling;
+  /** Hérité tel quel de la série chargée, tant que son ressenti n'est pas retouché via le
+   * sélecteur (voir setEditingSetFeeling) — l'éditeur n'offre pas de coche dédiée pour
+   * (re)confirmer "facile", donc un changement explicite de ressenti l'efface. */
+  markedEasy?: boolean;
 }
 interface EditableExercise {
   originalName: string;
@@ -321,6 +325,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
           repsTarget: s.repsTarget || 8,
           repsDone: s.repsDone,
           feeling: s.feeling as Feeling,
+          markedEasy: s.markedEasy,
         })),
       })),
       removedExerciseNames: [],
@@ -362,7 +367,10 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
 
   const setEditingSetFeeling = (exIdx: number, setIdx: number, feeling: Feeling) => {
     triggerLightHaptic();
-    patchEditingSet(exIdx, setIdx, () => ({ feeling }));
+    // Un choix explicite dans le sélecteur écrase toujours markedEasy : l'éditeur n'a pas de
+    // coche dédiée pour reconfirmer "facile", donc retoucher le ressenti d'une série ramène au
+    // libellé générique ("Réussi"), même si elle était "Facile" au moment de la séance.
+    patchEditingSet(exIdx, setIdx, () => ({ feeling, markedEasy: false }));
   };
 
   const addEditingSet = (exIdx: number) => {
@@ -649,7 +657,8 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                                     <View key={setIdx} style={styles.setChip}>
                                       <Dot color={FEELING_DOT[set.feeling as Feeling]} size={7} />
                                       <Text style={styles.setChipText}>
-                                        S{set.setNumber} · {set.repsDone} × {fmtKg(set.weight)}kg
+                                        S{set.setNumber} · {set.repsDone} × {fmtKg(set.weight)}kg ·{' '}
+                                        {resolveFeelingLabel(set.feeling as Feeling, set.markedEasy)}
                                       </Text>
                                     </View>
                                   ))}

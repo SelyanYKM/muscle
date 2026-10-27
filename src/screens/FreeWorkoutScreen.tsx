@@ -309,12 +309,16 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     else triggerWarningHaptic();
 
     const setNumber = getCurrentSetNumber();
+    // Coche "Dernière série facile" : affichée (et cochable) uniquement sur la toute dernière
+    // série de l'exercice, donc n'a de sens à capturer qu'à ce moment précis.
+    const markedEasy = setNumber === currentExercise.numSets && !!easyByExerciseId[currentExercise.id];
     const newSet: SetResult = {
       setNumber,
       targetReps: objective,
       repsDone: currentReps,
       weight: currentWeight,
       feeling,
+      markedEasy,
     };
 
     setCompletedExercises((prev) => {
@@ -422,6 +426,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           repsDone: s.repsDone,
           feeling: s.feeling,
           mode: 'FREE',
+          markedEasy: s.markedEasy,
         });
       }
 

@@ -24,3 +24,11 @@ export const FEELING_DOT: Record<Feeling, string> = {
   MEDIUM: THEME.colors.feelingMediumBorder,
   HARD: THEME.colors.feelingHardBorder,
 };
+
+// Libellé d'une série précise : "Facile" seulement si la coche "Dernière série facile" a été
+// cochée pour CETTE série au moment de la valider (jamais déduit après coup d'une marge de
+// reps) ; sinon le libellé générique du ressenti ("Réussi"/"Juste"/"Échec").
+export function resolveFeelingLabel(feeling: Feeling, markedEasy?: boolean): string {
+  if (feeling === 'EASY' && markedEasy) return 'Facile';
+  return FEELING_LABEL[feeling];
+}

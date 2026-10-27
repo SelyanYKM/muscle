@@ -181,7 +181,13 @@ export async function initDatabase(): Promise<void> {
 
     // Migration additive : la colonne "mode" (GUIDED/FREE) a été ajoutée après coup, pour
     // savoir dans quel mode une séance passée a été faite (utile pour "Reprendre"/"Relancer").
-    ensureColumns(db, 'workout_logs', [['mode', 'mode TEXT']]);
+    // "marked_easy" : la coche "Dernière série facile" cochée pour CETTE série précise (pas une
+    // marge de reps déduite après coup) — permet de distinguer dans l'historique une série
+    // "Réussi" ordinaire d'une série explicitement marquée "Facile".
+    ensureColumns(db, 'workout_logs', [
+      ['mode', 'mode TEXT'],
+      ['marked_easy', 'marked_easy INTEGER DEFAULT 0'],
+    ]);
 
     db.execSync(`
       CREATE TABLE IF NOT EXISTS app_metadata (
@@ -696,8 +702,8 @@ export function saveWorkoutLogs(logs: WorkoutLogEntry[]): void {
     for (const log of logs) {
       db.runSync(
         `INSERT INTO workout_logs
-        (workout_id, exercise_id, exercise_name, date, set_number, weight, reps_target, reps_done, feeling, mode)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        (workout_id, exercise_id, exercise_name, date, set_number, weight, reps_target, reps_done, feeling, mode, marked_easy)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
         [
           log.workoutId,
           log.exerciseId,
@@ -709,6 +715,7 @@ export function saveWorkoutLogs(logs: WorkoutLogEntry[]): void {
           log.repsDone,
           log.feeling,
           log.mode || null,
+          log.markedEasy ? 1 : 0,
         ]
       );
     }
@@ -908,6 +915,7 @@ export function getRecentLogs(limit: number = 200): WorkoutLogEntry[] {
       reps_done: number;
       feeling: 'EASY' | 'MEDIUM' | 'HARD';
       mode: 'GUIDED' | 'FREE' | null;
+      marked_easy: number | null;
     }>(
       `SELECT * FROM workout_logs ORDER BY id DESC LIMIT ?;`,
       [limit]
@@ -925,6 +933,7 @@ export function getRecentLogs(limit: number = 200): WorkoutLogEntry[] {
       repsDone: r.reps_done,
       feeling: r.feeling,
       mode: r.mode,
+      markedEasy: !!r.marked_easy,
     }));
   } catch (error) {
     console.error('Erreur getRecentLogs:', error);
@@ -1018,7 +1027,14 @@ export function insertExerciseLogsForSession(
   date: string,
   workoutId: number,
   exerciseName: string,
-  sets: { setNumber: number; weight: number; repsTarget: number; repsDone: number; feeling: 'EASY' | 'MEDIUM' | 'HARD' }[]
+  sets: {
+    setNumber: number;
+    weight: number;
+    repsTarget: number;
+    repsDone: number;
+    feeling: 'EASY' | 'MEDIUM' | 'HARD';
+    markedEasy?: boolean;
+  }[]
 ): void {
   if (!db || Platform.OS === 'web') {
     const matched = memoryExercises.find((e) => e.name === exerciseName);
@@ -1034,6 +1050,7 @@ export function insertExerciseLogsForSession(
         repsTarget: s.repsTarget,
         repsDone: s.repsDone,
         feeling: s.feeling,
+        markedEasy: !!s.markedEasy,
       });
     }
     return;
@@ -1045,9 +1062,9 @@ export function insertExerciseLogsForSession(
     for (const s of sets) {
       db.runSync(
         `INSERT INTO workout_logs
-        (workout_id, exercise_id, exercise_name, date, set_number, weight, reps_target, reps_done, feeling)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-        [workoutId, exerciseId, exerciseName, date, s.setNumber, s.weight, s.repsTarget, s.repsDone, s.feeling]
+        (workout_id, exercise_id, exercise_name, date, set_number, weight, reps_target, reps_done, feeling, marked_easy)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [workoutId, exerciseId, exerciseName, date, s.setNumber, s.weight, s.repsTarget, s.repsDone, s.feeling, s.markedEasy ? 1 : 0]
       );
     }
   } catch (error) {

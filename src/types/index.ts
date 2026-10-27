@@ -64,6 +64,10 @@ export interface SetResult {
   repsDone: number;
   weight: number;
   feeling: Feeling;
+  /** Coche "Dernière série facile" cochée au moment de valider CETTE série précise — jamais
+   * déduit après coup d'une marge de reps, contrairement au statut "Réussie facile" du bilan
+   * de fin de séance (qui combine cette coche et une marge automatique). */
+  markedEasy?: boolean;
 }
 
 export type SessionMode = 'GUIDED' | 'FREE';
@@ -81,6 +85,9 @@ export interface WorkoutLogEntry {
   feeling: Feeling;
   /** Mode utilisé pour cette séance. Absent (null) sur les séances enregistrées avant son ajout. */
   mode?: SessionMode | null;
+  /** Coche "Dernière série facile" cochée pour CETTE série précise. Absent (false) sur les
+   * séances enregistrées avant son ajout. */
+  markedEasy?: boolean;
 }
 
 export interface PlateInfo {
