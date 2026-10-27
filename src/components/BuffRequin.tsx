@@ -1,3 +1,4 @@
+import { Asset } from 'expo-asset';
 import React, { useEffect, useRef } from 'react';
 import { Animated, Dimensions, Easing, Image, StyleSheet, Text, View } from 'react-native';
 import { playBuffRequinSounds } from '../utils/audio';
@@ -5,6 +6,21 @@ import { triggerBuffRequinHaptics } from '../utils/haptics';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const ORIGIN = { x: SCREEN_WIDTH / 2, y: SCREEN_HEIGHT * 0.38 };
+
+// Une seule résolution de chaque asset (réutilisée partout ci-dessous) : évite tout doute sur
+// une divergence entre plusieurs require() du même fichier.
+const SHARK_SOURCE = require('../../assets/shark_buff.png');
+const SPEED_LINES_SOURCE = require('../../assets/speed_lines.png');
+
+/**
+ * Précharge shark_buff.png et speed_lines.png — images AJOUTÉES par cette mise à jour OTA,
+ * donc pas déjà dans l'APK : sans ce préchargement, la toute première fois que le buff se
+ * déclenche après une mise à jour, l'image peut ne pas avoir fini de se télécharger et
+ * Android affiche un icône de secours (triangle) à la place, le temps que ça charge.
+ */
+export function preloadBuffRequinAssets(): void {
+  Asset.loadAsync([SHARK_SOURCE, SPEED_LINES_SOURCE]).catch(() => {});
+}
 
 const EXP = Easing.bezier(0.16, 1, 0.3, 1); // tout ce qui frappe
 const EASE_IN = Easing.bezier(0.55, 0, 1, 0.45); // sorties
@@ -295,7 +311,7 @@ export const BuffRequin: React.FC<{ active: boolean; children: React.ReactNode }
         <Animated.View style={[styles.dim, { opacity: dimOpacity }]} />
 
         <Animated.Image
-          source={require('../../assets/speed_lines.png')}
+          source={SPEED_LINES_SOURCE}
           style={[
             styles.speedLines,
             { left: ORIGIN.x - 240, top: ORIGIN.y - 240, opacity: linesOpacity, transform: [{ rotate: deg(linesRotate) }] },
@@ -316,7 +332,7 @@ export const BuffRequin: React.FC<{ active: boolean; children: React.ReactNode }
           ]}
         >
           <Animated.Image
-            source={require('../../assets/shark_buff.png')}
+            source={SHARK_SOURCE}
             style={[styles.sharkImg, { tintColor: '#000', transform: [{ translateX: silJitterX }, { translateY: silJitterY }] }]}
             resizeMode="contain"
           />
@@ -330,10 +346,10 @@ export const BuffRequin: React.FC<{ active: boolean; children: React.ReactNode }
         </React.Fragment>
 
         <Animated.View style={[styles.sharkWrap, { left: ORIGIN.x - 150, top: ORIGIN.y - 97, opacity: ghost2Opacity, transform: [{ translateX: ghost2TranslateX }, { scaleX: ghost2ScaleX }, { scaleY: ghost2ScaleY }] }]}>
-          <Image source={require('../../assets/shark_buff.png')} style={styles.sharkImg} resizeMode="contain" />
+          <Image source={SHARK_SOURCE} style={styles.sharkImg} resizeMode="contain" />
         </Animated.View>
         <Animated.View style={[styles.sharkWrap, { left: ORIGIN.x - 150, top: ORIGIN.y - 97, opacity: ghost1Opacity, transform: [{ translateX: ghost1TranslateX }, { scaleX: ghost1ScaleX }, { scaleY: ghost1ScaleY }] }]}>
-          <Image source={require('../../assets/shark_buff.png')} style={styles.sharkImg} resizeMode="contain" />
+          <Image source={SHARK_SOURCE} style={styles.sharkImg} resizeMode="contain" />
         </Animated.View>
 
         <Animated.View
@@ -343,7 +359,7 @@ export const BuffRequin: React.FC<{ active: boolean; children: React.ReactNode }
           ]}
         >
           <Animated.Image
-            source={require('../../assets/shark_buff.png')}
+            source={SHARK_SOURCE}
             style={[styles.sharkImg, { transform: [{ scaleX: sharkImgScaleX }, { scaleY: sharkImgScaleY }] }]}
             resizeMode="contain"
           />

@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomSheet } from '../components/BottomSheet';
 import { Dot } from '../components/Dot';
 import { Icon } from '../components/Icon';
-import { BuffRequin } from '../components/BuffRequin';
+import { BuffRequin, preloadBuffRequinAssets } from '../components/BuffRequin';
 import { PlateBreakdown } from '../components/PlateBreakdown';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
 import { FEELING_BG, FEELING_DOT, FEELING_INK } from '../constants/feeling';
@@ -162,6 +162,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
   useEffect(() => {
     preloadBuffRequinSounds();
+    preloadBuffRequinAssets();
   }, []);
 
   const handleTimerTap = () => {
