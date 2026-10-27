@@ -1,3 +1,4 @@
+import { Anton_400Regular } from '@expo-google-fonts/anton';
 import {
   Manrope_500Medium,
   Manrope_600SemiBold,
@@ -63,6 +64,7 @@ export default function App() {
     Manrope_600SemiBold,
     Manrope_700Bold,
     Manrope_800ExtraBold,
+    Anton_400Regular,
   });
   const [currentScreen, setCurrentScreen] = useState<ScreenState>('SPLIT_SELECT');
 

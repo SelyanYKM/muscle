@@ -3,6 +3,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
+  Easing,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,9 +16,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomSheet } from '../components/BottomSheet';
 import { Dot } from '../components/Dot';
 import { Icon } from '../components/Icon';
+import { BuffRequin } from '../components/BuffRequin';
 import { PlateBreakdown } from '../components/PlateBreakdown';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
-import { SharkOverlay } from '../components/SharkOverlay';
 import { FEELING_BG, FEELING_DOT, FEELING_INK } from '../constants/feeling';
 import {
   addCustomExercise,
@@ -40,6 +42,7 @@ import {
   SetResult,
   WorkoutLogEntry,
 } from '../types';
+import { preloadBuffRequinSounds } from '../utils/audio';
 import { fmtKg, parseLocalDate } from '../utils/format';
 import { triggerLightHaptic, triggerMediumHaptic, triggerSuccessHaptic, triggerWarningHaptic } from '../utils/haptics';
 
@@ -147,25 +150,31 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   // (rien à annuler, aucune série loguée pour un échauffement).
   const [isWarmupRest, setIsWarmupRest] = useState<boolean>(false);
 
-  // Easter egg "buff shark" : 5 taps rapprochés sur le chrono de séance. `sharkAppeared` reste
-  // vrai pour le reste de la séance une fois déclenché (mémorisé dans le bilan), `isSharkActive`
-  // ne pilote que l'animation en cours.
+  // Easter egg "buff requin" (design_handoff_buff_requin) : 5 taps rapprochés (<1,5 s) sur le
+  // chrono de séance. `sharkAppeared` reste vrai pour le reste de la séance une fois déclenché
+  // (mémorisé dans le bilan), `isSharkActive` ne pilote que la séquence 1,8 s en cours.
+  // `buffEndsAt` pilote la rémanence cosmétique (aura + badge) pendant les 120 s qui suivent.
   const [sharkAppeared, setSharkAppeared] = useState<boolean>(false);
   const [isSharkActive, setIsSharkActive] = useState<boolean>(false);
+  const [buffEndsAt, setBuffEndsAt] = useState<number | null>(null);
   const sharkTapsRef = useRef<number[]>([]);
   const sharkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    preloadBuffRequinSounds();
+  }, []);
+
   const handleTimerTap = () => {
     const now = Date.now();
-    sharkTapsRef.current = [...sharkTapsRef.current, now].filter((t) => now - t < 2000);
+    sharkTapsRef.current = [...sharkTapsRef.current, now].filter((t) => now - t < 1500);
     if (sharkTapsRef.current.length < 5) return;
 
     sharkTapsRef.current = [];
-    triggerSuccessHaptic();
     setSharkAppeared(true);
     setIsSharkActive(true);
+    setBuffEndsAt(now + 1800 + 120000);
     if (sharkTimeoutRef.current) clearTimeout(sharkTimeoutRef.current);
-    sharkTimeoutRef.current = setTimeout(() => setIsSharkActive(false), 3200);
+    sharkTimeoutRef.current = setTimeout(() => setIsSharkActive(false), 2000);
   };
 
   useEffect(() => {
@@ -173,6 +182,25 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       if (sharkTimeoutRef.current) clearTimeout(sharkTimeoutRef.current);
     };
   }, []);
+
+  const buffSecondsLeft = buffEndsAt ? Math.max(0, Math.ceil((buffEndsAt - Date.now()) / 1000)) : 0;
+  // Le badge/aura n'apparaît qu'une fois la séquence 1,8 s terminée (phase "Rémanence" du
+  // design handoff), pas dès le déclenchement : gated par !isSharkActive.
+  const isBuffRemanent = buffSecondsLeft > 0 && !isSharkActive;
+
+  // Aura pulsée derrière le chrono pendant les 120 s de rémanence du buff requin.
+  const buffAuraOpacity = useRef(new Animated.Value(0.35)).current;
+  useEffect(() => {
+    if (!buffEndsAt) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(buffAuraOpacity, { toValue: 0.85, duration: 600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(buffAuraOpacity, { toValue: 0.35, duration: 600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [buffEndsAt]);
 
   const split = THEME.splits[workoutId];
 
@@ -529,6 +557,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
   return (
     <View style={styles.root}>
+      <BuffRequin active={isSharkActive}>
       <LinearGradient
         colors={[split.tint, THEME.colors.bg]}
         locations={[0, 0.42]}
@@ -536,7 +565,6 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         end={{ x: 0.85, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
-      <SharkOverlay visible={isSharkActive} />
       <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         {/* En-tête de la séance */}
@@ -551,10 +579,18 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           </View>
 
           <View style={styles.headerRightBox}>
-            <TouchableOpacity style={styles.timerBox} onPress={handleTimerTap} activeOpacity={1}>
-              <Dot color={THEME.colors.accent} size={7} />
-              <Text style={styles.timerText}>{formatElapsedTime(elapsedSeconds)}</Text>
-            </TouchableOpacity>
+            <View>
+              {isBuffRemanent && <Animated.View style={[styles.buffAura, { opacity: buffAuraOpacity }]} />}
+              <TouchableOpacity style={styles.timerBox} onPress={handleTimerTap} activeOpacity={1}>
+                <Dot color={THEME.colors.accent} size={7} />
+                <Text style={styles.timerText}>{formatElapsedTime(elapsedSeconds)}</Text>
+                {isBuffRemanent && (
+                  <View style={styles.buffBadge}>
+                    <Text style={styles.buffBadgeText}>🦈 BUFF · {formatElapsedTime(buffSecondsLeft)}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity
               style={styles.quitBtn}
               onPress={() => setIsQuitSheetOpen(true)}
@@ -941,6 +977,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         </TouchableOpacity>
       </BottomSheet>
       </SafeAreaView>
+      </BuffRequin>
     </View>
   );
 };
@@ -1004,6 +1041,28 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.8)',
     paddingHorizontal: 12,
     borderRadius: THEME.radius.pill,
+  },
+  buffAura: {
+    position: 'absolute',
+    top: -6,
+    left: -6,
+    right: -6,
+    bottom: -6,
+    borderRadius: THEME.radius.pill,
+    backgroundColor: '#FDC500',
+  },
+  buffBadge: {
+    backgroundColor: '#FDC500',
+    borderRadius: THEME.radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    marginLeft: 2,
+  },
+  buffBadgeText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#00296B',
   },
   timerText: {
     fontFamily: THEME.fonts.sans,
