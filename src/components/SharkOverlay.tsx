@@ -5,7 +5,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SHARK_WIDTH = 84;
 const SHARK_HEIGHT = 55; // ratio de l'illustration source (320x209)
 const HEART_SIZE = 26;
-const HEART_LEAD_PX = 46; // écart horizontal fixe entre le cœur et le requin qui le poursuit
+const HEART_LEAD_PX = SHARK_WIDTH + 30; // écart fixe : doit dépasser la largeur du requin pour se décoller de son nez
 
 // 3 couples requin/cœur décalés en hauteur, délai de départ et vitesse pour que la traversée
 // ne soit pas un simple copier-coller synchronisé.
