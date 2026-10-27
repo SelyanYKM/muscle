@@ -31,6 +31,7 @@ interface WorkoutSummaryProps {
     durationMinutes: number;
     totalVolume: number;
     exerciseSummaries: ExerciseSummaryItem[];
+    sharkAppeared?: boolean;
   };
   onClose: () => void;
 }
@@ -108,8 +109,8 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
   const [stretched, setStretched] = useState(false);
 
   const handleClose = () => {
-    if (physicalFeeling !== null || mentalFeeling !== null || stretched) {
-      saveSessionFeedback(summary.date, summary.workoutId, physicalFeeling, mentalFeeling, stretched);
+    if (physicalFeeling !== null || mentalFeeling !== null || stretched || summary.sharkAppeared) {
+      saveSessionFeedback(summary.date, summary.workoutId, physicalFeeling, mentalFeeling, stretched, summary.sharkAppeared);
     }
     onClose();
   };

@@ -122,6 +122,7 @@ function buildSessionBilan(session: GroupedSession, feedback?: SessionFeedbackRo
   const extras: string[] = [];
   if (feedback?.physicalFeeling != null) extras.push(`énergie ${feedback.physicalFeeling}/5`);
   if (feedback?.stretched) extras.push('étirements faits');
+  if (feedback?.sharkAppeared) extras.push('🦈 le requin était là');
 
   return extras.length > 0 ? `${perf} · ${extras.join(' · ')}` : `${perf}.`;
 }

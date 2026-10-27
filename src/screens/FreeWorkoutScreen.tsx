@@ -16,6 +16,7 @@ import { Dot } from '../components/Dot';
 import { Icon } from '../components/Icon';
 import { PlateBreakdown } from '../components/PlateBreakdown';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
+import { SharkOverlay } from '../components/SharkOverlay';
 import { FEELING_BG, FEELING_DOT, FEELING_INK } from '../constants/feeling';
 import {
   addCustomExercise,
@@ -56,6 +57,7 @@ interface FreeWorkoutScreenProps {
       decision: ProgressionDecision;
       results: SetResult[];
     }[];
+    sharkAppeared: boolean;
   }) => void;
   onQuitSession: () => void;
 }
@@ -144,6 +146,33 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   // validant une vraie série : masque le lien "corriger la dernière série" côté écran de repos
   // (rien à annuler, aucune série loguée pour un échauffement).
   const [isWarmupRest, setIsWarmupRest] = useState<boolean>(false);
+
+  // Easter egg "buff shark" : 5 taps rapprochés sur le chrono de séance. `sharkAppeared` reste
+  // vrai pour le reste de la séance une fois déclenché (mémorisé dans le bilan), `isSharkActive`
+  // ne pilote que l'animation en cours.
+  const [sharkAppeared, setSharkAppeared] = useState<boolean>(false);
+  const [isSharkActive, setIsSharkActive] = useState<boolean>(false);
+  const sharkTapsRef = useRef<number[]>([]);
+  const sharkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleTimerTap = () => {
+    const now = Date.now();
+    sharkTapsRef.current = [...sharkTapsRef.current, now].filter((t) => now - t < 2000);
+    if (sharkTapsRef.current.length < 5) return;
+
+    sharkTapsRef.current = [];
+    triggerSuccessHaptic();
+    setSharkAppeared(true);
+    setIsSharkActive(true);
+    if (sharkTimeoutRef.current) clearTimeout(sharkTimeoutRef.current);
+    sharkTimeoutRef.current = setTimeout(() => setIsSharkActive(false), 3200);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (sharkTimeoutRef.current) clearTimeout(sharkTimeoutRef.current);
+    };
+  }, []);
 
   const split = THEME.splits[workoutId];
 
@@ -480,6 +509,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       durationMinutes,
       totalVolume,
       exerciseSummaries,
+      sharkAppeared,
     });
   };
 
@@ -506,6 +536,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         end={{ x: 0.85, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
+      <SharkOverlay visible={isSharkActive} />
       <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         {/* En-tête de la séance */}
@@ -520,10 +551,10 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           </View>
 
           <View style={styles.headerRightBox}>
-            <View style={styles.timerBox}>
+            <TouchableOpacity style={styles.timerBox} onPress={handleTimerTap} activeOpacity={1}>
               <Dot color={THEME.colors.accent} size={7} />
               <Text style={styles.timerText}>{formatElapsedTime(elapsedSeconds)}</Text>
-            </View>
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.quitBtn}
               onPress={() => setIsQuitSheetOpen(true)}

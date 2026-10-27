@@ -210,6 +210,10 @@ export async function initDatabase(): Promise<void> {
       );
     `);
 
+    // "shark_appeared" : easter egg déclenché en tapant 5x sur le chrono de séance — ajouté
+    // après coup, donc migration additive comme les autres colonnes de cette table.
+    ensureColumns(db, 'session_feedback', [['shark_appeared', 'shark_appeared INTEGER DEFAULT 0']]);
+
     // Suivi du poids de corps : une entrée par jour, photo optionnelle (chemin local persistant,
     // copié depuis la galerie/l'appareil photo au moment de l'ajout — jamais l'URI temporaire
     // renvoyée par le sélecteur).
@@ -734,19 +738,21 @@ export function saveSessionFeedback(
   workoutId: number,
   physicalFeeling: number | null,
   mentalFeeling: number | null,
-  stretched: boolean
+  stretched: boolean,
+  sharkAppeared: boolean = false
 ): void {
   if (!db || Platform.OS === 'web') return;
 
   try {
     db.runSync(
-      `INSERT INTO session_feedback (date, workout_id, physical_feeling, mental_feeling, stretched)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO session_feedback (date, workout_id, physical_feeling, mental_feeling, stretched, shark_appeared)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(date, workout_id) DO UPDATE SET
          physical_feeling = excluded.physical_feeling,
          mental_feeling = excluded.mental_feeling,
-         stretched = excluded.stretched;`,
-      [date, workoutId, physicalFeeling, mentalFeeling, stretched ? 1 : 0]
+         stretched = excluded.stretched,
+         shark_appeared = excluded.shark_appeared;`,
+      [date, workoutId, physicalFeeling, mentalFeeling, stretched ? 1 : 0, sharkAppeared ? 1 : 0]
     );
   } catch (error) {
     console.error('Erreur saveSessionFeedback:', error);
@@ -759,6 +765,7 @@ export interface SessionFeedbackRow {
   physicalFeeling: number | null;
   mentalFeeling: number | null;
   stretched: boolean;
+  sharkAppeared: boolean;
 }
 
 /**
@@ -770,8 +777,15 @@ export function getAllSessionFeedback(): SessionFeedbackRow[] {
 
   try {
     return db
-      .getAllSync<{ date: string; workout_id: number; physical_feeling: number | null; mental_feeling: number | null; stretched: number }>(
-        'SELECT date, workout_id, physical_feeling, mental_feeling, stretched FROM session_feedback;'
+      .getAllSync<{
+        date: string;
+        workout_id: number;
+        physical_feeling: number | null;
+        mental_feeling: number | null;
+        stretched: number;
+        shark_appeared: number | null;
+      }>(
+        'SELECT date, workout_id, physical_feeling, mental_feeling, stretched, shark_appeared FROM session_feedback;'
       )
       .map((r) => ({
         date: r.date,
@@ -779,6 +793,7 @@ export function getAllSessionFeedback(): SessionFeedbackRow[] {
         physicalFeeling: r.physical_feeling,
         mentalFeeling: r.mental_feeling,
         stretched: !!r.stretched,
+        sharkAppeared: !!r.shark_appeared,
       }));
   } catch (error) {
     console.error('Erreur getAllSessionFeedback:', error);

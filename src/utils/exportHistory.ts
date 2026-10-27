@@ -2,7 +2,7 @@ import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { Alert } from 'react-native';
 import { FEELING_LABEL } from '../constants/feeling';
-import { formatLocalDate, getAllSessionsForExport } from '../database/db';
+import { formatLocalDate, getAllSessionFeedback, getAllSessionsForExport } from '../database/db';
 import { parseLocalDate } from './format';
 
 const WORKOUT_NAMES: Record<number, string> = {
@@ -33,6 +33,11 @@ function formatSets(sets: { weight: number; repsDone: number }[]): string {
 
 function buildExportText(): string {
   const sessions = getAllSessionsForExport();
+  const sharkByKey = new Set(
+    getAllSessionFeedback()
+      .filter((f) => f.sharkAppeared)
+      .map((f) => `${f.date}_${f.workoutId}`)
+  );
   const lines: string[] = [];
 
   lines.push('mooscles — Export de l’historique');
@@ -50,6 +55,9 @@ function buildExportText(): string {
     lines.push(rule);
     lines.push(title);
     lines.push(rule);
+    if (sharkByKey.has(`${session.date}_${session.workoutId}`)) {
+      lines.push('🦈 Le requin était là pendant cette séance.');
+    }
     lines.push('');
 
     session.exercises.forEach((ex, idx) => {
