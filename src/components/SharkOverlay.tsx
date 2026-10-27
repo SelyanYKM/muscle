@@ -1,25 +1,26 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Dimensions, Easing, StyleSheet, Text } from 'react-native';
+import { Animated, Dimensions, Easing, Image, StyleSheet } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SHARK_SIZE = 64;
+const SHARK_WIDTH = 110;
+const SHARK_HEIGHT = 72; // ratio de l'illustration source (320x209)
 const SWIM_DURATION_MS = 3200;
 
 /**
  * Easter egg "buff shark" : traverse l'écran une fois quand `visible` passe à true (déclenché
- * en tapant 5x sur le chrono de séance). Remplace `🦈` par l'illustration finale quand elle
- * sera prête — le reste de l'animation (traversée + léger tangage) ne change pas.
+ * en tapant 5x sur le chrono de séance). L'illustration (assets/shark.png) est orientée vers la
+ * droite pour correspondre au sens de la traversée.
  */
 export const SharkOverlay: React.FC<{ visible: boolean }> = ({ visible }) => {
-  const translateX = useRef(new Animated.Value(-SHARK_SIZE)).current;
+  const translateX = useRef(new Animated.Value(-SHARK_WIDTH)).current;
   const bob = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!visible) return;
 
-    translateX.setValue(-SHARK_SIZE);
+    translateX.setValue(-SHARK_WIDTH);
     const swim = Animated.timing(translateX, {
-      toValue: SCREEN_WIDTH + SHARK_SIZE,
+      toValue: SCREEN_WIDTH + SHARK_WIDTH,
       duration: SWIM_DURATION_MS,
       easing: Easing.inOut(Easing.sin),
       useNativeDriver: true,
@@ -49,7 +50,7 @@ export const SharkOverlay: React.FC<{ visible: boolean }> = ({ visible }) => {
       pointerEvents="none"
       style={[styles.container, { transform: [{ translateX }, { translateY }] }]}
     >
-      <Text style={styles.shark}>🦈</Text>
+      <Image source={require('../../assets/shark.png')} style={styles.shark} resizeMode="contain" />
     </Animated.View>
   );
 };
@@ -62,6 +63,7 @@ const styles = StyleSheet.create({
     zIndex: 999,
   },
   shark: {
-    fontSize: SHARK_SIZE,
+    width: SHARK_WIDTH,
+    height: SHARK_HEIGHT,
   },
 });
