@@ -437,6 +437,19 @@ export async function initDatabase(): Promise<void> {
         );
       }
     });
+
+    // `default_sets_count` n'est jamais touché par la migration v5 ci-dessus (elle ne met à jour
+    // que mode/reps/plancher/repos) : un exercice du catalogue déjà installé avant l'introduction
+    // de cette colonne peut donc garder un nombre de séries attendu obsolète, sans rapport avec
+    // SEED_EXERCISES. Conséquence concrète : une séance qui fait pourtant le bon nombre de séries
+    // est classée à tort "Incomplète" (moteur v2, voir suggestNextPrescription) et la progression
+    // reste bloquée. Resynchronise cette seule colonne sur le catalogue, sans toucher aux
+    // exercices personnalisés (hors SEED_EXERCISES) ni à rien d'autre.
+    runOnceMigration(db, 'sets_count_repair_v1', 'réparation nombre de séries', (database) => {
+      for (const ex of SEED_EXERCISES) {
+        database.runSync('UPDATE exercises SET default_sets_count = ? WHERE id = ?;', [ex.defaultSetsCount || 3, ex.id]);
+      }
+    });
   } catch (error) {
     console.warn('Erreur initialisation SQLite, utilisation du mode mémoire de secours:', error);
     initMemoryFallback();
