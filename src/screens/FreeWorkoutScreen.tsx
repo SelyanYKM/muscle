@@ -512,11 +512,16 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         isCalibrating: catalogEx.isCalibrating,
       };
       const weightUsed = resolveSessionWeight(exLog.sets.map((s) => s.weight));
+      // Seules les séries faites À la charge de travail retenue comptent pour la progression :
+      // une série plus lourde en premier (tâter le terrain) ou une série bonus à une autre
+      // charge ne doit ni aider ni pénaliser — resolveSessionWeight a déjà choisi la charge
+      // représentative, donc on évalue uniquement les séries qui la partagent réellement.
+      const workingSets = exLog.sets.filter((s) => s.weight === weightUsed);
 
       const decision = suggestNextPrescription(
         settings,
         state,
-        { reps: exLog.sets.map((s) => s.repsDone), weightUsed, easy: easyByExerciseId[exLog.exerciseId] || false },
+        { reps: workingSets.map((s) => s.repsDone), weightUsed, easy: easyByExerciseId[exLog.exerciseId] || false },
         today
       );
 
