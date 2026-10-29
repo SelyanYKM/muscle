@@ -11,6 +11,9 @@ interface PlateBreakdownProps {
   // N'est jamais rendu pour 'CABLE' (pile à broche, pas de disques) : le type accepte quand
   // même toute EquipmentCategory pour rester compatible avec currentExercise.category côté appelant.
   category: EquipmentCategory;
+  // Masque le séparateur du haut : utile quand le composant n'est pas enchaîné après un autre
+  // bloc (ex. dans une fenêtre contextuelle flottante plutôt qu'en ligne sur la carte sombre).
+  hideHairline?: boolean;
 }
 
 // Taille fixe par type de disque (pas une formule : des valeurs de design figées), plus
@@ -24,7 +27,12 @@ const PLATE_DIMENSIONS: Record<number, { width: number; height: number; border?:
   1.25: { width: 7, height: 28 },
 };
 
-export const PlateBreakdown: React.FC<PlateBreakdownProps> = ({ totalWeight, baseWeight = 0, category }) => {
+export const PlateBreakdown: React.FC<PlateBreakdownProps> = ({
+  totalWeight,
+  baseWeight = 0,
+  category,
+  hideHairline = false,
+}) => {
   const plates = getPlateBreakdownPerSide(totalWeight, baseWeight);
   const weightToLoad = Math.max(0, totalWeight - baseWeight);
   const weightPerSide = Math.round((weightToLoad / 2) * 100) / 100;
@@ -34,7 +42,7 @@ export const PlateBreakdown: React.FC<PlateBreakdownProps> = ({ totalWeight, bas
 
   return (
     <View style={styles.container}>
-      <View style={styles.hairline} />
+      {!hideHairline && <View style={styles.hairline} />}
 
       <View style={styles.row}>
         {plates.length === 0 ? (

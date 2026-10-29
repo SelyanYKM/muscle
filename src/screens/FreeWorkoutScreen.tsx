@@ -5,6 +5,7 @@ import {
   Alert,
   Animated,
   Easing,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -149,6 +150,10 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   // validant une vraie série : masque le lien "corriger la dernière série" côté écran de repos
   // (rien à annuler, aucune série loguée pour un échauffement).
   const [isWarmupRest, setIsWarmupRest] = useState<boolean>(false);
+
+  // Index de la pastille d'échauffement actuellement maintenue (appui long) : affiche la
+  // répartition des disques pour SA charge dans une fenêtre contextuelle, masquée au relâchement.
+  const [warmupPopupIdx, setWarmupPopupIdx] = useState<number | null>(null);
 
   // Easter egg "buff requin" (design_handoff_buff_requin) : 5 taps rapprochés (<1,5 s) sur le
   // chrono de séance. `sharkAppeared` reste vrai pour le reste de la séance une fois déclenché
@@ -413,6 +418,15 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     if (!warmupSets) return;
     triggerLightHaptic();
     if (idx !== warmupSets.length - 1) return;
+    setIsWarmupRest(true);
+    setRestDuration(60);
+    setIsResting(true);
+  };
+
+  // Mini bouton de repos post-échauffement : vient EN PLUS du tap sur la dernière pastille
+  // (ci-dessus), pour les cas où elle n'a pas été échauffée via les pastilles.
+  const handleWarmupRestButton = () => {
+    triggerLightHaptic();
     setIsWarmupRest(true);
     setRestDuration(60);
     setIsResting(true);
@@ -692,18 +706,42 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
           {!!warmupSets && (
             <View style={styles.warmupBlock}>
-              <Text style={styles.warmupLabel}>ÉCHAUFFEMENT SUGGÉRÉ · TAPE LA 2E POUR REPOSER</Text>
-              <View style={styles.warmupChipsRow}>
-                {warmupSets.map((w, idx) => (
+              <Text style={styles.warmupLabel}>
+                ÉCHAUFFEMENT SUGGÉRÉ · 2E = REPOS · MAINTENIR = DISQUES
+              </Text>
+              <View style={styles.warmupChipsWrap}>
+                <View style={styles.warmupChipsRow}>
+                  {warmupSets.map((w, idx) => (
+                    <Pressable
+                      key={idx}
+                      style={styles.warmupChip}
+                      onPress={() => handleWarmupTap(idx)}
+                      onLongPress={() => setWarmupPopupIdx(idx)}
+                      onPressOut={() => setWarmupPopupIdx(null)}
+                      delayLongPress={350}
+                    >
+                      <Text style={styles.warmupChipText}>{fmtKg(w.weight)} kg × {w.reps}</Text>
+                    </Pressable>
+                  ))}
                   <TouchableOpacity
-                    key={idx}
-                    style={styles.warmupChip}
-                    onPress={() => handleWarmupTap(idx)}
+                    style={styles.warmupRestBtn}
+                    onPress={handleWarmupRestButton}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.warmupChipText}>{fmtKg(w.weight)} kg × {w.reps}</Text>
+                    <Text style={styles.warmupRestBtnText}>⏱ Repos 60s</Text>
                   </TouchableOpacity>
-                ))}
+                </View>
+
+                {warmupPopupIdx !== null && currentExercise && (
+                  <View style={styles.warmupPopup} pointerEvents="none">
+                    <PlateBreakdown
+                      totalWeight={warmupSets[warmupPopupIdx].weight}
+                      baseWeight={currentExercise.baseWeight}
+                      category={currentExercise.category}
+                      hideHairline
+                    />
+                  </View>
+                )}
               </View>
             </View>
           )}
@@ -1198,6 +1236,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: 'rgba(242, 246, 252, 0.7)',
   },
+  warmupChipsWrap: {
+    position: 'relative',
+  },
   warmupChipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1216,6 +1257,36 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: 'rgba(242, 246, 252, 0.75)',
+  },
+  warmupRestBtn: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: THEME.radius.pill,
+    backgroundColor: 'rgba(242, 246, 252, 0.16)',
+  },
+  warmupRestBtnText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
+    fontWeight: '700',
+    color: THEME.colors.textOnDark,
+  },
+  warmupPopup: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    marginTop: 6,
+    zIndex: 20,
+    padding: 10,
+    borderRadius: THEME.radius.card,
+    backgroundColor: 'rgba(10, 14, 28, 0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(242, 246, 252, 0.18)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
   },
   stepperContainer: {
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
