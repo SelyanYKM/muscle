@@ -411,20 +411,14 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     setIsResting(true);
   };
 
-  // Tap sur une pastille d'échauffement : les échauffements s'enchaînent entre eux (aucune
-  // conséquence à taper la 1ère), seule la DERNIÈRE pastille — juste avant la vraie série de
-  // travail — lance un repos fixe de 60s.
-  const handleWarmupTap = (idx: number) => {
-    if (!warmupSets) return;
+  // Tap sur une pastille d'échauffement : juste un retour haptique léger (l'appui long affiche
+  // la répartition des disques, voir onLongPress ci-dessous). Le repos post-échauffement ne se
+  // déclenche plus au tap — uniquement via le bouton dédié ci-dessous.
+  const handleWarmupTap = () => {
     triggerLightHaptic();
-    if (idx !== warmupSets.length - 1) return;
-    setIsWarmupRest(true);
-    setRestDuration(60);
-    setIsResting(true);
   };
 
-  // Mini bouton de repos post-échauffement : vient EN PLUS du tap sur la dernière pastille
-  // (ci-dessus), pour les cas où elle n'a pas été échauffée via les pastilles.
+  // Seul déclencheur du repos post-échauffement (60s fixes).
   const handleWarmupRestButton = () => {
     triggerLightHaptic();
     setIsWarmupRest(true);
@@ -713,7 +707,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           {!!warmupSets && (
             <View style={styles.warmupBlock}>
               <Text style={styles.warmupLabel}>
-                ÉCHAUFFEMENT SUGGÉRÉ · 2E = REPOS · MAINTENIR = DISQUES
+                ÉCHAUFFEMENT SUGGÉRÉ · MAINTENIR = DISQUES
               </Text>
               <View style={styles.warmupChipsWrap}>
                 <View style={styles.warmupChipsRow}>
@@ -721,7 +715,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                     <Pressable
                       key={idx}
                       style={styles.warmupChip}
-                      onPress={() => handleWarmupTap(idx)}
+                      onPress={handleWarmupTap}
                       onLongPress={() => setWarmupPopupIdx(idx)}
                       onPressOut={() => setWarmupPopupIdx(null)}
                       delayLongPress={350}
