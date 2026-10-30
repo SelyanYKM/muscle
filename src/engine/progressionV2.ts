@@ -143,6 +143,17 @@ export function suggestNextPrescription(
     };
   }
 
+  // 2bis. Recalage sur la charge réellement soulevée quand elle dépasse la charge mémorisée :
+  // la mémoire interne ne doit jamais suggérer MOINS que ce que l'utilisatrice vient de prouver
+  // être capable de faire. Sans ça, un dépassement manuel de la charge suggérée (courant : elle
+  // ajuste elle-même les paliers plutôt que de suivre la suggestion à la lettre) n'est jamais
+  // adopté par la mémoire, qui continue d'avancer à petits pas depuis SA propre valeur, de plus
+  // en plus décalée par rapport à ce qui est réellement soulevé séance après séance. Jamais à la
+  // baisse : une séance volontairement plus légère ne doit pas faire chuter la prescription.
+  if (session.weightUsed > state.currentWeight) {
+    state = { ...state, currentWeight: session.weightUsed };
+  }
+
   // 3. Séance non exploitable (interrompue) : la charge suivante reste identique.
   if (session.reps.length < settings.targetSets) {
     const decision = keep(state, 'Séance incomplète : la charge suivante reste identique', 'INCOMPLETE');
