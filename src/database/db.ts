@@ -483,6 +483,46 @@ export async function initDatabase(): Promise<void> {
         database.runSync('UPDATE exercises SET order_index = ? WHERE id = ?;', [ex.orderIndex, ex.id]);
       }
     });
+
+    // Filet de sécurité large, suite à un bug confirmé dans le moteur v2 (corrigé dans ce même
+    // correctif) : `applyWeightFactor` (branche "reprise après pause") ne remettait jamais à jour
+    // `last_session_date`, donc une seule date périmée pouvait déclencher la réduction de charge
+    // -10 %/-20 % à répétition, à CHAQUE séance suivante, indéfiniment — effondrement silencieux
+    // de la charge sur plusieurs séances malgré un entraînement régulier (symptôme rapporté :
+    // charge suggérée largement sous ce qui est réellement soulevé, sur la plupart des exercices).
+    // Resynchronise `current_weight` de CHAQUE exercice déjà pratiqué sur la charge réellement
+    // utilisée à sa toute dernière séance (resolveSessionWeight corrigé, qui ne sous-estime plus
+    // une montée en charge) : un plancher sûr, quitte à perdre le dernier palier déjà acquis pour
+    // les exercices qui n'étaient pas buggés (elle le regagnera à la prochaine séance réussie).
+    runOnceMigration(db, 'resync_current_weight_from_history_v1', 'resynchronisation des charges', (database) => {
+      const exercises = database.getAllSync<{ id: number; name: string; default_target_reps: number }>(
+        'SELECT id, name, default_target_reps FROM exercises;'
+      );
+      for (const ex of exercises) {
+        const lastDateRow = database.getFirstSync<{ date: string }>(
+          'SELECT date FROM workout_logs WHERE exercise_id = ? AND exercise_name = ? ORDER BY date DESC, id DESC LIMIT 1;',
+          [ex.id, ex.name]
+        );
+        if (!lastDateRow) continue; // jamais pratiqué : rien à resynchroniser
+
+        const lastSets = database.getAllSync<{ weight: number; reps_target: number }>(
+          'SELECT weight, reps_target FROM workout_logs WHERE exercise_id = ? AND exercise_name = ? AND date = ?;',
+          [ex.id, ex.name, lastDateRow.date]
+        );
+        if (lastSets.length === 0) continue;
+
+        const resolvedWeight = resolveSessionWeight(lastSets.map((s) => s.weight));
+        const resolvedReps = lastSets[0].reps_target || ex.default_target_reps;
+
+        database.runSync(
+          `UPDATE exercise_progression_state
+           SET current_weight = ?, current_target_reps = ?, is_calibrating = 0,
+               last_session_date = ?, planned_weights = ?, consecutive_failures = 0, sessions_without_success = 0
+           WHERE exercise_id = ?;`,
+          [resolvedWeight, resolvedReps, lastDateRow.date, JSON.stringify([resolvedWeight]), ex.id]
+        );
+      }
+    });
   } catch (error) {
     console.warn('Erreur initialisation SQLite, utilisation du mode mémoire de secours:', error);
     initMemoryFallback();

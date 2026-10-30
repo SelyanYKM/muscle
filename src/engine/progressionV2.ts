@@ -40,7 +40,8 @@ function applyWeightFactor(
   state: ExerciseProgressionState,
   factor: number,
   reason: string,
-  status: SessionStatus
+  status: SessionStatus,
+  today: Date
 ): ProgressionDecision {
   const lowered = floorToIncrement(state.currentWeight * factor, settings.incrementKg);
   const nextWeight = Math.max(lowered, settings.minWeightKg);
@@ -50,6 +51,12 @@ function applyWeightFactor(
     consecutiveFailures: 0,
     sessionsWithoutSuccess: 0,
     lastDecisionReason: reason,
+    // Impératif : sans ça, la branche "reprise après pause" (seule appelante qui ne l'avait pas
+    // déjà fixée en amont) ne touche jamais lastSessionDate — le prochain calcul de jours de
+    // pause repart alors de la MÊME date périmée, et réapplique la réduction à CHAQUE séance
+    // suivante, indéfiniment, au lieu d'une seule fois (bug confirmé, charge qui s'effondre sur
+    // plusieurs séances malgré un entraînement régulier).
+    lastSessionDate: formatLocalDateForEngine(today),
   };
   return { status, nextWeight, nextTargetReps: state.currentTargetReps, reason, newState };
 }
@@ -110,10 +117,10 @@ export function suggestNextPrescription(
   if (state.lastSessionDate && !state.isCalibrating) {
     const jours = daysBetween(state.lastSessionDate, today);
     if (jours > 30) {
-      return applyWeightFactor(settings, state, 0.8, 'Reprise après plus de 30 jours', 'RESUMED_AFTER_BREAK');
+      return applyWeightFactor(settings, state, 0.8, 'Reprise après plus de 30 jours', 'RESUMED_AFTER_BREAK', today);
     }
     if (jours > 14) {
-      return applyWeightFactor(settings, state, 0.9, 'Reprise après plus de 14 jours', 'RESUMED_AFTER_BREAK');
+      return applyWeightFactor(settings, state, 0.9, 'Reprise après plus de 14 jours', 'RESUMED_AFTER_BREAK', today);
     }
   }
 
@@ -208,7 +215,7 @@ export function suggestNextPrescription(
 
   if (shouldDeload) {
     if (settings.mode === 'CHARGE') {
-      return applyWeightFactor(settings, afterCountersState, 0.9, '−10 % : échecs répétés', status);
+      return applyWeightFactor(settings, afterCountersState, 0.9, '−10 % : échecs répétés', status, today);
     }
     if (state.currentTargetReps > settings.repsMin) {
       const newState: ExerciseProgressionState = {
@@ -243,8 +250,12 @@ function formatLocalDateForEngine(d: Date): string {
 
 /**
  * Résout la charge "réellement utilisée" d'une séance quand elle a varié entre les séries :
- * garde la charge la plus fréquente ; sans majorité stricte, retient la plus basse (pour ne
- * jamais surestimer la prescription suivante).
+ * garde la charge la plus fréquente ; sans majorité stricte (ex. une montée en charge où chaque
+ * série est à un poids différent — un classique chez l'utilisatrice, voir son historique), retient
+ * la DERNIÈRE série de la séance plutôt que la plus légère : dans une montée en charge, la
+ * dernière série est la série de travail réelle (les précédentes ne sont qu'un échauffement
+ * rallongé) — retenir la plus basse sous-estimait systématiquement la charge de travail et
+ * pouvait geler la progression à tort.
  */
 export function resolveSessionWeight(weightsPerSet: number[]): number {
   if (weightsPerSet.length === 0) return 0;
@@ -268,7 +279,7 @@ export function resolveSessionWeight(weightsPerSet: number[]): number {
   }
 
   if (tie) {
-    return Math.min(...weightsPerSet);
+    return weightsPerSet[weightsPerSet.length - 1];
   }
   return bestWeight;
 }

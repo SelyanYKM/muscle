@@ -530,7 +530,13 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       // une série plus lourde en premier (tâter le terrain) ou une série bonus à une autre
       // charge ne doit ni aider ni pénaliser — resolveSessionWeight a déjà choisi la charge
       // représentative, donc on évalue uniquement les séries qui la partagent réellement.
-      const workingSets = exLog.sets.filter((s) => s.weight === weightUsed);
+      // Mais si ce filtre fait tomber sous le nombre de séries attendu, c'est qu'il ne s'agit pas
+      // d'un cas "charge de travail + une série isolée à ignorer" : c'est une montée en charge
+      // (chaque série à un poids différent, ex. 60/70/75), où CHAQUE série compte comme série de
+      // travail. Dans ce cas, ne pas filtrer — sinon la séance est à tort classée "Incomplète" et
+      // la progression reste bloquée alors que la séance est parfaitement valide.
+      const sameWeightSets = exLog.sets.filter((s) => s.weight === weightUsed);
+      const workingSets = sameWeightSets.length >= catalogEx.numSets ? sameWeightSets : exLog.sets;
 
       const decision = suggestNextPrescription(
         settings,
