@@ -523,6 +523,41 @@ export async function initDatabase(): Promise<void> {
         );
       }
     });
+
+    // v1 ci-dessus a tourné AVANT le correctif qui recale désormais current_weight sur la charge
+    // réellement soulevée quand elle dépasse la mémoire (suggestNextPrescription). Les séances
+    // faites entre les deux (ex. 30 oct : Leg Extension 75 kg réussi alors que la mémoire d'alors
+    // ne savait toujours pas que 72,5 kg avait déjà été dépassé) ont donc été calculées avec
+    // l'ancien calcul encore en retard d'un palier. Remonte current_weight au niveau de ce qui a
+    // réellement été soulevé à la toute dernière séance si c'est plus haut que la valeur en
+    // mémoire — jamais à la baisse, même logique de prudence que v1.
+    runOnceMigration(db, 'resync_current_weight_from_history_v2', 'resynchronisation des charges (v2)', (database) => {
+      const exercises = database.getAllSync<{ id: number; name: string; current_weight: number | null }>(
+        `SELECT e.id, e.name, p.current_weight
+         FROM exercises e LEFT JOIN exercise_progression_state p ON e.id = p.exercise_id;`
+      );
+      for (const ex of exercises) {
+        const lastDateRow = database.getFirstSync<{ date: string }>(
+          'SELECT date FROM workout_logs WHERE exercise_id = ? AND exercise_name = ? ORDER BY date DESC, id DESC LIMIT 1;',
+          [ex.id, ex.name]
+        );
+        if (!lastDateRow) continue;
+
+        const lastSets = database.getAllSync<{ weight: number }>(
+          'SELECT weight FROM workout_logs WHERE exercise_id = ? AND exercise_name = ? AND date = ?;',
+          [ex.id, ex.name, lastDateRow.date]
+        );
+        if (lastSets.length === 0) continue;
+
+        const resolvedWeight = resolveSessionWeight(lastSets.map((s) => s.weight));
+        if (ex.current_weight != null && resolvedWeight <= ex.current_weight) continue;
+
+        database.runSync(
+          `UPDATE exercise_progression_state SET current_weight = ?, planned_weights = ? WHERE exercise_id = ?;`,
+          [resolvedWeight, JSON.stringify([resolvedWeight]), ex.id]
+        );
+      }
+    });
   } catch (error) {
     console.warn('Erreur initialisation SQLite, utilisation du mode mémoire de secours:', error);
     initMemoryFallback();
