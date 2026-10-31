@@ -43,6 +43,8 @@ Moteur pur dans `src/engine/progressionV2.ts` (aucune dépendance à la base ni 
 - **Avant la séance** — `getPrescription()` (ou `prescriptionFor(exercice)` dans les écrans) donne la charge et l'objectif à afficher, réduction de reprise comprise. Ne jamais lire `currentWeight` du catalogue directement pour l'affichage.
 - **Après la séance** — `suggestNextPrescription()` reçoit **toutes** les séries loguées, les compare à cette prescription et renvoie le nouvel état à enregistrer.
 
+**Changement de règles** — quand le moteur change, la charge mémorisée par l'ancienne version peut avoir dérivé. Une migration unique (`replay_progression_v3` dans `db.ts`) rejoue alors tout l'historique réel de chaque exercice dans le nouveau moteur (`replayHistory`) : la première suggestion après la mise à jour part de la dernière séance réellement faite.
+
 **Séries prises en compte** (`selectWorkingSets`) — le moteur est pensé pour des séries droites (ex. 3×8 à la même charge) :
 - Séries droites : au moins le nombre de séries prévu à une même charge. Une série test, une série bonus ou une série de retour au calme à une autre charge est ignorée.
 - Séance irrégulière (montée en charge, charge baissée en cours de route) : une série plus lourde que prévu et ratée est une tentative, ignorée ; on garde ensuite les premières séries, et la charge retenue est la plus légère. Une montée en charge 60 / 70 / 75 ne fait donc pas progresser.

@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   getPrescription,
+  replayHistory,
   selectWorkingSets,
   suggestNextPrescription,
 } from '../progressionV2.ts';
@@ -274,4 +275,35 @@ test('réglages incohérents (0 série) : pas de « facile » fantôme', () => {
   const d = run(settings({ targetSets: 0 }), state(), x(1, 50, 8));
   assert.equal(d.status, 'SUCCESS');
   assert.equal(d.nextWeight, 52.5);
+});
+
+// --- Rejeu de l'historique (migration v3) ---
+
+test('rejeu : part de la dernière séance réellement faite, quelle que soit la mémoire', () => {
+  const history = [
+    { date: '2026-10-12', sets: sets([60, 8], [70, 8], [75, 8]) },
+    { date: '2026-10-19', sets: sets([60, 8], [60, 8], [60, 7]) },
+    { date: '2026-10-23', sets: x(3, 60, 8) },
+    { date: '2026-10-27', sets: x(3, 62.5, 8) },
+    { date: '2026-10-31', sets: x(3, 65, 8) },
+  ];
+  // Mémoire de l'ancien moteur, partie à 85 kg.
+  const st = replayHistory(settings(), state({ currentWeight: 85 }), history, history.map((h) => h.date));
+  assert.equal(st.currentWeight, 67.5);
+  assert.equal(st.lastSessionDate, '2026-10-31');
+  assert.equal(st.isCalibrating, false);
+});
+
+test('rejeu : garde les compteurs utiles (trois « presque » de suite)', () => {
+  const history = ['2026-10-19', '2026-10-23', '2026-10-27', '2026-10-31'].map((date, i) => ({
+    date, sets: i === 0 ? x(3, 55, 8) : sets([55, 8], [55, 8], [55, 7]),
+  }));
+  const st = replayHistory(settings(), state(), history);
+  assert.equal(st.currentWeight, 55);
+  assert.equal(st.sessionsWithoutSuccess, 3);
+});
+
+test('rejeu sans historique : l’exercice reste en calibration', () => {
+  const st = replayHistory(settings(), state({ isCalibrating: true }), []);
+  assert.equal(st.isCalibrating, true);
 });

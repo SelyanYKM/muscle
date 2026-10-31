@@ -470,6 +470,58 @@ export function suggestNextPrescription(
   );
 }
 
+// --- Rejeu de l'historique ---------------------------------------------------------------
+
+export interface HistorySession {
+  date: string; // 'YYYY-MM-DD'
+  sets: LoggedSet[];
+  easy?: boolean;
+}
+
+/**
+ * Recalcule l'état d'un exercice en rejouant toute son histoire réelle dans le moteur, séance
+ * après séance, comme si le moteur actuel avait toujours tourné. Sert à repartir de ce qui a
+ * vraiment été soulevé quand les règles changent (la mémoire calculée par une ancienne version
+ * peut avoir dérivé), au lieu de corriger l'écart séance après séance.
+ * `trainingDates` : toutes les dates d'entraînement, tous exercices confondus (pour la pause).
+ */
+export function replayHistory(
+  settings: ExerciseProgressionSettings,
+  initial: ExerciseProgressionState,
+  sessions: HistorySession[],
+  trainingDates: string[] = []
+): ExerciseProgressionState {
+  const sorted = [...sessions].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  const dates = [...new Set(trainingDates)].sort();
+  let state: ExerciseProgressionState = {
+    ...initial,
+    consecutiveFailures: 0,
+    sessionsWithoutSuccess: 0,
+    lastSessionDate: null,
+    lastDecisionReason: null,
+    isCalibrating: true,
+  };
+  let previousSets: LoggedSet[] | undefined;
+
+  for (const session of sorted) {
+    const [y, m, d] = session.date.split('-').map(Number);
+    const day = new Date(y, m - 1, d, 12);
+    const before = dates.filter((x) => x < session.date);
+    const previousWorkoutDate = before.length > 0 ? before[before.length - 1] : null;
+    const result = suggestNextPrescription(
+      settings,
+      state,
+      { sets: session.sets, easy: !!session.easy, previousSets },
+      day,
+      previousWorkoutDate
+    );
+    if (result.status === 'SKIPPED') continue;
+    state = result.newState;
+    previousSets = session.sets;
+  }
+  return state;
+}
+
 // --- Raccourcis pour les écrans -----------------------------------------------------------
 
 export function progressionSettingsOf(ex: ConfiguredExercise): ExerciseProgressionSettings {

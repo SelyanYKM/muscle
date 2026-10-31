@@ -1,6 +1,11 @@
 import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
-import { resolveSessionWeight } from '../engine/progressionV2';
+import {
+  progressionSettingsOf,
+  progressionStateOf,
+  replayHistory,
+  resolveSessionWeight,
+} from '../engine/progressionV2';
 import { BodyWeightEntry, ConfiguredExercise, EquipmentCategory, Exercise, ExerciseProgressionState, ProgressionMode, Workout, WorkoutLogEntry } from '../types';
 import { SEED_EXERCISES, SEED_WORKOUTS } from './seed';
 
@@ -556,6 +561,40 @@ export async function initDatabase(): Promise<void> {
           `UPDATE exercise_progression_state SET current_weight = ?, planned_weights = ? WHERE exercise_id = ?;`,
           [resolvedWeight, JSON.stringify([resolvedWeight]), ex.id]
         );
+      }
+    });
+
+    // Moteur v3 : la charge mémorisée par l'ancien moteur a pu dériver (au-dessus ou en dessous
+    // de ce qui est réellement soulevé). Plutôt que de laisser le nouveau moteur la corriger
+    // séance après séance, on recalcule une fois l'état de chaque exercice en rejouant tout son
+    // historique réel dans le moteur v3 : la première suggestion après la mise à jour part de la
+    // dernière séance réellement faite. Exercices jamais pratiqués : inchangés.
+    runOnceMigration(db, 'replay_progression_v3', 'rejeu de l\'historique (moteur v3)', (database) => {
+      const trainingDates = database
+        .getAllSync<{ date: string }>('SELECT DISTINCT date FROM workout_logs ORDER BY date ASC;')
+        .map((r: { date: string }) => r.date);
+      const exercises = database.getAllSync<ExerciseRow>(`${EXERCISE_JOIN_SELECT};`).map(rowToConfiguredExercise);
+
+      for (const ex of exercises) {
+        const rows = database.getAllSync<{ date: string; weight: number; reps_done: number; marked_easy: number | null }>(
+          `SELECT date, weight, reps_done, marked_easy FROM workout_logs
+           WHERE exercise_id = ? AND exercise_name = ?
+           ORDER BY date ASC, set_number ASC, id ASC;`,
+          [ex.id, ex.name]
+        );
+        if (rows.length === 0) continue;
+
+        type ReplayedSession = { date: string; sets: { weight: number; reps: number }[]; easy: boolean };
+        const byDate = new Map<string, ReplayedSession>();
+        for (const r of rows) {
+          const session: ReplayedSession = byDate.get(r.date) ?? { date: r.date, sets: [], easy: false };
+          session.sets.push({ weight: r.weight, reps: r.reps_done });
+          session.easy = session.easy || !!r.marked_easy;
+          byDate.set(r.date, session);
+        }
+
+        const state = replayHistory(progressionSettingsOf(ex), progressionStateOf(ex), [...byDate.values()], trainingDates);
+        saveExerciseProgressionState(ex.id, state);
       }
     });
   } catch (error) {
