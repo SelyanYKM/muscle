@@ -110,11 +110,13 @@ export interface BodyWeightEntry {
 export type SessionStatus =
   | 'EASY_SUCCESS' // Réussie facile : toutes les séries ≥ objectif, case "facile" (ou ≥ objectif+2 partout)
   | 'SUCCESS' // Réussie : toutes les séries ≥ objectif
-  | 'PARTIAL' // Partielle : une seule série sous l'objectif
-  | 'FAILED' // Ratée : deux séries ou plus sous l'objectif
-  | 'CALIBRATION' // Première séance sur cet exercice : pas de statut, l'utilisateur choisit la charge
+  | 'PARTIAL' // Presque : objectif manqué, mais ≥ 85 % du volume visé (reps plafonnées à l'objectif)
+  | 'FAILED' // Ratée : moins de 85 % du volume visé
+  | 'REDUCED_LOAD' // Allégée : sous la charge prévue (séance isolée ou irrégulière) : la charge stagne
+  | 'CALIBRATION' // Première séance sur cet exercice : charge et objectif estimés d'après les reps faites
   | 'INCOMPLETE' // Moins de séries que l'objectif : séance non exploitable
-  | 'RESUMED_AFTER_BREAK'; // Reprise après plus de 14/30 jours sans l'exercice
+  | 'SKIPPED' // Aucune série enregistrée : rien ne change
+  | 'RESUMED_AFTER_BREAK'; // Plus émis depuis la v3 : la reprise est portée par Prescription.resumedAfterBreak
 
 // Réglages par exercice (catalogue). minIncrement/baseWeight existent déjà sur Exercise ;
 // ces champs s'y ajoutent pour piloter le nouveau moteur.
@@ -139,11 +141,30 @@ export interface ExerciseProgressionState {
   isCalibrating: boolean; // vrai tant qu'aucune séance n'a encore été classée sur cet exercice
 }
 
-// Une séance de travail sur un exercice (hors échauffement), telle que saisie par l'utilisateur.
+// Une série telle que loguée pendant la séance.
+export interface LoggedSet {
+  weight: number;
+  reps: number;
+  isWarmup?: boolean; // les échauffements ne sont pas logués aujourd'hui ; prévu pour le jour où ils le seront
+}
+
+// Une séance sur un exercice : TOUTES les séries loguées, dans l'ordre. Le moteur choisit
+// lui-même les séries de travail (selectWorkingSets).
 export interface ProgressionSessionInput {
-  reps: number[]; // répétitions par série de travail, à la charge prescrite
-  weightUsed: number; // charge réellement utilisée (résolue si elle a varié en cours de séance)
+  sets: LoggedSet[];
   easy: boolean; // case "facile" cochée sur la dernière série
+  // Séries de la séance PRÉCÉDENTE sur cet exercice (avant aujourd'hui). Sert à distinguer une
+  // mauvaise séance isolée (la charge stagne) d'un choix de charge qui se confirme (elle suit).
+  previousSets?: LoggedSet[];
+}
+
+// Ce qu'il faut proposer AVANT une séance (getPrescription), réduction de reprise comprise.
+export interface Prescription {
+  weight: number;
+  targetReps: number;
+  resumedAfterBreak: boolean;
+  daysOff: number | null; // jours depuis la dernière séance sur l'exercice, null si jamais fait
+  reason: string | null; // raison à afficher (reprise, ou dernière décision)
 }
 
 export interface ProgressionDecision {
@@ -152,4 +173,5 @@ export interface ProgressionDecision {
   nextTargetReps: number;
   reason: string;
   newState: ExerciseProgressionState;
+  resumedAfterBreak?: boolean; // la séance a été évaluée par rapport à une charge réduite de reprise
 }
