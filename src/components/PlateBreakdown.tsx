@@ -27,6 +27,20 @@ const PLATE_DIMENSIONS: Record<number, { width: number; height: number; border?:
   1.25: { width: 7, height: 28 },
 };
 
+/**
+ * Une seule phrase pour le lecteur d'écran (les barres de disques sont purement visuelles) :
+ * "Disques par côté : 21,25 kilos, 1 de 20, 1 de 1,25". Réutilisée par les pastilles
+ * d'échauffement, dont la répartition n'apparaît sinon qu'en maintenant le doigt appuyé.
+ */
+export function plateBreakdownA11yLabel(totalWeight: number, baseWeight: number, category: EquipmentCategory): string {
+  const plates = getPlateBreakdownPerSide(totalWeight, baseWeight);
+  const weightPerSide = Math.round((Math.max(0, totalWeight - baseWeight) / 2) * 100) / 100;
+  const isFreeWeight = category === 'FREE_WEIGHT';
+  if (plates.length === 0) return isFreeWeight ? 'Barre à vide, 20 kilos' : 'Machine à vide';
+  const list = plates.map((p) => `${p.count} de ${fmtKg(p.weight)}`).join(', ');
+  return `Disques par côté : ${fmtKg(weightPerSide)} kilos, ${list}${isFreeWeight ? ', sur une barre de 20 kilos' : ''}`;
+}
+
 export const PlateBreakdown: React.FC<PlateBreakdownProps> = ({
   totalWeight,
   baseWeight = 0,
@@ -41,7 +55,11 @@ export const PlateBreakdown: React.FC<PlateBreakdownProps> = ({
   const summaryText = plates.map((p) => `${p.count} × ${fmtKg(p.weight)}`).join(' + ');
 
   return (
-    <View style={styles.container}>
+    <View
+      style={styles.container}
+      accessible
+      accessibilityLabel={plateBreakdownA11yLabel(totalWeight, baseWeight, category)}
+    >
       {!hideHairline && <View style={styles.hairline} />}
 
       <View style={styles.row}>

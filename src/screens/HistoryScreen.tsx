@@ -13,9 +13,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomSheet } from '../components/BottomSheet';
-import { Dot } from '../components/Dot';
+import { FeelingMark } from '../components/FeelingMark';
 import { Icon } from '../components/Icon';
-import { FEELING_BG, FEELING_DOT, FEELING_INK, FEELING_LABEL, resolveFeelingLabel } from '../constants/feeling';
+import { FEELING_BG, FEELING_INK, FEELING_LABEL, resolveFeelingLabel } from '../constants/feeling';
 import {
   clearAllWorkoutLogs,
   deleteExerciseFromSession,
@@ -28,6 +28,7 @@ import {
 } from '../database/db';
 import { THEME } from '../theme';
 import { Feeling, WorkoutLogEntry } from '../types';
+import { kgA11y, setA11yLabel } from '../utils/a11y';
 import { exportBackupFile, importBackupFile } from '../utils/backup';
 import { exportHistoryAsText } from '../utils/exportHistory';
 import { fmtKg, parseLocalDate } from '../utils/format';
@@ -502,6 +503,15 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
     }
   };
 
+  // Date en toutes lettres pour le lecteur d'écran ("lundi 27 octobre" plutôt que "lun. 27 oct.").
+  const formatDateA11y = (dateStr: string) => {
+    try {
+      return parseLocalDate(dateStr).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    } catch {
+      return dateStr;
+    }
+  };
+
   const monthGroups = groupByMonth(sessions);
 
   return (
@@ -517,7 +527,14 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* En-tête avec bouton Retour & Option Clear au clic long */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={onBack}
+          activeOpacity={0.8}
+          hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
+          accessibilityRole="button"
+          accessibilityLabel="Retour à l'accueil"
+        >
           <Icon name="arrow-left" size={18} color={THEME.colors.textPrimary} />
         </TouchableOpacity>
 
@@ -526,7 +543,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
           onLongPress={promptClearHistory}
           activeOpacity={0.8}
         >
-          <Text style={styles.title}>Historique</Text>
+          <Text style={styles.title} accessibilityRole="header">Historique</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -534,6 +551,10 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
           onPress={handleExport}
           disabled={isExporting || sessions.length === 0}
           activeOpacity={0.8}
+          hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
+          accessibilityRole="button"
+          accessibilityLabel="Exporter l'historique en texte"
+          accessibilityState={{ disabled: isExporting || sessions.length === 0, busy: isExporting }}
         >
           <Text style={styles.exportButtonText}>{isExporting ? '...' : 'Exporter'}</Text>
         </TouchableOpacity>
@@ -550,6 +571,10 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
             onPress={handleBackup}
             disabled={isBackingUp}
             activeOpacity={0.8}
+            hitSlop={{ top: 7, bottom: 7, left: 2, right: 2 }}
+            accessibilityRole="button"
+            accessibilityLabel="Sauvegarder toutes les données"
+            accessibilityState={{ disabled: isBackingUp, busy: isBackingUp }}
           >
             <Text style={styles.backupBtnText}>{isBackingUp ? '...' : 'Sauvegarder'}</Text>
           </TouchableOpacity>
@@ -558,6 +583,10 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
             onPress={confirmRestore}
             disabled={isRestoring}
             activeOpacity={0.8}
+            hitSlop={{ top: 7, bottom: 7, left: 2, right: 2 }}
+            accessibilityRole="button"
+            accessibilityLabel="Restaurer une sauvegarde"
+            accessibilityState={{ disabled: isRestoring, busy: isRestoring }}
           >
             <Text style={styles.backupBtnText}>{isRestoring ? '...' : 'Restaurer'}</Text>
           </TouchableOpacity>
@@ -579,7 +608,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
             return (
               <View key={group.label} style={{ gap: 10 }}>
                 <View style={styles.monthHeaderRow}>
-                  <Text style={styles.monthLabel}>{group.label}</Text>
+                  <Text style={styles.monthLabel} accessibilityRole="header">{group.label}</Text>
                   <Text style={styles.monthSummary}>
                     {group.sessions.length} séance{group.sessions.length > 1 ? 's' : ''} · {Math.round(monthVolume).toLocaleString('fr-FR')} kg
                   </Text>
@@ -603,6 +632,10 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                             style={styles.sessionHeaderTappable}
                             onPress={() => toggleSessionExpand(sessionKey)}
                             activeOpacity={0.8}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${formatDateA11y(session.date)}, ${session.workoutName.split(' (')[0]}. ${session.exercises.length} exercices, ${session.totalSets} séries, ${Math.round(session.totalVolume).toLocaleString('fr-FR')} kilos.${bilan ? ` ${bilan}` : ''}`}
+                            accessibilityHint={isExpanded ? 'Masque le détail' : 'Affiche le détail'}
+                            accessibilityState={{ expanded: isExpanded }}
                           >
                             <LinearGradient
                               colors={split.gradient}
@@ -636,11 +669,21 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                             style={styles.editSessionBtn}
                             onPress={() => openEditSessionModal(session)}
                             activeOpacity={0.8}
+                            hitSlop={{ top: 5, bottom: 5, left: 2, right: 2 }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Modifier la séance du ${formatDateA11y(session.date)}`}
                           >
                             <Text style={styles.editSessionBtnText}>Modifier</Text>
                           </TouchableOpacity>
 
-                          <TouchableOpacity onPress={() => toggleSessionExpand(sessionKey)} activeOpacity={0.8}>
+                          {/* Doublon visuel de l'en-tête (qui déplie déjà la séance) : masqué au lecteur d'écran. */}
+                          <TouchableOpacity
+                            onPress={() => toggleSessionExpand(sessionKey)}
+                            activeOpacity={0.8}
+                            hitSlop={{ top: 6, bottom: 6, left: 4, right: 6 }}
+                            accessible={false}
+                            importantForAccessibility="no-hide-descendants"
+                          >
                             <Animated.View style={[styles.chevronCircle, { transform: [{ rotate: rotation }] }]}>
                               <Icon name="chevron-down" size={16} color={THEME.colors.textSecondary} />
                             </Animated.View>
@@ -655,8 +698,13 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                                 <Text style={styles.exerciseDetailName}>{ex.exerciseName}</Text>
                                 <View style={styles.setsChipsRow}>
                                   {ex.sets.map((set, setIdx) => (
-                                    <View key={setIdx} style={styles.setChip}>
-                                      <Dot color={FEELING_DOT[set.feeling as Feeling]} size={7} />
+                                    <View
+                                      key={setIdx}
+                                      style={styles.setChip}
+                                      accessible
+                                      accessibilityLabel={setA11yLabel(set.setNumber, set.repsDone, set.weight, set.feeling as Feeling, set.markedEasy)}
+                                    >
+                                      <FeelingMark feeling={set.feeling as Feeling} />
                                       <Text style={styles.setChipText}>
                                         S{set.setNumber} · {set.repsDone} × {fmtKg(set.weight)}kg ·{' '}
                                         {resolveFeelingLabel(set.feeling as Feeling, set.markedEasy)}
@@ -680,7 +728,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
           <View style={styles.legendRow}>
             {(['EASY', 'MEDIUM', 'HARD'] as Feeling[]).map((f) => (
               <View key={f} style={styles.legendItem}>
-                <Dot color={FEELING_DOT[f]} size={8} />
+                <FeelingMark feeling={f} />
                 <Text style={styles.legendText}>{FEELING_LABEL[f]}</Text>
               </View>
             ))}
@@ -692,20 +740,24 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
           séries d'un coup (remplace les deux feuilles séparées d'avant, chacune avec son
           propre bouton "Modifier"). */}
       <BottomSheet visible={!!editingSession} onClose={() => setEditingSession(null)} maxHeightPercent={88}>
-        <Text style={styles.sheetTitle}>Modifier la séance</Text>
+        <Text style={styles.sheetTitle} accessibilityRole="header">Modifier la séance</Text>
         <Text style={styles.sheetSubtitle}>
           Séance du {editingSession ? formatDate(editingSession.date) : ''}
         </Text>
 
         <ScrollView style={styles.sessionEditScroll} showsVerticalScrollIndicator={false}>
           <Text style={styles.inputSectionLabel}>PROGRAMME ASSOCIÉ</Text>
-          <View style={styles.programToggleRow}>
+          <View style={styles.programToggleRow} accessibilityRole="radiogroup" accessibilityLabel="Programme associé">
             {[{ id: 1, label: 'Push' }, { id: 2, label: 'Pull' }, { id: 3, label: 'Legs' }].map((p) => (
               <TouchableOpacity
                 key={p.id}
                 style={[styles.programBtn, editingSession?.workoutId === p.id && styles.programBtnActive]}
                 onPress={() => setEditingSession((prev) => (prev ? { ...prev, workoutId: p.id } : prev))}
                 activeOpacity={0.8}
+                hitSlop={{ top: 3, bottom: 3 }}
+                accessibilityRole="radio"
+                accessibilityLabel={p.label}
+                accessibilityState={{ checked: editingSession?.workoutId === p.id }}
               >
                 <Text style={[styles.programBtnText, editingSession?.workoutId === p.id && styles.programBtnTextActive]}>
                   {p.label}
@@ -722,8 +774,14 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                   value={ex.name}
                   onChangeText={(text) => updateEditingExerciseName(exIdx, text)}
                   placeholderTextColor={THEME.colors.textMuted}
+                  accessibilityLabel={`Nom de l'exercice ${exIdx + 1}`}
                 />
-                <TouchableOpacity onPress={() => removeEditingExercise(exIdx)}>
+                <TouchableOpacity
+                  onPress={() => removeEditingExercise(exIdx)}
+                  hitSlop={{ top: 14, bottom: 14, left: 6, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Retirer l'exercice ${ex.name} de la séance`}
+                >
                   <Text style={styles.deleteSetLink}>Retirer</Text>
                 </TouchableOpacity>
               </View>
@@ -733,7 +791,12 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                   <View style={styles.setEditTop}>
                     <Text style={styles.setNumberBadge}>Série {s.setNumber}</Text>
                     {ex.sets.length > 1 && (
-                      <TouchableOpacity onPress={() => removeEditingSet(exIdx, setIdx)}>
+                      <TouchableOpacity
+                        onPress={() => removeEditingSet(exIdx, setIdx)}
+                        hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Retirer la série ${s.setNumber}`}
+                      >
                         <Text style={styles.deleteSetLink}>Retirer</Text>
                       </TouchableOpacity>
                     )}
@@ -743,11 +806,34 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                     <View style={styles.stepperBlock}>
                       <Text style={styles.stepperLabel}>POIDS</Text>
                       <View style={styles.stepperWrap}>
-                        <TouchableOpacity style={styles.stepBtn} onPress={() => adjustEditingSetWeight(exIdx, setIdx, -2.5)}>
+                        <TouchableOpacity
+                          style={styles.stepBtn}
+                          onPress={() => adjustEditingSetWeight(exIdx, setIdx, -2.5)}
+                          hitSlop={{ top: 7, bottom: 7, left: 4, right: 4 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Retirer 2,5 kilos à la série ${s.setNumber}`}
+                        >
                           <Text style={styles.stepBtnText}>−2,5</Text>
                         </TouchableOpacity>
-                        <Text style={styles.stepValText}>{fmtKg(s.weight)}kg</Text>
-                        <TouchableOpacity style={styles.stepBtn} onPress={() => adjustEditingSetWeight(exIdx, setIdx, 2.5)}>
+                        <Text
+                          style={styles.stepValText}
+                          accessibilityRole="adjustable"
+                          accessibilityLabel={`Poids de la série ${s.setNumber}`}
+                          accessibilityValue={{ text: kgA11y(s.weight) }}
+                          accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+                          onAccessibilityAction={(e) =>
+                            adjustEditingSetWeight(exIdx, setIdx, e.nativeEvent.actionName === 'increment' ? 2.5 : -2.5)
+                          }
+                        >
+                          {fmtKg(s.weight)}kg
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.stepBtn}
+                          onPress={() => adjustEditingSetWeight(exIdx, setIdx, 2.5)}
+                          hitSlop={{ top: 7, bottom: 7, left: 4, right: 4 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Ajouter 2,5 kilos à la série ${s.setNumber}`}
+                        >
                           <Text style={styles.stepBtnText}>+2,5</Text>
                         </TouchableOpacity>
                       </View>
@@ -756,25 +842,52 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                     <View style={styles.stepperBlock}>
                       <Text style={styles.stepperLabel}>REPS</Text>
                       <View style={styles.stepperWrap}>
-                        <TouchableOpacity style={styles.stepBtn} onPress={() => adjustEditingSetReps(exIdx, setIdx, -1)}>
+                        <TouchableOpacity
+                          style={styles.stepBtn}
+                          onPress={() => adjustEditingSetReps(exIdx, setIdx, -1)}
+                          hitSlop={{ top: 7, bottom: 7, left: 4, right: 4 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Retirer une rep à la série ${s.setNumber}`}
+                        >
                           <Text style={styles.stepBtnText}>−1</Text>
                         </TouchableOpacity>
-                        <Text style={styles.stepValText}>{s.repsDone}</Text>
-                        <TouchableOpacity style={styles.stepBtn} onPress={() => adjustEditingSetReps(exIdx, setIdx, 1)}>
+                        <Text
+                          style={styles.stepValText}
+                          accessibilityRole="adjustable"
+                          accessibilityLabel={`Reps de la série ${s.setNumber}`}
+                          accessibilityValue={{ text: `${s.repsDone} reps` }}
+                          accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+                          onAccessibilityAction={(e) =>
+                            adjustEditingSetReps(exIdx, setIdx, e.nativeEvent.actionName === 'increment' ? 1 : -1)
+                          }
+                        >
+                          {s.repsDone}
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.stepBtn}
+                          onPress={() => adjustEditingSetReps(exIdx, setIdx, 1)}
+                          hitSlop={{ top: 7, bottom: 7, left: 4, right: 4 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Ajouter une rep à la série ${s.setNumber}`}
+                        >
                           <Text style={styles.stepBtnText}>+1</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
                   </View>
 
-                  <View style={styles.feelingRow}>
+                  <View style={styles.feelingRow} accessibilityRole="radiogroup" accessibilityLabel={`Ressenti de la série ${s.setNumber}`}>
                     {(['EASY', 'MEDIUM', 'HARD'] as Feeling[]).map((f) => (
                       <TouchableOpacity
                         key={f}
                         style={[styles.feelBtn, s.feeling === f && { backgroundColor: FEELING_BG[f] }]}
                         onPress={() => setEditingSetFeeling(exIdx, setIdx, f)}
+                        hitSlop={{ top: 7, bottom: 7 }}
+                        accessibilityRole="radio"
+                        accessibilityLabel={FEELING_LABEL[f]}
+                        accessibilityState={{ checked: s.feeling === f }}
                       >
-                        <Dot color={FEELING_DOT[f]} size={7} />
+                        <FeelingMark feeling={f} />
                         <Text style={[styles.feelBtnText, s.feeling === f && { color: FEELING_INK[f] }]}>
                           {FEELING_LABEL[f]}
                         </Text>
@@ -784,22 +897,29 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                 </View>
               ))}
 
-              <TouchableOpacity style={styles.addSetBtn} onPress={() => addEditingSet(exIdx)} activeOpacity={0.8}>
+              <TouchableOpacity
+                style={styles.addSetBtn}
+                onPress={() => addEditingSet(exIdx)}
+                activeOpacity={0.8}
+                hitSlop={{ top: 4, bottom: 4 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Ajouter une série à ${ex.name}`}
+              >
                 <Text style={styles.addSetBtnText}>+ Ajouter une série</Text>
               </TouchableOpacity>
             </View>
           ))}
         </ScrollView>
 
-        <TouchableOpacity style={styles.primaryBtn} onPress={saveAllSessionChanges} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.primaryBtn} onPress={saveAllSessionChanges} activeOpacity={0.85} accessibilityRole="button">
           <Text style={styles.primaryBtnText}>Enregistrer les modifications</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.destructiveBtn} onPress={confirmDeleteSession} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.destructiveBtn} onPress={confirmDeleteSession} activeOpacity={0.8} accessibilityRole="button">
           <Text style={styles.destructiveBtnText}>Supprimer cette séance</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.outlineBtn} onPress={() => setEditingSession(null)} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.outlineBtn} onPress={() => setEditingSession(null)} activeOpacity={0.8} accessibilityRole="button">
           <Text style={styles.outlineBtnText}>Fermer</Text>
         </TouchableOpacity>
       </BottomSheet>

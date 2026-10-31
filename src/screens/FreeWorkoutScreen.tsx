@@ -2,6 +2,7 @@ import { useKeepAwake } from 'expo-keep-awake';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   Alert,
   Animated,
   Easing,
@@ -16,11 +17,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomSheet } from '../components/BottomSheet';
 import { Dot } from '../components/Dot';
+import { FeelingMark } from '../components/FeelingMark';
 import { Icon } from '../components/Icon';
 import { BuffRequin, preloadBuffRequinAssets } from '../components/BuffRequin';
-import { PlateBreakdown } from '../components/PlateBreakdown';
+import { PlateBreakdown, plateBreakdownA11yLabel } from '../components/PlateBreakdown';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
-import { FEELING_BG, FEELING_DOT, FEELING_INK } from '../constants/feeling';
+import { FEELING_BG, FEELING_INK } from '../constants/feeling';
 import {
   addCustomExercise,
   deleteExercise,
@@ -47,6 +49,7 @@ import {
   SetResult,
   WorkoutLogEntry,
 } from '../types';
+import { durationA11y, kgA11y, setA11yLabel } from '../utils/a11y';
 import { preloadBuffRequinSounds } from '../utils/audio';
 import { fmtKg, parseLocalDate } from '../utils/format';
 import { triggerLightHaptic, triggerMediumHaptic, triggerSuccessHaptic, triggerWarningHaptic } from '../utils/haptics';
@@ -467,6 +470,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
   const showEmptyToast = () => {
     setEmptyToastVisible(true);
+    AccessibilityInfo.announceForAccessibility('Valide au moins une série avant de terminer.');
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     toastTimeoutRef.current = setTimeout(() => setEmptyToastVisible(false), 2200);
   };
@@ -590,14 +594,22 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
               <Text style={[styles.headerBadgeText, { color: split.fg }]}>{workoutName.charAt(0)}</Text>
             </LinearGradient>
             <View style={styles.headerTitleCol}>
-              <Text style={styles.sessionTitle} numberOfLines={1}>{workoutName}</Text>
+              <Text style={styles.sessionTitle} numberOfLines={1} accessibilityRole="header">{workoutName}</Text>
             </View>
           </View>
 
           <View style={styles.headerRightBox}>
             <View>
               {isBuffRemanent && <Animated.View style={[styles.buffAura, { opacity: buffAuraOpacity }]} />}
-              <TouchableOpacity style={styles.timerBox} onPress={handleTimerTap} activeOpacity={1}>
+              <TouchableOpacity
+                style={styles.timerBox}
+                onPress={handleTimerTap}
+                activeOpacity={1}
+                accessibilityRole="timer"
+                accessibilityLabel={`Durée de la séance : ${durationA11y(elapsedSeconds)}${
+                  isBuffRemanent ? `. Buff requin actif encore ${durationA11y(buffSecondsLeft)}` : ''
+                }`}
+              >
                 <Dot color={THEME.colors.accent} size={7} />
                 <Text style={styles.timerText}>{formatElapsedTime(elapsedSeconds)}</Text>
                 {isBuffRemanent && (
@@ -611,6 +623,9 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
               style={styles.quitBtn}
               onPress={() => setIsQuitSheetOpen(true)}
               activeOpacity={0.8}
+              hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
+              accessibilityRole="button"
+              accessibilityLabel="Quitter la séance"
             >
               <Icon name="x" size={18} color={THEME.colors.textPrimary} />
             </TouchableOpacity>
@@ -646,6 +661,9 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                   setIsPickerSheetOpen(true);
                 }}
                 activeOpacity={0.8}
+                hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel="Changer d'exercice"
               >
                 <Text style={styles.changeExBtnText}>Changer d'exercice</Text>
                 <Icon name="chevron-down" size={15} color={THEME.colors.accentStrong} />
@@ -671,7 +689,13 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
             <Text style={styles.setCounterText}>Série {currentSetNum}</Text>
           </View>
 
-          <TouchableOpacity onPress={() => setIsPickerSheetOpen(true)} activeOpacity={0.8}>
+          <TouchableOpacity
+            onPress={() => setIsPickerSheetOpen(true)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={`Exercice : ${currentExercise?.name || 'aucun'}, série ${currentSetNum}`}
+            accessibilityHint="Ouvre la liste des exercices"
+          >
             <Text style={styles.currentExName} numberOfLines={2}>
               {currentExercise?.name || 'Sélectionner un exercice'}
             </Text>
@@ -682,8 +706,13 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
               <Text style={styles.lastPerfLabel}>DERNIÈRE FOIS · {formatLastPerfDate(currentLastPerf.date)}</Text>
               <View style={styles.lastPerfChipsRow}>
                 {currentLastPerf.sets.map((s, idx) => (
-                  <View key={idx} style={styles.lastPerfChip}>
-                    <Dot color={FEELING_DOT[s.feeling]} size={8} />
+                  <View
+                    key={idx}
+                    style={styles.lastPerfChip}
+                    accessible
+                    accessibilityLabel={setA11yLabel(idx + 1, s.repsDone, s.weight, s.feeling)}
+                  >
+                    <FeelingMark feeling={s.feeling} />
                     <Text style={styles.lastPerfChipText}>{fmtKg(s.weight)} × {s.repsDone}</Text>
                   </View>
                 ))}
@@ -715,6 +744,13 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                       onLongPress={() => setWarmupPopupIdx(idx)}
                       onPressOut={() => setWarmupPopupIdx(null)}
                       delayLongPress={350}
+                      hitSlop={{ top: 9, bottom: 9, left: 2, right: 2 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Échauffement : ${kgA11y(w.weight)}, ${w.reps} reps. ${
+                        currentExercise
+                          ? plateBreakdownA11yLabel(w.weight, currentExercise.baseWeight, currentExercise.category)
+                          : ''
+                      }`}
                     >
                       <Text style={styles.warmupChipText}>{fmtKg(w.weight)} kg × {w.reps}</Text>
                     </Pressable>
@@ -723,6 +759,9 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                     style={styles.warmupRestBtn}
                     onPress={handleWarmupRestButton}
                     activeOpacity={0.7}
+                    hitSlop={{ top: 9, bottom: 9, left: 2, right: 2 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Lancer un repos de 60 secondes après l'échauffement"
                   >
                     <Text style={styles.warmupRestBtnText}>⏱ Repos 60s</Text>
                   </TouchableOpacity>
@@ -745,33 +784,73 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           {/* Steppers pleine largeur */}
           <View style={styles.stepperContainer}>
             <View style={styles.stepperFullRow}>
-              <TouchableOpacity style={styles.stepperBtnLg} onPress={() => adjustWeight(-2.5)} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={styles.stepperBtnLg}
+                onPress={() => adjustWeight(-2.5)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Retirer 2,5 kilos"
+              >
                 <Text style={styles.stepperBtnLgText}>−2,5</Text>
               </TouchableOpacity>
-              <View style={styles.stepperCenterCol}>
+              <View
+                style={styles.stepperCenterCol}
+                accessible
+                accessibilityRole="adjustable"
+                accessibilityLabel="Charge"
+                accessibilityValue={{ text: kgA11y(currentWeight) }}
+                accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+                onAccessibilityAction={(e) => adjustWeight(e.nativeEvent.actionName === 'increment' ? 2.5 : -2.5)}
+              >
                 <Text style={styles.stepperRowLabel}>CHARGE</Text>
                 <View style={styles.stepperValueRow}>
                   <Text style={styles.stepperBigValue}>{fmtKg(currentWeight)}</Text>
                   <Text style={styles.stepperUnit}>kg</Text>
                 </View>
               </View>
-              <TouchableOpacity style={styles.stepperBtnLg} onPress={() => adjustWeight(2.5)} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={styles.stepperBtnLg}
+                onPress={() => adjustWeight(2.5)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Ajouter 2,5 kilos"
+              >
                 <Text style={styles.stepperBtnLgText}>+2,5</Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.stepperFullRow}>
-              <TouchableOpacity style={styles.stepperBtnLg} onPress={() => adjustReps(-1)} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={styles.stepperBtnLg}
+                onPress={() => adjustReps(-1)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Retirer une répétition"
+              >
                 <Text style={styles.stepperBtnLgText}>−1</Text>
               </TouchableOpacity>
-              <View style={styles.stepperCenterCol}>
+              <View
+                style={styles.stepperCenterCol}
+                accessible
+                accessibilityRole="adjustable"
+                accessibilityLabel="Répétitions"
+                accessibilityValue={{ text: `${currentReps} reps` }}
+                accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+                onAccessibilityAction={(e) => adjustReps(e.nativeEvent.actionName === 'increment' ? 1 : -1)}
+              >
                 <Text style={styles.stepperRowLabel}>RÉPÉTITIONS</Text>
                 <View style={styles.stepperValueRow}>
                   <Text style={styles.stepperBigValue}>{currentReps}</Text>
                   <Text style={styles.stepperUnit}>reps</Text>
                 </View>
               </View>
-              <TouchableOpacity style={styles.stepperBtnLg} onPress={() => adjustReps(1)} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={styles.stepperBtnLg}
+                onPress={() => adjustReps(1)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Ajouter une répétition"
+              >
                 <Text style={styles.stepperBtnLgText}>+1</Text>
               </TouchableOpacity>
             </View>
@@ -798,6 +877,10 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
               setEasyByExerciseId((prev) => ({ ...prev, [currentExercise.id]: !prev[currentExercise.id] }));
             }}
             activeOpacity={0.8}
+            hitSlop={{ top: 10, bottom: 10 }}
+            accessibilityRole="checkbox"
+            accessibilityLabel="Dernière série facile, 2 reps ou plus en réserve"
+            accessibilityState={{ checked: !!easyByExerciseId[currentExercise.id] }}
           >
             <View style={[styles.easyCheckbox, easyByExerciseId[currentExercise.id] && styles.easyCheckboxChecked]}>
               {!!easyByExerciseId[currentExercise.id] && <Icon name="check" size={14} color="#FFFFFF" />}
@@ -806,7 +889,13 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity style={styles.validateBtn} onPress={handleCompleteSet} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={styles.validateBtn}
+          onPress={handleCompleteSet}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Valider la série ${currentSetNum}`}
+        >
           <Text style={styles.validateBtnText}>Valider la série</Text>
           <Icon name="arrow-right" size={18} color="#FFFFFF" />
         </TouchableOpacity>
@@ -830,8 +919,13 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                   <Text style={styles.completedExName}>{cEx.exerciseName}</Text>
                   <View style={styles.completedSetsRow}>
                     {cEx.sets.map((s, sIdx) => (
-                      <View key={sIdx} style={[styles.setChip, { backgroundColor: FEELING_BG[s.feeling] }]}>
-                        <Dot color={FEELING_DOT[s.feeling]} size={7} />
+                      <View
+                        key={sIdx}
+                        style={[styles.setChip, { backgroundColor: FEELING_BG[s.feeling] }]}
+                        accessible
+                        accessibilityLabel={setA11yLabel(s.setNumber, s.repsDone, s.weight, s.feeling, s.markedEasy)}
+                      >
+                        <FeelingMark feeling={s.feeling} />
                         <Text style={[styles.setChipText, { color: FEELING_INK[s.feeling] }]}>
                           S{s.setNumber} · {s.repsDone} × {fmtKg(s.weight)}kg
                         </Text>
@@ -849,6 +943,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           style={styles.finishBtn}
           onPress={handleFinalizeSession}
           activeOpacity={0.85}
+          accessibilityRole="button"
         >
           <Text style={styles.finishBtnText}>Terminer la séance</Text>
         </TouchableOpacity>
@@ -856,7 +951,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
       {/* Toast "séance vide" */}
       {emptyToastVisible && (
-        <View style={styles.toast} pointerEvents="none">
+        <View style={styles.toast} pointerEvents="none" accessibilityLiveRegion="polite" accessibilityRole="alert">
           <Text style={styles.toastText}>Valide au moins une série avant de terminer.</Text>
         </View>
       )}
@@ -877,19 +972,19 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
       {/* FEUILLE : QUITTER LA SÉANCE */}
       <BottomSheet visible={isQuitSheetOpen} onClose={() => setIsQuitSheetOpen(false)} maxHeightPercent={50}>
-        <Text style={styles.sheetTitle}>Quitter la séance ?</Text>
+        <Text style={styles.sheetTitle} accessibilityRole="header">Quitter la séance ?</Text>
         <Text style={styles.sheetBody}>Les séries effectuées pendant cette séance ne seront pas enregistrées.</Text>
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => setIsQuitSheetOpen(false)} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => setIsQuitSheetOpen(false)} activeOpacity={0.85} accessibilityRole="button">
           <Text style={styles.primaryBtnText}>Continuer</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.destructiveBtn} onPress={onQuitSession} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.destructiveBtn} onPress={onQuitSession} activeOpacity={0.85} accessibilityRole="button">
           <Text style={styles.destructiveBtnText}>Quitter</Text>
         </TouchableOpacity>
       </BottomSheet>
 
       {/* FEUILLE : SÉLECTEUR D'EXERCICE DU CATALOGUE */}
       <BottomSheet visible={isPickerSheetOpen} onClose={() => setIsPickerSheetOpen(false)}>
-        <Text style={styles.sheetTitle}>Choisir un exercice</Text>
+        <Text style={styles.sheetTitle} accessibilityRole="header">Choisir un exercice</Text>
         <Text style={styles.sheetSubtitle}>{workoutName} · {catalogExercises.length} exercices</Text>
 
         <ScrollView style={styles.catalogScroll} showsVerticalScrollIndicator={false}>
@@ -902,6 +997,17 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 style={[styles.catalogItem, isSelected && { backgroundColor: split.tint }]}
                 onPress={() => handleSelectExercise(catEx)}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`${idx + 1}. ${catEx.name}, ${CATEGORY_SUB_LABEL[catEx.category]}, conseillé ${kgA11y(
+                  prescribedFor(catEx).weight
+                )}${doneSets.length > 0 ? `, ${doneSets.length} série${doneSets.length > 1 ? 's' : ''} faite${doneSets.length > 1 ? 's' : ''}` : ''}`}
+                accessibilityState={{ selected: isSelected }}
+                // La croix de suppression est imbriquée dans la ligne : sur Android, TalkBack ne
+                // l'atteint pas séparément, d'où cette action "Supprimer" sur la ligne elle-même.
+                accessibilityActions={[{ name: 'delete', label: 'Supprimer du catalogue' }]}
+                onAccessibilityAction={(e) => {
+                  if (e.nativeEvent.actionName === 'delete') handleDeleteCatalogExercise(catEx);
+                }}
               >
                 <View style={[styles.catalogIndexBadge, isSelected && styles.catalogIndexBadgeActive]}>
                   <Text style={[styles.catalogIndexText, isSelected && styles.catalogIndexTextActive]}>{idx + 1}</Text>
@@ -915,7 +1021,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 {doneSets.length > 0 && (
                   <View style={styles.catalogDoneDots}>
                     {doneSets.map((s, sIdx) => (
-                      <Dot key={sIdx} color={FEELING_DOT[s.feeling]} size={7} />
+                      <FeelingMark key={sIdx} feeling={s.feeling} />
                     ))}
                   </View>
                 )}
@@ -924,6 +1030,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                   onPress={() => handleDeleteCatalogExercise(catEx)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   activeOpacity={0.6}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Supprimer ${catEx.name} du catalogue`}
                 >
                   <Icon name="x" size={14} color={THEME.colors.textSecondary} />
                 </TouchableOpacity>
@@ -939,6 +1047,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
             setIsCreateSheetOpen(true);
           }}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Nouvel exercice"
         >
           <Text style={styles.secondaryBtnText}>+ Nouvel exercice</Text>
         </TouchableOpacity>
@@ -947,6 +1057,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           style={styles.outlineBtn}
           onPress={() => setIsPickerSheetOpen(false)}
           activeOpacity={0.8}
+          accessibilityRole="button"
         >
           <Text style={styles.outlineBtnText}>Fermer</Text>
         </TouchableOpacity>
@@ -954,7 +1065,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
       {/* FEUILLE : CRÉER UN EXERCICE PERSONNALISÉ */}
       <BottomSheet visible={isCreateSheetOpen} onClose={() => setIsCreateSheetOpen(false)} maxHeightPercent={70}>
-        <Text style={styles.sheetTitle}>Nouvel exercice</Text>
+        <Text style={styles.sheetTitle} accessibilityRole="header">Nouvel exercice</Text>
         <Text style={styles.sheetSubtitle}>Ajouter au catalogue permanent</Text>
 
         <Text style={styles.inputMiniLabel}>NOM DE LA MACHINE</Text>
@@ -964,13 +1075,18 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           onChangeText={setNewExName}
           placeholder="ex: HS Lateral Raise"
           placeholderTextColor={THEME.colors.textMuted}
+          accessibilityLabel="Nom de la machine"
         />
 
         <Text style={styles.inputMiniLabel}>TYPE D'ÉQUIPEMENT</Text>
-        <View style={styles.typeSegmentRow}>
+        <View style={styles.typeSegmentRow} accessibilityRole="radiogroup" accessibilityLabel="Type d'équipement">
           <TouchableOpacity
             style={[styles.typeSegment, newExCategory === 'HAMMER_STRENGTH' && styles.typeSegmentActive]}
             onPress={() => setNewExCategory('HAMMER_STRENGTH')}
+            hitSlop={{ top: 4, bottom: 4 }}
+            accessibilityRole="radio"
+            accessibilityLabel="Machine, 0 kilo à vide"
+            accessibilityState={{ checked: newExCategory === 'HAMMER_STRENGTH' }}
           >
             <Text style={[styles.typeSegmentText, newExCategory === 'HAMMER_STRENGTH' && styles.typeSegmentTextActive]}>
               Machine · 0 kg
@@ -979,6 +1095,10 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           <TouchableOpacity
             style={[styles.typeSegment, newExCategory === 'CABLE' && styles.typeSegmentActive]}
             onPress={() => setNewExCategory('CABLE')}
+            hitSlop={{ top: 4, bottom: 4 }}
+            accessibilityRole="radio"
+            accessibilityLabel="Poulie, 0 kilo à vide"
+            accessibilityState={{ checked: newExCategory === 'CABLE' }}
           >
             <Text style={[styles.typeSegmentText, newExCategory === 'CABLE' && styles.typeSegmentTextActive]}>
               Poulie · 0 kg
@@ -987,6 +1107,10 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           <TouchableOpacity
             style={[styles.typeSegment, newExCategory === 'FREE_WEIGHT' && styles.typeSegmentActive]}
             onPress={() => setNewExCategory('FREE_WEIGHT')}
+            hitSlop={{ top: 4, bottom: 4 }}
+            accessibilityRole="radio"
+            accessibilityLabel="Barre libre, barre de 20 kilos"
+            accessibilityState={{ checked: newExCategory === 'FREE_WEIGHT' }}
           >
             <Text style={[styles.typeSegmentText, newExCategory === 'FREE_WEIGHT' && styles.typeSegmentTextActive]}>
               Barre libre · 20 kg
@@ -1002,9 +1126,10 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           onChangeText={setNewExWeight}
           placeholder="40"
           placeholderTextColor={THEME.colors.textMuted}
+          accessibilityLabel="Charge initiale en kilos"
         />
 
-        <TouchableOpacity style={styles.primaryBtn} onPress={handleCreateCustomExercise} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.primaryBtn} onPress={handleCreateCustomExercise} activeOpacity={0.85} accessibilityRole="button">
           <Text style={styles.primaryBtnText}>Créer & sélectionner</Text>
         </TouchableOpacity>
 
@@ -1012,6 +1137,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           style={styles.outlineBtn}
           onPress={() => setIsCreateSheetOpen(false)}
           activeOpacity={0.8}
+          accessibilityRole="button"
         >
           <Text style={styles.outlineBtnText}>Annuler</Text>
         </TouchableOpacity>

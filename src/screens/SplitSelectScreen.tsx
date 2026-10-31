@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
   Image,
@@ -37,6 +37,14 @@ function formatLastSessionMeta(days: number | null): string {
   if (days === 0) return "Aujourd'hui";
   if (days === 1) return 'Hier';
   return `il y a ${days} j`;
+}
+
+// Même information, rédigée pour le lecteur d'écran ("il y a 5 jours" plutôt que "5 j").
+function formatLastSessionMetaA11y(days: number | null): string {
+  if (days === null) return 'jamais fait';
+  if (days === 0) return "fait aujourd'hui";
+  if (days === 1) return 'fait hier';
+  return `fait il y a ${days} jours`;
 }
 
 // Charge réelle (nb d'exercices du catalogue + dernière séance) par split, pour la méta
@@ -88,6 +96,8 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
   const dashboardSummary = getDashboardSummary();
   const splitMeta = getSplitMeta(workouts);
   const toFollowWorkoutId = getToFollowWorkoutId(workouts, splitMeta);
+  // Tiroir "Ton progrès" déplié : le reste de l'écran est masqué au lecteur d'écran.
+  const [isDashboardExpanded, setIsDashboardExpanded] = useState(false);
 
   const handleSelect = (wId: number, wName: string) => {
     triggerMediumHaptic();
@@ -103,7 +113,11 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView
+        style={styles.safeArea}
+        importantForAccessibility={isDashboardExpanded ? 'no-hide-descendants' : 'auto'}
+        accessibilityElementsHidden={isDashboardExpanded}
+      >
       <View style={styles.container}>
         {/* En-tête officiel mooscles */}
         <View style={styles.headerRow}>
@@ -111,6 +125,7 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
             <Image
               source={require('../../assets/icon.png')}
               style={styles.brandLogo}
+              accessible={false}
             />
             <View>
               <Text style={styles.brandTitle}>
@@ -122,6 +137,9 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
 
           <TouchableOpacity
             style={styles.historyBtn}
+            hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
+            accessibilityRole="button"
+            accessibilityLabel="Historique"
             onPress={() => {
               triggerLightHaptic();
               onOpenHistory();
@@ -151,7 +169,7 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
 
         {/* Titre de sélection */}
         <View style={styles.stepTitleBox}>
-          <Text style={styles.stepHeading}>Choisis ton split</Text>
+          <Text style={styles.stepHeading} accessibilityRole="header">Choisis ton split</Text>
           <Text style={styles.stepSubheading}>Quelle séance attaques-tu aujourd'hui ?</Text>
         </View>
 
@@ -165,6 +183,9 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
             return (
               <Pressable
                 key={w.id}
+                accessibilityRole="button"
+                accessibilityLabel={`${w.name}${isToFollow ? ', à suivre' : ''}. ${SPLIT_SUBTITLES[w.id].replace(/ • /g, ', ')}. ${meta.exerciseCount} exercices, ${formatLastSessionMetaA11y(meta.daysSinceLastSession)}`}
+                accessibilityHint="Démarre la séance"
                 onPress={() => handleSelect(w.id, w.name)}
                 style={({ pressed }) => [styles.splitCardWrap, pressed && styles.splitCardPressed]}
               >
@@ -175,7 +196,7 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
                   style={styles.splitCard}
                 >
                   {/* Lettre en filigrane */}
-                  <Text style={styles.watermarkLetter} numberOfLines={1}>
+                  <Text style={styles.watermarkLetter} numberOfLines={1} accessible={false} importantForAccessibility="no">
                     {SPLIT_LETTERS[w.id]}
                   </Text>
 
@@ -211,7 +232,7 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
       </View>
       </SafeAreaView>
 
-      <DashboardSheet summary={dashboardSummary} />
+      <DashboardSheet summary={dashboardSummary} onExpandedChange={setIsDashboardExpanded} />
     </View>
   );
 };

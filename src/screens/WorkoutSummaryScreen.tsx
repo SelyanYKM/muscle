@@ -8,12 +8,12 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { Dot } from '../components/Dot';
+import { FeelingMark } from '../components/FeelingMark';
 import { Icon } from '../components/Icon';
-import { FEELING_DOT } from '../constants/feeling';
 import { saveSessionFeedback } from '../database/db';
 import { THEME } from '../theme';
 import { ProgressionDecision, SessionStatus, SetResult } from '../types';
+import { kgA11y, setA11yLabel } from '../utils/a11y';
 import { fmtKg } from '../utils/format';
 import { triggerLightHaptic } from '../utils/haptics';
 
@@ -48,8 +48,12 @@ const FeelingScaleRow: React.FC<{
   onChange: (n: number | null) => void;
 }> = ({ label, endLabels, value, onChange }) => (
   <View style={styles.feelingScaleBlock}>
-    <Text style={styles.feelingScaleLabel}>{label}</Text>
-    <View style={styles.feelingScaleRow}>
+    <Text style={styles.feelingScaleLabel} importantForAccessibility="no">{label}</Text>
+    <View
+      style={styles.feelingScaleRow}
+      accessibilityRole="radiogroup"
+      accessibilityLabel={label.charAt(0) + label.slice(1).toLowerCase()}
+    >
       {FEELING_SCALE.map((n) => (
         <TouchableOpacity
           key={n}
@@ -59,12 +63,16 @@ const FeelingScaleRow: React.FC<{
             onChange(value === n ? null : n);
           }}
           activeOpacity={0.8}
+          hitSlop={{ top: 2, bottom: 2 }}
+          accessibilityRole="radio"
+          accessibilityLabel={`${n} sur 5${n === 1 ? `, ${endLabels[0]}` : n === 5 ? `, ${endLabels[1]}` : ''}`}
+          accessibilityState={{ checked: value === n }}
         >
           <Text style={[styles.feelingPillText, value === n && styles.feelingPillTextActive]}>{n}</Text>
         </TouchableOpacity>
       ))}
     </View>
-    <View style={styles.feelingScaleEndsRow}>
+    <View style={styles.feelingScaleEndsRow} importantForAccessibility="no-hide-descendants">
       <Text style={styles.feelingScaleEndText}>{endLabels[0]}</Text>
       <Text style={styles.feelingScaleEndText}>{endLabels[1]}</Text>
     </View>
@@ -164,25 +172,33 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
           >
             <Icon name="check" size={30} color={split.fg} />
           </LinearGradient>
-          <Text style={styles.victoryTitle}>Séance terminée</Text>
+          <Text style={styles.victoryTitle} accessibilityRole="header">Séance terminée</Text>
           <Text style={styles.workoutSubtitle}>{summary.workoutName} · {todayLabel}</Text>
         </View>
 
         {/* Bloc Statistiques */}
         <View style={styles.statsBlock}>
-          <View style={styles.statCol}>
+          <View style={styles.statCol} accessible accessibilityLabel={`Durée : ${summary.durationMinutes} minutes`}>
             <Text style={styles.statValue}>{summary.durationMinutes}</Text>
             <Text style={styles.statUnit}>min</Text>
             <Text style={styles.statLabel}>DURÉE</Text>
           </View>
           <View style={styles.statDivider} />
-          <View style={styles.statCol}>
+          <View
+            style={styles.statCol}
+            accessible
+            accessibilityLabel={`Volume : ${Math.round(summary.totalVolume).toLocaleString('fr-FR')} kilos`}
+          >
             <Text style={styles.statValue}>{Math.round(summary.totalVolume).toLocaleString('fr-FR')}</Text>
             <Text style={styles.statUnit}>kg</Text>
             <Text style={styles.statLabel}>VOLUME</Text>
           </View>
           <View style={styles.statDivider} />
-          <View style={styles.statCol}>
+          <View
+            style={styles.statCol}
+            accessible
+            accessibilityLabel={`${summary.exerciseSummaries.reduce((acc, e) => acc + e.results.length, 0)} séries`}
+          >
             <Text style={styles.statValue}>
               {summary.exerciseSummaries.reduce((acc, e) => acc + e.results.length, 0)}
             </Text>
@@ -193,7 +209,7 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
 
         {/* Section Calculateur de Surcharge Progressive */}
         <View style={{ gap: 10 }}>
-          <Text style={styles.sectionHeading}>BILAN DE SURCHARGE</Text>
+          <Text style={styles.sectionHeading} accessibilityRole="header">BILAN DE SURCHARGE</Text>
 
           <View style={{ gap: 12 }}>
             {summary.exerciseSummaries.map((item, index) => {
@@ -216,8 +232,13 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
                   {/* Résumé des séries */}
                   <View style={styles.setsSummaryRow}>
                     {item.results.map((res, rIdx) => (
-                      <View key={rIdx} style={styles.setResultBadge}>
-                        <Dot color={FEELING_DOT[res.feeling]} size={7} />
+                      <View
+                        key={rIdx}
+                        style={styles.setResultBadge}
+                        accessible
+                        accessibilityLabel={setA11yLabel(res.setNumber, res.repsDone, res.weight, res.feeling, res.markedEasy)}
+                      >
+                        <FeelingMark feeling={res.feeling} />
                         <Text style={styles.setResultText}>
                           S{res.setNumber} · {res.repsDone} × {fmtKg(res.weight)}kg
                         </Text>
@@ -228,7 +249,10 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
                   <View style={styles.cardHairline} />
 
                   {/* Instruction et Prochaine charge */}
-                  <View>
+                  <View
+                    accessible
+                    accessibilityLabel={`Prochaine séance : ${kgA11y(item.decision.nextWeight)}, ${item.decision.nextTargetReps} reps. ${item.decision.reason}`}
+                  >
                     <Text style={styles.nextSessionLabel}>PROCHAINE SÉANCE</Text>
                     <Text style={[styles.nextWeightsText, { color: ink }]}>
                       {fmtKg(item.decision.nextWeight)} kg × {item.decision.nextTargetReps}
@@ -243,7 +267,7 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
 
         {/* Ressenti mental/physique + étirements (optionnel) */}
         <View style={{ gap: 10 }}>
-          <Text style={styles.sectionHeading}>RESSENTI DE LA SÉANCE</Text>
+          <Text style={styles.sectionHeading} accessibilityRole="header">RESSENTI DE LA SÉANCE</Text>
 
           <View style={styles.feelingCard}>
             <FeelingScaleRow
@@ -267,6 +291,10 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
                 setStretched((prev) => !prev);
               }}
               activeOpacity={0.8}
+              hitSlop={{ top: 10, bottom: 10 }}
+              accessibilityRole="checkbox"
+              accessibilityLabel="Étirements faits"
+              accessibilityState={{ checked: stretched }}
             >
               <View style={[styles.stretchCheckbox, stretched && styles.stretchCheckboxChecked]}>
                 {stretched && <Icon name="check" size={14} color="#FFFFFF" />}
@@ -277,7 +305,7 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
         </View>
 
         {/* Bouton de Fermeture */}
-        <TouchableOpacity style={styles.closeButton} onPress={handleClose} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.closeButton} onPress={handleClose} activeOpacity={0.85} accessibilityRole="button">
           <Text style={styles.closeButtonText}>Enregistrer & revenir</Text>
         </TouchableOpacity>
       </Animated.View>

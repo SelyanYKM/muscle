@@ -47,48 +47,61 @@ export const BarChart: React.FC<BarChartProps> = ({ data, color, height = 120, f
   const barWidth = data.length > 0 ? CHART_WIDTH / data.length - BAR_GAP : 0;
   const lastIdx = data.length - 1;
 
+  const valueText = (v: number) => (formatValue ? formatValue(v) : String(v));
+
   return (
     <View>
       {selectedIdx !== null && data[selectedIdx] && (
         <View style={styles.tooltipRow}>
           <Text style={styles.tooltipText}>
-            {data[selectedIdx].label} · {formatValue ? formatValue(data[selectedIdx].value) : data[selectedIdx].value}
+            {data[selectedIdx].label} · {valueText(data[selectedIdx].value)}
           </Text>
         </View>
       )}
 
-      <Svg width={CHART_WIDTH} height={height}>
-        {/* Ligne de base, discrète */}
-        <Line x1={0} y1={height - 1} x2={CHART_WIDTH} y2={height - 1} stroke="rgba(0, 41, 107, 0.07)" strokeWidth={1} />
+      <View>
+        <Svg width={CHART_WIDTH} height={height} accessible={false} importantForAccessibility="no-hide-descendants">
+          {/* Ligne de base, discrète */}
+          <Line x1={0} y1={height - 1} x2={CHART_WIDTH} y2={height - 1} stroke="rgba(0, 41, 107, 0.07)" strokeWidth={1} />
 
-        {data.map((d, idx) => {
-          const barHeight = d.value > 0 ? Math.max(3, (d.value / maxValue) * (height - 8)) : 2;
-          const x = idx * (barWidth + BAR_GAP);
-          const y = height - barHeight - 1;
-          const isSelected = selectedIdx === idx;
-          // La semaine courante (dernière barre) ressort par défaut, les autres sont en retrait.
-          const opacity = isSelected ? 1 : idx === lastIdx ? 1 : 0.45;
+          {data.map((d, idx) => {
+            const barHeight = d.value > 0 ? Math.max(3, (d.value / maxValue) * (height - 8)) : 2;
+            const x = idx * (barWidth + BAR_GAP);
+            const y = height - barHeight - 1;
+            const isSelected = selectedIdx === idx;
+            // La semaine courante (dernière barre) ressort par défaut, les autres sont en retrait.
+            const opacity = isSelected ? 1 : idx === lastIdx ? 1 : 0.45;
 
-          return (
-            <Path key={idx} d={roundedBarPath(x, y, Math.max(2, barWidth), barHeight)} fill={color} opacity={opacity} />
-          );
-        })}
-      </Svg>
+            return (
+              <Path key={idx} d={roundedBarPath(x, y, Math.max(2, barWidth), barHeight)} fill={color} opacity={opacity} />
+            );
+          })}
+        </Svg>
 
-      {/* Zones tactiles superposées (une par barre) pour afficher la valeur au tap */}
-      <View style={styles.touchOverlay}>
-        {data.map((d, idx) => (
-          <TouchableOpacity
-            key={idx}
-            style={{ width: barWidth + BAR_GAP }}
-            onPress={() => setSelectedIdx(selectedIdx === idx ? null : idx)}
-            activeOpacity={0.6}
-          >
-            <Text style={styles.axisLabel} numberOfLines={1}>
+        {/* Étiquettes de l'axe (visuelles seulement : chaque colonne tactile porte déjà la sienne) */}
+        <View style={styles.labelsRow} importantForAccessibility="no-hide-descendants">
+          {data.map((d, idx) => (
+            <Text key={idx} style={[styles.axisLabel, { width: barWidth + BAR_GAP }]} numberOfLines={1}>
               {d.label}
             </Text>
-          </TouchableOpacity>
-        ))}
+          ))}
+        </View>
+
+        {/* Zones tactiles superposées : une colonne par barre, sur toute la hauteur (barre +
+            étiquette), au lieu de la seule étiquette de quelques pixels sous le graphique. */}
+        <View style={[StyleSheet.absoluteFill, styles.touchOverlay]}>
+          {data.map((d, idx) => (
+            <TouchableOpacity
+              key={idx}
+              style={{ width: barWidth + BAR_GAP, height: '100%' }}
+              onPress={() => setSelectedIdx(selectedIdx === idx ? null : idx)}
+              activeOpacity={0.6}
+              accessibilityRole="button"
+              accessibilityLabel={`${d.label} : ${valueText(d.value)}`}
+              accessibilityState={{ selected: selectedIdx === idx }}
+            />
+          ))}
+        </View>
       </View>
     </View>
   );
@@ -104,9 +117,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: THEME.colors.textPrimary,
   },
-  touchOverlay: {
+  labelsRow: {
     flexDirection: 'row',
     marginTop: 4,
+  },
+  touchOverlay: {
+    flexDirection: 'row',
   },
   axisLabel: {
     fontFamily: THEME.fonts.sans,

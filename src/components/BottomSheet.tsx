@@ -13,8 +13,22 @@ interface BottomSheetProps {
 export const BottomSheet: React.FC<BottomSheetProps> = ({ visible, onClose, children, maxHeightPercent = 84 }) => (
   <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
     <View style={styles.backdrop}>
-      <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
-      <View style={[styles.sheet, { maxHeight: `${maxHeightPercent}%` as const }]}>{children}</View>
+      {/* Fond cliquable pour refermer : masqué au lecteur d'écran (chaque feuille a son propre
+          bouton Fermer / Annuler), sinon TalkBack s'arrête sur un grand bouton sans nom. */}
+      <TouchableOpacity
+        style={StyleSheet.absoluteFill}
+        activeOpacity={1}
+        onPress={onClose}
+        accessible={false}
+        importantForAccessibility="no"
+      />
+      <View
+        style={[styles.sheet, { maxHeight: `${maxHeightPercent}%` as const }]}
+        accessibilityViewIsModal
+        onAccessibilityEscape={onClose}
+      >
+        {children}
+      </View>
     </View>
   </Modal>
 );

@@ -1,6 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   Animated,
   AppState,
   AppStateStatus,
@@ -13,6 +14,7 @@ import {
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { THEME } from '../theme';
+import { durationA11y, kgA11y } from '../utils/a11y';
 import { playRestTimerAlarm } from '../utils/audio';
 import { fmtKg, formatMinSec } from '../utils/format';
 import { triggerLightHaptic, triggerTimerEndHaptic, triggerWarningHaptic } from '../utils/haptics';
@@ -92,6 +94,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     hideRestTimerLiveNotification();
     triggerTimerEndHaptic();
     playRestTimerAlarm();
+    AccessibilityInfo.announceForAccessibility('Repos terminé');
     onFinish();
   };
 
@@ -122,6 +125,11 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
 
     if (remaining === 4 || remaining === 3 || remaining === 2) {
       triggerWarningHaptic();
+    }
+
+    // Repère vocal pour le lecteur d'écran (sans effet quand TalkBack / VoiceOver est coupé).
+    if (remaining === 10) {
+      AccessibilityInfo.announceForAccessibility('Encore 10 secondes de repos');
     }
   };
 
@@ -284,7 +292,12 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
           <Text style={styles.topSub}>{isPaused ? 'EN PAUSE' : 'RÉCUPÉRATION'}</Text>
 
           {/* Anneau de progression avec chronomètre centré */}
-          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+          <Animated.View
+            style={{ transform: [{ scale: pulseAnim }] }}
+            accessible
+            accessibilityRole="timer"
+            accessibilityLabel={`${isPaused ? 'Repos en pause' : 'Repos'} : ${durationA11y(secondsRemaining)} restantes sur ${durationA11y(totalSeconds)}`}
+          >
             <Svg width={RING_SIZE} height={RING_SIZE}>
               <Circle
                 cx={RING_SIZE / 2}
@@ -316,27 +329,56 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
           </Animated.View>
 
           {/* Pause/Reprendre — reflète et pilote le même état que les boutons de la notification */}
-          <TouchableOpacity style={styles.pauseToggleBtn} onPress={togglePause} activeOpacity={0.75}>
+          <TouchableOpacity
+            style={styles.pauseToggleBtn}
+            onPress={togglePause}
+            activeOpacity={0.75}
+            hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
+            accessibilityRole="button"
+            accessibilityLabel={isPaused ? 'Reprendre le repos' : 'Mettre le repos en pause'}
+          >
             <Text style={styles.pauseToggleText}>{isPaused ? '▶  Reprendre' : '⏸  Pause'}</Text>
           </TouchableOpacity>
 
           {/* Boutons d'ajustement du repos */}
           <View style={styles.adjustRow}>
-            <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(-15)} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.adjustBtn}
+              onPress={() => addTime(-15)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Retirer 15 secondes"
+            >
               <Text style={styles.adjustBtnText}>−15s</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(30)} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.adjustBtn}
+              onPress={() => addTime(30)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Ajouter 30 secondes"
+            >
               <Text style={styles.adjustBtnText}>+30s</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(60)} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.adjustBtn}
+              onPress={() => addTime(60)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Ajouter 60 secondes"
+            >
               <Text style={styles.adjustBtnText}>+60s</Text>
             </TouchableOpacity>
           </View>
 
           {/* Teaser Prochaine Série */}
-          <View style={styles.nextSetInfoCard}>
+          <View
+            style={styles.nextSetInfoCard}
+            accessible
+            accessibilityLabel={`Prochaine série : ${exerciseName}, série ${nextSetNumber}, ${kgA11y(nextWeight)}, ${nextReps} reps`}
+          >
             <Text style={styles.nextSetLabel}>PROCHAINE SÉRIE</Text>
             <Text style={styles.nextSetTitle} numberOfLines={1}>
               {exerciseName}
@@ -347,13 +389,27 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
           </View>
 
           {/* Bouton Prêt */}
-          <TouchableOpacity style={styles.skipButton} onPress={handleSkip} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={styles.skipButton}
+            onPress={handleSkip}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityHint="Termine le repos"
+          >
             <Text style={styles.skipButtonText}>Je suis prêt</Text>
           </TouchableOpacity>
 
           {/* Correction d'une erreur de validation, sans attendre la fin du repos */}
           {onUndo && (
-            <TouchableOpacity style={styles.undoLink} onPress={handleUndo} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.undoLink}
+              onPress={handleUndo}
+              activeOpacity={0.7}
+              hitSlop={{ top: 9, bottom: 9, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Corriger la dernière série"
+              accessibilityHint="Annule la série que tu viens de valider"
+            >
               <Text style={styles.undoLinkText}>Erreur ? Corriger la dernière série</Text>
             </TouchableOpacity>
           )}

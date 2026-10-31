@@ -1,7 +1,7 @@
 import React from 'react';
 import Svg, { Path } from 'react-native-svg';
 
-export type IconName = 'arrow-right' | 'arrow-left' | 'x' | 'chevron-down' | 'check';
+export type IconName = 'arrow-right' | 'arrow-left' | 'x' | 'chevron-down' | 'check' | 'minus';
 
 // Tracés Lucide (viewBox 24x24), repris tels quels du handoff design v2.
 const ICON_PATHS: Record<IconName, string[]> = {
@@ -10,6 +10,7 @@ const ICON_PATHS: Record<IconName, string[]> = {
   x: ['M18 6 6 18', 'm6 6 12 12'],
   'chevron-down': ['m6 9 6 6 6-6'],
   check: ['M20 6 9 17l-5-5'],
+  minus: ['M5 12h14'],
 };
 
 interface IconProps {
