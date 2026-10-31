@@ -708,6 +708,29 @@ export function getLastExercisePerformance(exerciseId: number): LastExercisePerf
   }
 }
 
+/**
+ * Date de la dernière séance, tous exercices confondus, STRICTEMENT avant `beforeDate`
+ * ('YYYY-MM-DD'). Sert au moteur de progression : une longue absence sur un exercice pèse moins
+ * lourd si l'utilisatrice a continué à s'entraîner entre-temps.
+ */
+export function getLastTrainingDateBefore(beforeDate: string): string | null {
+  if (!db || Platform.OS === 'web') {
+    const dates = memoryLogs.map((l) => l.date).filter((d) => d < beforeDate);
+    return dates.length > 0 ? dates.reduce((a, b) => (a > b ? a : b)) : null;
+  }
+
+  try {
+    const row = db.getFirstSync<{ d: string | null }>(
+      `SELECT MAX(date) AS d FROM workout_logs WHERE date < ?;`,
+      [beforeDate]
+    );
+    return row?.d ?? null;
+  } catch (error) {
+    console.error('Erreur getLastTrainingDateBefore:', error);
+    return null;
+  }
+}
+
 export function getAllCatalogExercises(workoutId?: number): ConfiguredExercise[] {
   if (!db || Platform.OS === 'web') {
     return workoutId ? memoryExercises.filter((e) => e.workoutId === workoutId) : memoryExercises;

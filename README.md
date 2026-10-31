@@ -14,9 +14,12 @@ Application mobile Android, 100 % hors-ligne, pour suivre un programme Push / Pu
 - Passage automatique à l'exercice suivant du catalogue une fois le nombre de séries prévu atteint.
 
 **Algorithme de progression (double progression)**
-- Deux modes par exercice : `CHARGE` (séries identiques, poids qui monte — compound/machine) et `REPS_PUIS_CHARGE` (les répétitions montent dans une plage avant que le poids augmente — isolation/poulie).
-- Classification de chaque séance (réussie facile / réussie / partielle / ratée) à partir des répétitions réellement faites, avec déchargement uniquement après 2 échecs consécutifs ou 3 séances sans réussite — jamais sur une seule mauvaise séance.
-- Réduction automatique de la charge après une longue coupure (14/30 jours), calibration libre au premier lancement d'un nouvel exercice.
+- Deux modes par exercice : `CHARGE` (séries identiques, poids qui monte — compound/machine) et `REPS_PUIS_CHARGE` (les répétitions montent dans une plage avant que le poids augmente — isolation/poulie). Un exercice en `CHARGE` passe de lui-même en double progression tant que sa charge est trop légère pour encaisser un palier.
+- Classification de chaque séance au volume réellement fait (réussie facile / réussie / presque / ratée / allégée) : rater une ou deux reps en fin de séance n'est pas un échec, et une charge baissée en cours de route ne vaut jamais une hausse.
+- Déchargement uniquement après 3 échecs ou 4 séances sans réussite — jamais sur une seule mauvaise séance.
+- Réduction de la charge après une longue coupure (14/30 jours), proposée dès la séance du retour ; calibration de la charge et de l'objectif d'après les reps faites au premier lancement d'un exercice.
+
+Détail des règles : voir [Algorithme de progression](#-algorithme-de-progression).
 
 **Bilan & historique**
 - Fin de séance : statut et prochaine charge par exercice, ressenti mental/physique et étirements (optionnel).
@@ -29,6 +32,58 @@ Application mobile Android, 100 % hors-ligne, pour suivre un programme Push / Pu
 
 **Catalogue**
 - Exercices Hammer Strength (machines), finishers barre libre, exercices poulie — catalogue géré en base, modifiable (ajout/suppression) directement dans l'app.
+
+---
+
+## 🧮 Algorithme de progression
+
+Moteur pur dans `src/engine/progressionV2.ts` (aucune dépendance à la base ni à React). L'état mémorisé par exercice (`ExerciseProgressionState`) n'a pas changé de forme depuis la v2.
+
+**Deux temps**
+- **Avant la séance** — `getPrescription()` (ou `prescriptionFor(exercice)` dans les écrans) donne la charge et l'objectif à afficher, réduction de reprise comprise. Ne jamais lire `currentWeight` du catalogue directement pour l'affichage.
+- **Après la séance** — `suggestNextPrescription()` reçoit **toutes** les séries loguées, les compare à cette prescription et renvoie le nouvel état à enregistrer.
+
+**Séries prises en compte** (`selectWorkingSets`) — le moteur est pensé pour des séries droites (ex. 3×8 à la même charge) :
+- Séries droites : au moins le nombre de séries prévu à une même charge. Une série test, une série bonus ou une série de retour au calme à une autre charge est ignorée.
+- Séance irrégulière (montée en charge, charge baissée en cours de route) : une série plus lourde que prévu et ratée est une tentative, ignorée ; on garde ensuite les premières séries, et la charge retenue est la plus légère. Une montée en charge 60 / 70 / 75 ne fait donc pas progresser.
+- Moins de séries que prévu (tentatives exclues) : séance incomplète, rien ne bouge.
+
+**Classement de la séance** — reps plafonnées à l'objectif, rapportées au volume visé :
+
+| Statut | Condition | Effet |
+|---|---|---|
+| Réussie facile | toutes les séries ≥ objectif, case « facile » ou ≥ objectif + 2 partout | +2 paliers si ça reste sous +10 % de la charge, sinon +1 |
+| Réussie | toutes les séries ≥ objectif | +1 palier (CHARGE) ou +1 rep (double progression) |
+| Presque | ≥ 85 % du volume | charge maintenue |
+| Ratée | < 85 % du volume | charge maintenue, compte comme un échec |
+| Allégée | séance irrégulière avec une série sous la charge prévue, reps tenues | charge maintenue, jamais de hausse |
+| Incomplète | moins de séries que prévu | rien ne bouge |
+| Calibration | première séance sur l'exercice | charge et objectif estimés (Epley) d'après les reps faites, à ±20 % |
+
+Exemple sur 3×8 : 8/8/7 ou 8/7/6 = presque ; 8/6/6 = ratée.
+
+**Charge différente de la prescription** — en séries droites, le moteur suit la charge réellement choisie :
+- Plus lourde et tenue (réussie ou presque) : la nouvelle charge est adoptée. Plus lourde et ratée : retour à la prescription, sans compter d'échec.
+- Plus légère : elle devient la référence et la progression repart d'elle, sans dépasser la prescription d'origine (3×8 à 45 kg pour 50 prévus → 47,5 kg).
+- Séance irrégulière avec une série sous la prescription : pas de hausse ; la séance compte comme « sans réussite ».
+
+**Double progression** (`REPS_PUIS_CHARGE`)
+- L'objectif monte de 1 rep (2 si facile), et vise toujours au moins une rep de plus que la dernière perf sur toutes les séries.
+- Haut de la plage atteint partout : +1 palier, objectif ramené au bas de la plage.
+- **Charge légère** : en mode `CHARGE`, si un palier dépasse 10 % de la charge (ex. 8 → 10 kg = +25 %), l'exercice suit une double progression sur la plage objectif → objectif + 4 (8-12) jusqu'à ce que la charge soit assez lourde.
+
+**Décharge** — après 3 séances ratées depuis la dernière réussite, ou 4 séances sans réussite (presque, ratée, allégée) :
+- `CHARGE` : environ −10 % après 3 échecs, au palier le plus proche (52,5 → 47,5 kg) ; −1 palier seulement pour une stagnation (des « presque » qui s'accumulent, ex. 8/8/7 quatre fois).
+- Double progression : retour au bas de la plage, puis −1 palier si on y est déjà.
+
+**Reprise après une pause** — calculée sur la date de la dernière séance de l'exercice :
+- plus de 14 jours : −10 % ; plus de 30 jours : −20 % ;
+- un cran de moins si une autre séance a eu lieu dans les 14 derniers jours (`getLastTrainingDateBefore()` dans `db.ts`) ;
+- la réduction est proposée **avant** la séance du retour, qui est ensuite évaluée normalement par rapport à elle ; les compteurs d'échecs repartent de zéro.
+
+**Réglages** — toutes les valeurs (85 %, 3 échecs, 4 séances, 10 %, ±20 %…) sont des constantes exportées en tête de `progressionV2.ts`.
+
+**Tests** — `npm run test:engine` (Node 22.18 ou plus récent, aucune dépendance) : scénarios dans `src/engine/__tests__/progressionV2.test.mjs`.
 
 ---
 
@@ -72,7 +127,8 @@ mooscles/
 │   │   └── seed.ts                 # Catalogue d'exercices par défaut
 │   ├── engine/
 │   │   ├── plateCalculator.ts      # Décomposition des disques par côté
-│   │   └── progressionV2.ts        # Algorithme de double progression
+│   │   ├── progressionV2.ts        # Algorithme de double progression
+│   │   └── __tests__/              # Tests du moteur (npm run test:engine)
 │   ├── screens/
 │   │   ├── SplitSelectScreen.tsx   # Accueil (choix du split + tiroir de stats)
 │   │   ├── FreeWorkoutScreen.tsx   # Déroulé de la séance en direct

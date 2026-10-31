@@ -74,10 +74,12 @@ const FeelingScaleRow: React.FC<{
 const STATUS_LABEL: Record<SessionStatus, string> = {
   EASY_SUCCESS: 'Réussie facile',
   SUCCESS: 'Réussie',
-  PARTIAL: 'Partielle',
+  PARTIAL: 'Presque',
   FAILED: 'Ratée',
+  REDUCED_LOAD: 'Allégée',
   CALIBRATION: 'Calibration',
   INCOMPLETE: 'Incomplète',
+  SKIPPED: 'Non faite',
   RESUMED_AFTER_BREAK: 'Reprise',
 };
 
@@ -85,7 +87,7 @@ function statusColors(status: SessionStatus) {
   if (status === 'EASY_SUCCESS' || status === 'SUCCESS') {
     return { bg: THEME.colors.feelingEasyBg, ink: THEME.colors.feelingEasyText };
   }
-  if (status === 'PARTIAL') {
+  if (status === 'PARTIAL' || status === 'REDUCED_LOAD') {
     return { bg: THEME.colors.feelingMediumBg, ink: THEME.colors.feelingMediumText };
   }
   if (status === 'FAILED') {

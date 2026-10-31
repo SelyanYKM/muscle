@@ -27,17 +27,21 @@ import {
   formatLocalDate,
   getAllCatalogExercises,
   getLastExercisePerformance,
+  getLastTrainingDateBefore,
   LastExercisePerformance,
   saveExerciseProgressionState,
   saveWorkoutLogs,
 } from '../database/db';
-import { resolveSessionWeight, suggestNextPrescription } from '../engine/progressionV2';
+import {
+  prescriptionFor,
+  progressionSettingsOf,
+  progressionStateOf,
+  suggestNextPrescription,
+} from '../engine/progressionV2';
 import { THEME } from '../theme';
 import {
   ConfiguredExercise,
   EquipmentCategory,
-  ExerciseProgressionSettings,
-  ExerciseProgressionState,
   Feeling,
   ProgressionDecision,
   SetResult,
@@ -118,6 +122,14 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
   // Dernière performance connue par exercice (repère affiché pendant la séance), indexée par id.
   const [lastPerfByExerciseId, setLastPerfByExerciseId] = useState<Record<number, LastExercisePerformance | null>>({});
+
+  // Dernière séance (tous exercices confondus) avant aujourd'hui : adoucit la réduction de
+  // reprise d'un exercice délaissé si l'entraînement, lui, a continué.
+  const [previousWorkoutDate] = useState<string | null>(() => getLastTrainingDateBefore(formatLocalDate(new Date())));
+
+  // Charge/objectif à proposer AVANT la séance (réduction de reprise comprise) : toujours passer
+  // par le moteur plutôt que lire currentWeight/currentTargetReps du catalogue directement.
+  const prescribedFor = (ex: ConfiguredExercise) => prescriptionFor(ex, new Date(), previousWorkoutDate);
 
   // État de la série en cours
   const [currentWeight, setCurrentWeight] = useState<number>(40);
@@ -224,9 +236,10 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     const list = getAllCatalogExercises(workoutId);
     setCatalogExercises(list);
     if (list.length > 0 && !currentExercise) {
+      const first = prescribedFor(list[0]);
       setCurrentExercise(list[0]);
-      setCurrentWeight(list[0].currentWeight);
-      setCurrentReps(list[0].currentTargetReps);
+      setCurrentWeight(first.weight);
+      setCurrentReps(first.targetReps);
     }
 
     const perfMap: Record<number, LastExercisePerformance | null> = {};
@@ -265,7 +278,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       const lastSet = existing.sets[existing.sets.length - 1];
       return { weight: lastSet.weight, reps: lastSet.repsDone };
     }
-    return { weight: ex.currentWeight, reps: ex.currentTargetReps };
+    const p = prescribedFor(ex);
+    return { weight: p.weight, reps: p.targetReps };
   };
 
   const handleSelectExercise = (ex: ConfiguredExercise) => {
@@ -305,9 +319,10 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
               const updated = prev.filter((c) => c.id !== ex.id);
               if (currentExercise?.id === ex.id) {
                 const next = updated[0] || null;
+                const nextPrescription = next ? prescribedFor(next) : null;
                 setCurrentExercise(next);
-                setCurrentWeight(next?.currentWeight || 40);
-                setCurrentReps(next?.currentTargetReps || 8);
+                setCurrentWeight(nextPrescription?.weight || 40);
+                setCurrentReps(nextPrescription?.targetReps || 8);
               }
               return updated;
             });
@@ -501,42 +516,18 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       const catalogEx = catalogExercises.find((c) => c.id === exLog.exerciseId);
       if (!catalogEx) continue; // supprimé du catalogue entre temps : rien à mettre à jour
 
-      const settings: ExerciseProgressionSettings = {
-        mode: catalogEx.mode,
-        targetSets: catalogEx.numSets,
-        repsMin: catalogEx.repsMin,
-        repsMax: catalogEx.repsMax,
-        incrementKg: catalogEx.minIncrement,
-        minWeightKg: catalogEx.minWeightKg,
-        restSeconds: catalogEx.restSeconds,
-      };
-      const state: ExerciseProgressionState = {
-        currentWeight: catalogEx.currentWeight,
-        currentTargetReps: catalogEx.currentTargetReps,
-        consecutiveFailures: catalogEx.consecutiveFailures,
-        sessionsWithoutSuccess: catalogEx.sessionsWithoutSuccess,
-        lastSessionDate: catalogEx.lastSessionDate,
-        lastDecisionReason: catalogEx.lastDecisionReason,
-        isCalibrating: catalogEx.isCalibrating,
-      };
-      const weightUsed = resolveSessionWeight(exLog.sets.map((s) => s.weight));
-      // Seules les séries faites À la charge de travail retenue comptent pour la progression :
-      // une série plus lourde en premier (tâter le terrain) ou une série bonus à une autre
-      // charge ne doit ni aider ni pénaliser — resolveSessionWeight a déjà choisi la charge
-      // représentative, donc on évalue uniquement les séries qui la partagent réellement.
-      // Mais si ce filtre fait tomber sous le nombre de séries attendu, c'est qu'il ne s'agit pas
-      // d'un cas "charge de travail + une série isolée à ignorer" : c'est une montée en charge
-      // (chaque série à un poids différent, ex. 60/70/75), où CHAQUE série compte comme série de
-      // travail. Dans ce cas, ne pas filtrer — sinon la séance est à tort classée "Incomplète" et
-      // la progression reste bloquée alors que la séance est parfaitement valide.
-      const sameWeightSets = exLog.sets.filter((s) => s.weight === weightUsed);
-      const workingSets = sameWeightSets.length >= catalogEx.numSets ? sameWeightSets : exLog.sets;
-
+      // Toutes les séries loguées, dans l'ordre : le moteur choisit lui-même les séries de
+      // travail (séries droites, montée en charge type 60/70/75, ou baisse en cours de séance)
+      // et les compare à la prescription réellement proposée (réduction de reprise comprise).
       const decision = suggestNextPrescription(
-        settings,
-        state,
-        { reps: workingSets.map((s) => s.repsDone), weightUsed, easy: easyByExerciseId[exLog.exerciseId] || false },
-        today
+        progressionSettingsOf(catalogEx),
+        progressionStateOf(catalogEx),
+        {
+          sets: exLog.sets.map((s) => ({ weight: s.weight, reps: s.repsDone })),
+          easy: easyByExerciseId[exLog.exerciseId] || false,
+        },
+        today,
+        previousWorkoutDate
       );
 
       saveExerciseProgressionState(exLog.exerciseId, decision.newState);
@@ -562,6 +553,9 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   };
 
   const currentSetNum = getCurrentSetNumber();
+  // Raison affichée sous la suggestion : la reprise après pause si elle s'applique, sinon la
+  // dernière décision du moteur.
+  const currentReason = currentExercise ? prescribedFor(currentExercise).reason : null;
   const currentLastPerf = currentExercise ? lastPerfByExerciseId[currentExercise.id] : null;
   const activeIndex = currentExercise ? catalogExercises.findIndex((e) => e.id === currentExercise.id) : -1;
   const warmupSets =
@@ -692,8 +686,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                   </View>
                 ))}
               </View>
-              {!!currentExercise?.lastDecisionReason && !currentExercise.isCalibrating && (
-                <Text style={styles.suggestionReasonText}>→ {currentExercise.lastDecisionReason}</Text>
+              {!!currentReason && !currentExercise?.isCalibrating && (
+                <Text style={styles.suggestionReasonText}>→ {currentReason}</Text>
               )}
             </View>
           ) : (
@@ -913,7 +907,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 <View style={{ flex: 1 }}>
                   <Text style={styles.catalogItemName}>{catEx.name}</Text>
                   <Text style={styles.catalogItemSub}>
-                    {CATEGORY_SUB_LABEL[catEx.category]} · conseillé {fmtKg(catEx.currentWeight)} kg
+                    {CATEGORY_SUB_LABEL[catEx.category]} · conseillé {fmtKg(prescribedFor(catEx).weight)} kg
                   </Text>
                 </View>
                 {doneSets.length > 0 && (
