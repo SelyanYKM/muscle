@@ -19,8 +19,10 @@ const state = (o = {}) => ({
 const day = (s) => new Date(`${s}T18:00:00`);
 const sets = (...pairs) => pairs.map(([weight, r]) => ({ weight, reps: r }));
 const x = (n, weight, r) => Array.from({ length: n }, () => ({ weight, reps: r }));
-const run = (cfg, st, logged, date = '2026-10-23', easy = false, prev = null) =>
-  suggestNextPrescription(cfg, st, { sets: logged, easy }, day(date), prev);
+const run = (cfg, st, logged, date = '2026-10-23', easy = false, prev = null, previousSets) =>
+  suggestNextPrescription(cfg, st, { sets: logged, easy, previousSets }, day(date), prev);
+// Séance du jour, avec les séries de la séance précédente sur l'exercice.
+const after = (previousSets, cfg, st, logged) => run(cfg, st, logged, '2026-10-23', false, null, previousSets);
 
 // --- Reprise après pause ---
 
@@ -54,21 +56,46 @@ test('pause sur un exercice, mais entraînement récent : un cran de moins', () 
 
 // --- Charge différente de la prescription ---
 
-test('séries droites plus légères que prescrit : on suit la charge faite', () => {
-  const d = run(settings(), state(), x(3, 45, 8));
+test('mauvaise séance isolée, plus légère : la charge stagne', () => {
+  const d = after(x(3, 50, 8), settings(), state(), x(3, 45, 8));
+  assert.equal(d.status, 'REDUCED_LOAD');
+  assert.equal(d.nextWeight, 50);
+  assert.equal(d.newState.sessionsWithoutSuccess, 1);
+});
+
+test('mauvaise séance isolée juste après une réussite : la charge prévue ne recule pas', () => {
+  // Réussi à 105 → 107,5 prévus ; jour sans à 100 kg.
+  const d = after(x(3, 105, 8), settings(), state({ currentWeight: 107.5 }), x(3, 100, 8));
+  assert.equal(d.nextWeight, 107.5);
+});
+
+test('deuxième séance de suite plus légère : la charge suit, puis progresse', () => {
+  const d = after(x(3, 45, 8), settings(), state({ sessionsWithoutSuccess: 1 }), x(3, 45, 8));
   assert.equal(d.status, 'SUCCESS');
   assert.equal(d.nextWeight, 47.5);
 });
 
-test('séries droites plus légères et faciles : la hausse ne dépasse pas la prescription', () => {
-  const d = run(settings(), state(), x(3, 47.5, 10));
+test('charge qui suit : la hausse ne dépasse pas la prescription', () => {
+  const d = after(x(3, 47.5, 8), settings(), state({ sessionsWithoutSuccess: 1 }), x(3, 47.5, 10));
   assert.equal(d.nextWeight, 50);
 });
 
-test('séries droites plus légères en double progression : objectif repris d’après les reps faites', () => {
-  const d = run(reps({ repsMin: 10, repsMax: 15 }), state({ currentWeight: 27.5, currentTargetReps: 10 }), x(3, 25, 11));
+test('charge qui suit en double progression : objectif repris d’après les reps faites', () => {
+  const prev = sets([27.5, 10], [25, 10], [25, 10]);
+  const d = after(prev, reps({ repsMin: 10, repsMax: 15 }), state({ currentWeight: 27.5, currentTargetReps: 10, sessionsWithoutSuccess: 1 }), x(3, 25, 11));
   assert.equal(d.nextWeight, 25);
   assert.equal(d.nextTargetReps, 12);
+});
+
+test('sans séance précédente connue : la charge stagne', () => {
+  const d = run(settings(), state({ sessionsWithoutSuccess: 1 }), x(3, 45, 8));
+  assert.equal(d.nextWeight, 50);
+});
+
+test('reprise après pause : une séance plus légère ne fait pas suivre la charge', () => {
+  const d = run(settings(), state({ sessionsWithoutSuccess: 2 }), x(3, 40, 8), '2026-11-09', false, null, x(3, 45, 8));
+  assert.equal(d.status, 'REDUCED_LOAD');
+  assert.equal(d.nextWeight, 45);
 });
 
 test('baisse en cours de séance (50, 50, 45, 45) : pas de hausse', () => {

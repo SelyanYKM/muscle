@@ -525,6 +525,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         {
           sets: exLog.sets.map((s) => ({ weight: s.weight, reps: s.repsDone })),
           easy: easyByExerciseId[exLog.exerciseId] || false,
+          // Dernière séance connue avant celle-ci (chargée à l'ouverture de l'écran).
+          previousSets: lastPerfByExerciseId[exLog.exerciseId]?.sets.map((s) => ({ weight: s.weight, reps: s.repsDone })),
         },
         today,
         previousWorkoutDate

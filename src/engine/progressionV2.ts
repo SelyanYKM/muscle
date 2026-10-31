@@ -375,9 +375,16 @@ export function suggestNextPrescription(
 
   const lighter = sel.weight < ref - EPS;
   const heavier = sel.weight > ref + EPS;
-  // Séries droites plus légères que prévu : la charge choisie devient la nouvelle référence,
-  // et la progression repart d'elle (sans dépasser la prescription d'origine).
-  const followLighter = lighter && sel.pattern === 'STRAIGHT';
+  // Séries droites plus légères que prévu : une mauvaise séance isolée fait stagner (la charge
+  // prévue est maintenue). Si la séance précédente était déjà sous cette charge prévue, et pas
+  // réussie (sinon la prescription aurait bougé), c'est un choix qui se confirme : la charge faite
+  // devient la référence et la progression repart d'elle, sans dépasser la prescription.
+  const previous = session.previousSets?.length
+    ? selectWorkingSets(session.previousSets, cfg.targetSets, ref, prescription.targetReps)
+    : null;
+  const previousAlsoLighter =
+    !!previous && previous.pattern !== 'INCOMPLETE' && previous.weight < ref - EPS && s.sessionsWithoutSuccess >= 1;
+  const followLighter = lighter && sel.pattern === 'STRAIGHT' && previousAlsoLighter;
   const evalWeight = heavier || followLighter ? sel.weight : ref;
   const plan = progressionPlan(cfg, evalWeight);
   const target = clamp(s.currentTargetReps, plan.repsMin, plan.repsMax);
@@ -403,11 +410,11 @@ export function suggestNextPrescription(
   // 5b. Séries droites plus légères : on suit la charge réellement choisie.
   if (followLighter) {
     s = { ...s, currentWeight: sel.weight, consecutiveFailures: 0, sessionsWithoutSuccess: 0 };
-    note = `Faite à ${fmt(sel.weight)} kg au lieu de ${fmt(ref)} · `;
+    note = `2e séance de suite sous ${fmt(ref)} kg : la charge suit (${fmt(sel.weight)} kg) · `;
   }
 
-  // 5c. Séance irrégulière avec au moins une série sous la prescription (50, 50, 45, 45, ou
-  // 70, 72,5, 72,5 pour 72,5 prévus) : jamais de hausse.
+  // 5c. Séance plus légère isolée, ou irrégulière avec au moins une série sous la prescription
+  // (50, 50, 45, 45, ou 70, 72,5, 72,5 pour 72,5 prévus) : la charge stagne, jamais de hausse.
   if (lighter && !followLighter) {
     const failed = outcome === 'FAILED';
     const next: ExerciseProgressionState = {
@@ -418,7 +425,8 @@ export function suggestNextPrescription(
     const status: SessionStatus = failed ? 'FAILED' : 'REDUCED_LOAD';
     const deload = applyDeloadRules(cfg, plan, next);
     if (deload) return finish(status, deload.state, deload.reason);
-    return finish(status, next, `Série(s) sous la charge prévue (${fmt(sel.weight)} kg) : ${fmt(ref)} kg maintenus`);
+    const why = sel.pattern === 'STRAIGHT' ? `Faite à ${fmt(sel.weight)} kg` : `Série(s) sous la charge prévue (${fmt(sel.weight)} kg)`;
+    return finish(status, next, `${why} : ${fmt(ref)} kg maintenus`);
   }
 
   // 6. Réussite.

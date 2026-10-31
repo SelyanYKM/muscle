@@ -112,7 +112,7 @@ export type SessionStatus =
   | 'SUCCESS' // Réussie : toutes les séries ≥ objectif
   | 'PARTIAL' // Presque : objectif manqué, mais ≥ 85 % du volume visé (reps plafonnées à l'objectif)
   | 'FAILED' // Ratée : moins de 85 % du volume visé
-  | 'REDUCED_LOAD' // Allégée : séance irrégulière avec une série sous la charge prévue (des séries droites plus légères sont suivies, pas « allégées »)
+  | 'REDUCED_LOAD' // Allégée : sous la charge prévue (séance isolée ou irrégulière) : la charge stagne
   | 'CALIBRATION' // Première séance sur cet exercice : charge et objectif estimés d'après les reps faites
   | 'INCOMPLETE' // Moins de séries que l'objectif : séance non exploitable
   | 'SKIPPED' // Aucune série enregistrée : rien ne change
@@ -153,6 +153,9 @@ export interface LoggedSet {
 export interface ProgressionSessionInput {
   sets: LoggedSet[];
   easy: boolean; // case "facile" cochée sur la dernière série
+  // Séries de la séance PRÉCÉDENTE sur cet exercice (avant aujourd'hui). Sert à distinguer une
+  // mauvaise séance isolée (la charge stagne) d'un choix de charge qui se confirme (elle suit).
+  previousSets?: LoggedSet[];
 }
 
 // Ce qu'il faut proposer AVANT une séance (getPrescription), réduction de reprise comprise.

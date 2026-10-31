@@ -56,15 +56,16 @@ Moteur pur dans `src/engine/progressionV2.ts` (aucune dépendance à la base ni 
 | Réussie | toutes les séries ≥ objectif | +1 palier (CHARGE) ou +1 rep (double progression) |
 | Presque | ≥ 85 % du volume | charge maintenue |
 | Ratée | < 85 % du volume | charge maintenue, compte comme un échec |
-| Allégée | séance irrégulière avec une série sous la charge prévue, reps tenues | charge maintenue, jamais de hausse |
+| Allégée | sous la charge prévue (séance plus légère isolée, ou série(s) sous la charge), reps tenues | charge maintenue, jamais de hausse |
 | Incomplète | moins de séries que prévu | rien ne bouge |
 | Calibration | première séance sur l'exercice | charge et objectif estimés (Epley) d'après les reps faites, à ±20 % |
 
 Exemple sur 3×8 : 8/8/7 ou 8/7/6 = presque ; 8/6/6 = ratée.
 
-**Charge différente de la prescription** — en séries droites, le moteur suit la charge réellement choisie :
+**Charge différente de la prescription** — une mauvaise séance fait stagner, jamais reculer :
 - Plus lourde et tenue (réussie ou presque) : la nouvelle charge est adoptée. Plus lourde et ratée : retour à la prescription, sans compter d'échec.
-- Plus légère : elle devient la référence et la progression repart d'elle, sans dépasser la prescription d'origine (3×8 à 45 kg pour 50 prévus → 47,5 kg).
+- Plus légère, une fois : une mauvaise séance ne creuse pas, la charge prévue est maintenue (statut « Allégée »).
+- Plus légère deux séances de suite : c'est un choix qui se confirme, la charge faite devient la référence et la progression repart d'elle, sans dépasser la prescription d'origine (2e fois 3×8 à 45 kg pour 50 prévus → 47,5 kg). Le moteur s'appuie sur la séance précédente (`previousSets`), déjà chargée par l'écran.
 - Séance irrégulière avec une série sous la prescription : pas de hausse ; la séance compte comme « sans réussite ».
 
 **Double progression** (`REPS_PUIS_CHARGE`)
