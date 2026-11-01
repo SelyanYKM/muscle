@@ -1,6 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   Animated,
   AppState,
   AppStateStatus,
@@ -9,10 +10,14 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { FEELING_DOT } from '../constants/feeling';
 import { THEME } from '../theme';
+import { SetResult } from '../types';
+import { durationA11y, kgA11y } from '../utils/a11y';
 import { playRestTimerAlarm } from '../utils/audio';
 import { fmtKg, formatMinSec } from '../utils/format';
 import { triggerLightHaptic, triggerTimerEndHaptic, triggerWarningHaptic } from '../utils/haptics';
@@ -41,12 +46,15 @@ interface RestTimerOverlayProps {
   onFinish: () => void;
   /** Ferme le repos et annule la dernière série validée (accessible directement depuis cet écran). */
   onUndo?: () => void;
+  /** Série qui vient d'être validée, rappelée en haut de l'écran (absente pour un repos d'échauffement). */
+  lastSet?: SetResult;
 }
 
-const RING_SIZE = 264;
+// Anneau : 264 px au maximum, réduit sur les écrans peu hauts pour que tout l'écran de repos
+// tienne sans défiler (le reste des éléments garde sa taille).
+const RING_MAX_SIZE = 264;
+const RING_MIN_SIZE = 190;
 const RING_STROKE = 13;
-const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   initialSeconds,
@@ -57,10 +65,12 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   onSkip,
   onFinish,
   onUndo,
+  lastSet,
 }) => {
   const [secondsRemaining, setSecondsRemaining] = useState(initialSeconds);
   const [totalSeconds, setTotalSeconds] = useState(initialSeconds);
   const [isPaused, setIsPaused] = useState(false);
+  const { height: windowHeight } = useWindowDimensions();
 
   // Timestamp cible absolu pour ne jamais perdre le temps en arrière-plan
   const targetTimeRef = useRef<number>(Date.now() + initialSeconds * 1000);
@@ -80,6 +90,13 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const setInfo = { exerciseName, nextSetNumber, nextWeight, nextReps };
+
+  // Retour sur la série validée : réussie si l'objectif de reps est atteint (même règle que
+  // FreeWorkoutScreen.handleCompleteSet), sinon "sous l'objectif".
+  const lastSetMet = !!lastSet && lastSet.feeling !== 'HARD';
+  const lastSetText = lastSet
+    ? `Série ${lastSet.setNumber} ${lastSetMet ? 'réussie' : "sous l'objectif"} · ${lastSet.repsDone}/${lastSet.targetReps} reps`
+    : null;
   const notificationBody = `${exerciseName} • Série ${nextSetNumber} • ${nextWeight} kg`;
 
   // Déclenche l'alerte de fin de repos une seule fois, quel que soit le chemin qui la détecte
@@ -92,6 +109,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     hideRestTimerLiveNotification();
     triggerTimerEndHaptic();
     playRestTimerAlarm();
+    AccessibilityInfo.announceForAccessibility('Repos terminé');
     onFinish();
   };
 
@@ -122,6 +140,11 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
 
     if (remaining === 4 || remaining === 3 || remaining === 2) {
       triggerWarningHaptic();
+    }
+
+    // Repère vocal pour le lecteur d'écran (sans effet quand TalkBack / VoiceOver est coupé).
+    if (remaining === 10) {
+      AccessibilityInfo.announceForAccessibility('Encore 10 secondes de repos');
     }
   };
 
@@ -180,6 +203,12 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
       duration: 180,
       useNativeDriver: true,
     }).start();
+
+    if (lastSet) {
+      AccessibilityInfo.announceForAccessibility(
+        `Série ${lastSet.setNumber} ${lastSet.feeling !== 'HARD' ? 'réussie' : "sous l'objectif"}, ${lastSet.repsDone} reps sur ${lastSet.targetReps}`
+      );
+    }
 
     // Service au premier plan Android avec notification persistante (chronomètre natif +
     // boutons Pause/Passer) : contrairement au son/vibration ci-dessus (qui dépendent du code
@@ -267,7 +296,10 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   const formattedTotal = formatMinSec(totalSeconds);
 
   const progressFraction = totalSeconds > 0 ? secondsRemaining / totalSeconds : 0;
-  const dashOffset = RING_CIRCUMFERENCE * (1 - progressFraction);
+  const ringSize = Math.round(Math.max(RING_MIN_SIZE, Math.min(RING_MAX_SIZE, windowHeight * 0.31)));
+  const ringRadius = (ringSize - RING_STROKE) / 2;
+  const ringCircumference = 2 * Math.PI * ringRadius;
+  const dashOffset = ringCircumference * (1 - progressFraction);
 
   return (
     <Modal visible transparent animationType="fade">
@@ -280,63 +312,113 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
           style={StyleSheet.absoluteFill}
         />
 
+        {/* Écran plein, sans défilement : les blocs se répartissent sur la hauteur disponible. */}
         <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-          <Text style={styles.topSub}>{isPaused ? 'EN PAUSE' : 'RÉCUPÉRATION'}</Text>
+          <View style={styles.topGroup}>
+            <Text style={styles.topSub}>{isPaused ? 'EN PAUSE' : 'RÉCUPÉRATION'}</Text>
+            {!!lastSetText && (
+              <View style={styles.lastSetPill}>
+                <View
+                  style={[
+                    styles.lastSetMark,
+                    lastSetMet
+                      ? { backgroundColor: FEELING_DOT[lastSet!.feeling] }
+                      : { borderWidth: 2, borderColor: FEELING_DOT.HARD },
+                  ]}
+                />
+                <Text style={styles.lastSetText}>{lastSetText}</Text>
+              </View>
+            )}
+          </View>
 
           {/* Anneau de progression avec chronomètre centré */}
-          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-            <Svg width={RING_SIZE} height={RING_SIZE}>
+          <Animated.View
+            style={{ transform: [{ scale: pulseAnim }] }}
+            accessible
+            accessibilityRole="timer"
+            accessibilityLabel={`${isPaused ? 'Repos en pause' : 'Repos'} : ${durationA11y(secondsRemaining)} restantes sur ${durationA11y(totalSeconds)}`}
+          >
+            <Svg width={ringSize} height={ringSize}>
               <Circle
-                cx={RING_SIZE / 2}
-                cy={RING_SIZE / 2}
-                r={RING_RADIUS}
+                cx={ringSize / 2}
+                cy={ringSize / 2}
+                r={ringRadius}
                 stroke="rgba(255, 255, 255, 0.14)"
                 strokeWidth={RING_STROKE}
                 fill="none"
               />
               <Circle
-                cx={RING_SIZE / 2}
-                cy={RING_SIZE / 2}
-                r={RING_RADIUS}
+                cx={ringSize / 2}
+                cy={ringSize / 2}
+                r={ringRadius}
                 stroke={THEME.colors.accent}
                 strokeWidth={RING_STROKE}
                 fill="none"
                 strokeLinecap="round"
-                strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
+                strokeDasharray={`${ringCircumference} ${ringCircumference}`}
                 strokeDashoffset={dashOffset}
                 rotation={-90}
-                originX={RING_SIZE / 2}
-                originY={RING_SIZE / 2}
+                originX={ringSize / 2}
+                originY={ringSize / 2}
               />
             </Svg>
             <View style={[StyleSheet.absoluteFill, styles.ringInner]}>
-              <Text style={styles.timeBig}>{formattedTime}</Text>
+              <Text style={[styles.timeBig, { fontSize: Math.round(ringSize * 0.3) }]}>{formattedTime}</Text>
               <Text style={styles.timeOf}>sur {formattedTotal}</Text>
             </View>
           </Animated.View>
 
           {/* Pause/Reprendre — reflète et pilote le même état que les boutons de la notification */}
-          <TouchableOpacity style={styles.pauseToggleBtn} onPress={togglePause} activeOpacity={0.75}>
+          <TouchableOpacity
+            style={styles.pauseToggleBtn}
+            onPress={togglePause}
+            activeOpacity={0.75}
+            hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
+            accessibilityRole="button"
+            accessibilityLabel={isPaused ? 'Reprendre le repos' : 'Mettre le repos en pause'}
+          >
             <Text style={styles.pauseToggleText}>{isPaused ? '▶  Reprendre' : '⏸  Pause'}</Text>
           </TouchableOpacity>
 
           {/* Boutons d'ajustement du repos */}
           <View style={styles.adjustRow}>
-            <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(-15)} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.adjustBtn}
+              onPress={() => addTime(-15)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Retirer 15 secondes"
+            >
               <Text style={styles.adjustBtnText}>−15s</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(30)} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.adjustBtn}
+              onPress={() => addTime(30)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Ajouter 30 secondes"
+            >
               <Text style={styles.adjustBtnText}>+30s</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.adjustBtn} onPress={() => addTime(60)} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.adjustBtn}
+              onPress={() => addTime(60)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Ajouter 60 secondes"
+            >
               <Text style={styles.adjustBtnText}>+60s</Text>
             </TouchableOpacity>
           </View>
 
           {/* Teaser Prochaine Série */}
-          <View style={styles.nextSetInfoCard}>
+          <View
+            style={styles.nextSetInfoCard}
+            accessible
+            accessibilityLabel={`Prochaine série : ${exerciseName}, série ${nextSetNumber}, ${kgA11y(nextWeight)}, ${nextReps} reps`}
+          >
             <Text style={styles.nextSetLabel}>PROCHAINE SÉRIE</Text>
             <Text style={styles.nextSetTitle} numberOfLines={1}>
               {exerciseName}
@@ -346,17 +428,31 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
             </Text>
           </View>
 
-          {/* Bouton Prêt */}
-          <TouchableOpacity style={styles.skipButton} onPress={handleSkip} activeOpacity={0.85}>
+          {/* Bouton Prêt + correction, groupés et serrés */}
+          <View style={styles.bottomGroup}>
+          <TouchableOpacity
+            style={styles.skipButton}
+            onPress={handleSkip}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityHint="Termine le repos"
+          >
             <Text style={styles.skipButtonText}>Je suis prêt</Text>
           </TouchableOpacity>
 
           {/* Correction d'une erreur de validation, sans attendre la fin du repos */}
           {onUndo && (
-            <TouchableOpacity style={styles.undoLink} onPress={handleUndo} activeOpacity={0.7}>
-              <Text style={styles.undoLinkText}>Erreur ? Corriger la dernière série</Text>
+            <TouchableOpacity
+              style={styles.undoBtn}
+              onPress={handleUndo}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityHint="Annule la série que tu viens de valider"
+            >
+              <Text style={styles.undoBtnText}>Corriger la dernière série</Text>
             </TouchableOpacity>
           )}
+          </View>
         </Animated.View>
       </View>
     </Modal>
@@ -370,15 +466,15 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     alignItems: 'center',
-    paddingTop: 60,
+    justifyContent: 'space-between',
+    paddingTop: 52,
     paddingHorizontal: 24,
     paddingBottom: 34,
-    gap: 22,
+    gap: 12,
   },
   topSub: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 12,
-    fontWeight: '800',
     color: THEME.colors.accent,
     letterSpacing: 2.4,
   },
@@ -396,7 +492,6 @@ const styles = StyleSheet.create({
   timeOf: {
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '700',
     color: 'rgba(255, 255, 255, 0.72)',
     marginTop: 2,
   },
@@ -409,10 +504,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   pauseToggleText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '800',
   },
   adjustRow: {
     flexDirection: 'row',
@@ -428,10 +522,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.22)',
   },
   adjustBtnText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '800',
   },
   nextSetInfoCard: {
     width: '100%',
@@ -443,9 +536,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.16)',
   },
   nextSetLabel: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
     color: THEME.colors.accent,
     letterSpacing: 1,
     marginBottom: 6,
@@ -457,15 +549,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   nextSetDetails: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 13,
     color: 'rgba(255, 255, 255, 0.85)',
     marginTop: 4,
-    fontWeight: '600',
   },
   nextSetHighlight: {
     color: THEME.colors.accent,
-    fontWeight: '800',
+    fontFamily: THEME.fonts.sansHeavy,
   },
   skipButton: {
     width: '100%',
@@ -476,19 +567,51 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   skipButtonText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: THEME.colors.accentTextDark,
     fontSize: 15,
-    fontWeight: '800',
   },
-  undoLink: {
-    paddingVertical: 4,
+  topGroup: {
+    alignItems: 'center',
+    gap: 10,
   },
-  undoLinkText: {
+  lastSetPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    height: 32,
+    paddingHorizontal: 14,
+    borderRadius: THEME.radius.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+  },
+  lastSetMark: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  lastSetText: {
     fontFamily: THEME.fonts.sans,
-    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.92)',
+  },
+  bottomGroup: {
+    width: '100%',
+    gap: 10,
+  },
+  undoBtn: {
+    width: '100%',
+    height: 44,
+    borderRadius: THEME.radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  undoBtnText: {
+    fontFamily: THEME.fonts.sans,
+    color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '700',
-    textDecorationLine: 'underline',
   },
 });

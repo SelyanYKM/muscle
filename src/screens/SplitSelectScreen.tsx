@@ -1,7 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import React from 'react';
+import React, { useState } from 'react';
 import {
-  Alert,
   Image,
   Pressable,
   SafeAreaView,
@@ -13,11 +12,11 @@ import {
 import { DashboardSheet } from '../components/DashboardSheet';
 import { Icon } from '../components/Icon';
 import { SPLIT_LETTERS, SPLIT_SUBTITLES } from '../constants/splits';
-import { clearAllWorkoutLogs, getDashboardSummary, getExercisesForWorkout, getRecentLogs, getWorkouts } from '../database/db';
+import { getDashboardSummary, getExercisesForWorkout, getRecentLogs, getWorkouts } from '../database/db';
 import { THEME } from '../theme';
 import { Workout } from '../types';
 import { parseLocalDate } from '../utils/format';
-import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
+import { triggerLightHaptic, triggerMediumHaptic } from '../utils/haptics';
 
 interface SplitMeta {
   exerciseCount: number;
@@ -37,6 +36,14 @@ function formatLastSessionMeta(days: number | null): string {
   if (days === 0) return "Aujourd'hui";
   if (days === 1) return 'Hier';
   return `il y a ${days} j`;
+}
+
+// Même information, rédigée pour le lecteur d'écran ("il y a 5 jours" plutôt que "5 j").
+function formatLastSessionMetaA11y(days: number | null): string {
+  if (days === null) return 'jamais fait';
+  if (days === 0) return "fait aujourd'hui";
+  if (days === 1) return 'fait hier';
+  return `fait il y a ${days} jours`;
 }
 
 // Charge réelle (nb d'exercices du catalogue + dernière séance) par split, pour la méta
@@ -88,6 +95,8 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
   const dashboardSummary = getDashboardSummary();
   const splitMeta = getSplitMeta(workouts);
   const toFollowWorkoutId = getToFollowWorkoutId(workouts, splitMeta);
+  // Tiroir "Ton progrès" déplié : le reste de l'écran est masqué au lecteur d'écran.
+  const [isDashboardExpanded, setIsDashboardExpanded] = useState(false);
 
   const handleSelect = (wId: number, wName: string) => {
     triggerMediumHaptic();
@@ -103,7 +112,11 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
         end={{ x: 1, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView
+        style={styles.safeArea}
+        importantForAccessibility={isDashboardExpanded ? 'no-hide-descendants' : 'auto'}
+        accessibilityElementsHidden={isDashboardExpanded}
+      >
       <View style={styles.container}>
         {/* En-tête officiel mooscles */}
         <View style={styles.headerRow}>
@@ -111,6 +124,7 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
             <Image
               source={require('../../assets/icon.png')}
               style={styles.brandLogo}
+              accessible={false}
             />
             <View>
               <Text style={styles.brandTitle}>
@@ -122,27 +136,15 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
 
           <TouchableOpacity
             style={styles.historyBtn}
+            hitSlop={{ top: 4, bottom: 4, left: 2, right: 2 }}
+            accessibilityRole="button"
+            accessibilityLabel="Historique"
             onPress={() => {
               triggerLightHaptic();
               onOpenHistory();
             }}
-            onLongPress={() => {
-              triggerWarningHaptic();
-              Alert.alert(
-                "Effacer l'historique ?",
-                "Toutes les séances enregistrées seront définitivement supprimées.",
-                [
-                  { text: 'Annuler', style: 'cancel' },
-                  {
-                    text: 'Tout effacer',
-                    style: 'destructive',
-                    onPress: () => {
-                      clearAllWorkoutLogs();
-                    },
-                  },
-                ]
-              );
-            }}
+            // L'effacement de l'historique n'est plus caché ici (appui long) : il a son propre
+            // bouton, visible, en bas de l'écran Historique.
             activeOpacity={0.8}
           >
             <Text style={styles.historyBtnText}>Historique</Text>
@@ -151,7 +153,7 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
 
         {/* Titre de sélection */}
         <View style={styles.stepTitleBox}>
-          <Text style={styles.stepHeading}>Choisis ton split</Text>
+          <Text style={styles.stepHeading} accessibilityRole="header">Choisis ton split</Text>
           <Text style={styles.stepSubheading}>Quelle séance attaques-tu aujourd'hui ?</Text>
         </View>
 
@@ -165,6 +167,9 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
             return (
               <Pressable
                 key={w.id}
+                accessibilityRole="button"
+                accessibilityLabel={`${w.name}${isToFollow ? ', à suivre' : ''}. ${SPLIT_SUBTITLES[w.id].replace(/ • /g, ', ')}. ${meta.exerciseCount} exercices, ${formatLastSessionMetaA11y(meta.daysSinceLastSession)}`}
+                accessibilityHint="Démarre la séance"
                 onPress={() => handleSelect(w.id, w.name)}
                 style={({ pressed }) => [styles.splitCardWrap, pressed && styles.splitCardPressed]}
               >
@@ -175,7 +180,7 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
                   style={styles.splitCard}
                 >
                   {/* Lettre en filigrane */}
-                  <Text style={styles.watermarkLetter} numberOfLines={1}>
+                  <Text style={styles.watermarkLetter} numberOfLines={1} accessible={false} importantForAccessibility="no">
                     {SPLIT_LETTERS[w.id]}
                   </Text>
 
@@ -211,7 +216,7 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
       </View>
       </SafeAreaView>
 
-      <DashboardSheet summary={dashboardSummary} />
+      <DashboardSheet summary={dashboardSummary} onExpandedChange={setIsDashboardExpanded} />
     </View>
   );
 };
@@ -262,9 +267,8 @@ const styles = StyleSheet.create({
     color: THEME.colors.accent,
   },
   brandSubtitle: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 12,
-    fontWeight: '600',
     color: THEME.colors.textSecondary,
     marginTop: 1,
   },
@@ -281,7 +285,6 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     color: THEME.colors.textPrimary,
     fontSize: 12,
-    fontWeight: '700',
   },
   stepTitleBox: {
     marginBottom: 22,
@@ -293,9 +296,8 @@ const styles = StyleSheet.create({
     letterSpacing: -0.6,
   },
   stepSubheading: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansMedium,
     fontSize: 14,
-    fontWeight: '500',
     color: THEME.colors.textSecondary,
     marginTop: 4,
   },
@@ -346,15 +348,13 @@ const styles = StyleSheet.create({
     borderRadius: THEME.radius.pill,
   },
   toFollowChipText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
     color: '#FFFFFF',
   },
   cardSubtitle: {
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '700',
     marginTop: 6,
   },
   cardBottomRow: {
@@ -371,7 +371,6 @@ const styles = StyleSheet.create({
   cardMetaText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
-    fontWeight: '700',
   },
   arrowBtn: {
     width: 44,

@@ -179,16 +179,10 @@ export default function App() {
   // Gestion du bouton retour physique / geste Android pour naviguer entre les écrans
   useEffect(() => {
     const onBackPress = () => {
+      // Séance en cours : c'est FreeWorkoutScreen qui gère le retour (il ouvre sa feuille
+      // "Quitter la séance ?", la même que le bouton ×).
       if (currentScreen === 'LIVE') {
-        Alert.alert(
-          'Quitter la séance ?',
-          'La séance en cours sera interrompue.',
-          [
-            { text: 'Continuer', style: 'cancel' },
-            { text: 'Quitter', style: 'destructive', onPress: handleResetToHome },
-          ]
-        );
-        return true;
+        return false;
       }
       if (currentScreen === 'SUMMARY' || currentScreen === 'HISTORY') {
         handleResetToHome();

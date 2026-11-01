@@ -2,8 +2,10 @@ import { useKeepAwake } from 'expo-keep-awake';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   Alert,
   Animated,
+  BackHandler,
   Easing,
   Pressable,
   ScrollView,
@@ -16,11 +18,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomSheet } from '../components/BottomSheet';
 import { Dot } from '../components/Dot';
+import { FeelingMark } from '../components/FeelingMark';
 import { Icon } from '../components/Icon';
 import { BuffRequin, preloadBuffRequinAssets } from '../components/BuffRequin';
-import { PlateBreakdown } from '../components/PlateBreakdown';
+import { PlateBreakdown, plateBreakdownA11yLabel } from '../components/PlateBreakdown';
 import { RestTimerOverlay } from '../components/RestTimerOverlay';
-import { FEELING_BG, FEELING_DOT, FEELING_INK } from '../constants/feeling';
+import { FEELING_BG, FEELING_INK } from '../constants/feeling';
 import {
   addCustomExercise,
   deleteExercise,
@@ -47,9 +50,11 @@ import {
   SetResult,
   WorkoutLogEntry,
 } from '../types';
+import { durationA11y, kgA11y, setA11yLabel } from '../utils/a11y';
 import { preloadBuffRequinSounds } from '../utils/audio';
 import { fmtKg, parseLocalDate } from '../utils/format';
 import { triggerLightHaptic, triggerMediumHaptic, triggerSuccessHaptic, triggerWarningHaptic } from '../utils/haptics';
+import { useRepeatPress } from '../utils/useRepeatPress';
 
 interface FreeWorkoutScreenProps {
   workoutId: number;
@@ -150,6 +155,9 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   const [isPickerSheetOpen, setIsPickerSheetOpen] = useState<boolean>(false);
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState<boolean>(false);
   const [isQuitSheetOpen, setIsQuitSheetOpen] = useState<boolean>(false);
+  // Confirmation avant "Terminer la séance" : un seul tap enregistrait tout et recalculait la
+  // progression, sans retour possible.
+  const [isFinishSheetOpen, setIsFinishSheetOpen] = useState<boolean>(false);
   const [newExName, setNewExName] = useState<string>('');
   const [newExCategory, setNewExCategory] = useState<EquipmentCategory>('HAMMER_STRENGTH');
   const [newExWeight, setNewExWeight] = useState<string>('40');
@@ -162,6 +170,24 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   // validant une vraie série : masque le lien "corriger la dernière série" côté écran de repos
   // (rien à annuler, aucune série loguée pour un échauffement).
   const [isWarmupRest, setIsWarmupRest] = useState<boolean>(false);
+
+  // Dernière série validée, rappelée en haut de l'écran de repos ("Série 2 sous l'objectif ·
+  // 7/8 reps") : seul retour visible du verdict, la validation ouvrant le repos aussitôt.
+  const [lastValidatedSet, setLastValidatedSet] = useState<SetResult | null>(null);
+
+  // Répétition à l'appui long des boutons − / + (charge et reps).
+  const repeatPress = useRepeatPress();
+
+  // Geste / bouton retour Android : ouvre la même feuille "Quitter la séance ?" que le bouton ×
+  // (au lieu d'une alerte système au texte différent). Quand une feuille ou le repos est ouvert,
+  // c'est leur propre fenêtre qui reçoit le retour, pas cet écouteur.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setIsQuitSheetOpen(true);
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
 
   // Index de la pastille d'échauffement actuellement maintenue (appui long) : affiche la
   // répartition des disques pour SA charge dans une fenêtre contextuelle, masquée au relâchement.
@@ -358,15 +384,27 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   };
 
   // Ajustements de charge et reps pour la série en cours
-  const adjustWeight = (delta: number) => {
-    triggerLightHaptic();
+  const adjustWeight = (delta: number, withHaptic: boolean = true) => {
+    if (withHaptic) triggerLightHaptic();
     setCurrentWeight((prev) => Math.max(0, Math.round((prev + delta) * 100) / 100));
   };
 
-  const adjustReps = (delta: number) => {
-    triggerLightHaptic();
+  const adjustReps = (delta: number, withHaptic: boolean = true) => {
+    if (withHaptic) triggerLightHaptic();
     setCurrentReps((prev) => Math.max(1, prev + delta));
   };
+
+  // Props communes aux 4 boutons − / + : tap = un pas, maintenir = répétition accélérée
+  // (une vibration au déclenchement, pas une par pas).
+  const stepperPressProps = (step: (withHaptic: boolean) => void) => ({
+    onPress: () => step(true),
+    onLongPress: () => {
+      triggerMediumHaptic();
+      repeatPress.start(() => step(false));
+    },
+    onPressOut: repeatPress.stop,
+    delayLongPress: 350,
+  });
 
   // Calcul du numéro de la prochaine série pour l'exercice actuel
   const getCurrentSetNumber = () => {
@@ -421,6 +459,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       }
     });
 
+    setLastValidatedSet(newSet);
     setRestDuration(currentExercise.restSeconds);
     setIsWarmupRest(false);
     setIsResting(true);
@@ -467,6 +506,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
   const showEmptyToast = () => {
     setEmptyToastVisible(true);
+    AccessibilityInfo.announceForAccessibility('Valide au moins une série avant de terminer.');
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     toastTimeoutRef.current = setTimeout(() => setEmptyToastVisible(false), 2200);
   };
@@ -555,6 +595,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   };
 
   const currentSetNum = getCurrentSetNumber();
+  const isLastSetOfExercise = !!currentExercise && currentSetNum === currentExercise.numSets;
   // Raison affichée sous la suggestion : la reprise après pause si elle s'applique, sinon la
   // dernière décision du moteur.
   const currentReason = currentExercise ? prescribedFor(currentExercise).reason : null;
@@ -590,14 +631,22 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
               <Text style={[styles.headerBadgeText, { color: split.fg }]}>{workoutName.charAt(0)}</Text>
             </LinearGradient>
             <View style={styles.headerTitleCol}>
-              <Text style={styles.sessionTitle} numberOfLines={1}>{workoutName}</Text>
+              <Text style={styles.sessionTitle} numberOfLines={1} accessibilityRole="header">{workoutName}</Text>
             </View>
           </View>
 
           <View style={styles.headerRightBox}>
             <View>
               {isBuffRemanent && <Animated.View style={[styles.buffAura, { opacity: buffAuraOpacity }]} />}
-              <TouchableOpacity style={styles.timerBox} onPress={handleTimerTap} activeOpacity={1}>
+              <TouchableOpacity
+                style={styles.timerBox}
+                onPress={handleTimerTap}
+                activeOpacity={1}
+                accessibilityRole="timer"
+                accessibilityLabel={`Durée de la séance : ${durationA11y(elapsedSeconds)}${
+                  isBuffRemanent ? `. Buff requin actif encore ${durationA11y(buffSecondsLeft)}` : ''
+                }`}
+              >
                 <Dot color={THEME.colors.accent} size={7} />
                 <Text style={styles.timerText}>{formatElapsedTime(elapsedSeconds)}</Text>
                 {isBuffRemanent && (
@@ -611,6 +660,9 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
               style={styles.quitBtn}
               onPress={() => setIsQuitSheetOpen(true)}
               activeOpacity={0.8}
+              hitSlop={{ top: 2, bottom: 2, left: 2, right: 2 }}
+              accessibilityRole="button"
+              accessibilityLabel="Quitter la séance"
             >
               <Icon name="x" size={18} color={THEME.colors.textPrimary} />
             </TouchableOpacity>
@@ -646,6 +698,9 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                   setIsPickerSheetOpen(true);
                 }}
                 activeOpacity={0.8}
+                hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel="Changer d'exercice"
               >
                 <Text style={styles.changeExBtnText}>Changer d'exercice</Text>
                 <Icon name="chevron-down" size={15} color={THEME.colors.accentStrong} />
@@ -671,7 +726,13 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
             <Text style={styles.setCounterText}>Série {currentSetNum}</Text>
           </View>
 
-          <TouchableOpacity onPress={() => setIsPickerSheetOpen(true)} activeOpacity={0.8}>
+          <TouchableOpacity
+            onPress={() => setIsPickerSheetOpen(true)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={`Exercice : ${currentExercise?.name || 'aucun'}, série ${currentSetNum}`}
+            accessibilityHint="Ouvre la liste des exercices"
+          >
             <Text style={styles.currentExName} numberOfLines={2}>
               {currentExercise?.name || 'Sélectionner un exercice'}
             </Text>
@@ -682,8 +743,13 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
               <Text style={styles.lastPerfLabel}>DERNIÈRE FOIS · {formatLastPerfDate(currentLastPerf.date)}</Text>
               <View style={styles.lastPerfChipsRow}>
                 {currentLastPerf.sets.map((s, idx) => (
-                  <View key={idx} style={styles.lastPerfChip}>
-                    <Dot color={FEELING_DOT[s.feeling]} size={8} />
+                  <View
+                    key={idx}
+                    style={styles.lastPerfChip}
+                    accessible
+                    accessibilityLabel={setA11yLabel(idx + 1, s.repsDone, s.weight, s.feeling)}
+                  >
+                    <FeelingMark feeling={s.feeling} size={8} />
                     <Text style={styles.lastPerfChipText}>{fmtKg(s.weight)} × {s.repsDone}</Text>
                   </View>
                 ))}
@@ -702,9 +768,6 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
           {!!warmupSets && (
             <View style={styles.warmupBlock}>
-              <Text style={styles.warmupLabel}>
-                ÉCHAUFFEMENT SUGGÉRÉ · MAINTENIR = DISQUES
-              </Text>
               <View style={styles.warmupChipsWrap}>
                 <View style={styles.warmupChipsRow}>
                   {warmupSets.map((w, idx) => (
@@ -715,6 +778,13 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                       onLongPress={() => setWarmupPopupIdx(idx)}
                       onPressOut={() => setWarmupPopupIdx(null)}
                       delayLongPress={350}
+                      hitSlop={{ top: 10, bottom: 10, left: 2, right: 2 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Échauffement : ${kgA11y(w.weight)}, ${w.reps} reps. ${
+                        currentExercise
+                          ? plateBreakdownA11yLabel(w.weight, currentExercise.baseWeight, currentExercise.category)
+                          : ''
+                      }`}
                     >
                       <Text style={styles.warmupChipText}>{fmtKg(w.weight)} kg × {w.reps}</Text>
                     </Pressable>
@@ -723,6 +793,9 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                     style={styles.warmupRestBtn}
                     onPress={handleWarmupRestButton}
                     activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 2, right: 2 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Lancer un repos de 60 secondes après l'échauffement"
                   >
                     <Text style={styles.warmupRestBtnText}>⏱ Repos 60s</Text>
                   </TouchableOpacity>
@@ -745,33 +818,77 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           {/* Steppers pleine largeur */}
           <View style={styles.stepperContainer}>
             <View style={styles.stepperFullRow}>
-              <TouchableOpacity style={styles.stepperBtnLg} onPress={() => adjustWeight(-2.5)} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={styles.stepperBtnLg}
+                {...stepperPressProps((h) => adjustWeight(-2.5, h))}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Retirer 2,5 kilos"
+              >
                 <Text style={styles.stepperBtnLgText}>−2,5</Text>
               </TouchableOpacity>
-              <View style={styles.stepperCenterCol}>
-                <Text style={styles.stepperRowLabel}>CHARGE</Text>
-                <View style={styles.stepperValueRow}>
-                  <Text style={styles.stepperBigValue}>{fmtKg(currentWeight)}</Text>
-                  <Text style={styles.stepperUnit}>kg</Text>
+              <View
+                style={styles.stepperCenterCol}
+                accessible
+                accessibilityRole="adjustable"
+                accessibilityLabel="Charge"
+                accessibilityValue={{ text: kgA11y(currentWeight) }}
+                accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+                onAccessibilityAction={(e) => adjustWeight(e.nativeEvent.actionName === 'increment' ? 2.5 : -2.5)}
+              >
+                <Text style={styles.stepperRowLabel}>CHARGE · KG</Text>
+                <View style={styles.stepperValueBox}>
+                  <Text style={styles.stepperBigValue} numberOfLines={1} adjustsFontSizeToFit>
+                    {fmtKg(currentWeight)}
+                  </Text>
                 </View>
               </View>
-              <TouchableOpacity style={styles.stepperBtnLg} onPress={() => adjustWeight(2.5)} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={styles.stepperBtnLg}
+                {...stepperPressProps((h) => adjustWeight(2.5, h))}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Ajouter 2,5 kilos"
+              >
                 <Text style={styles.stepperBtnLgText}>+2,5</Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.stepperFullRow}>
-              <TouchableOpacity style={styles.stepperBtnLg} onPress={() => adjustReps(-1)} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={styles.stepperBtnLg}
+                {...stepperPressProps((h) => adjustReps(-1, h))}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Retirer une répétition"
+              >
                 <Text style={styles.stepperBtnLgText}>−1</Text>
               </TouchableOpacity>
-              <View style={styles.stepperCenterCol}>
+              <View
+                style={styles.stepperCenterCol}
+                accessible
+                accessibilityRole="adjustable"
+                accessibilityLabel="Répétitions"
+                accessibilityValue={{
+                  text: `${currentReps} reps${currentExercise ? `, objectif ${currentExercise.currentTargetReps}` : ''}`,
+                }}
+                accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+                onAccessibilityAction={(e) => adjustReps(e.nativeEvent.actionName === 'increment' ? 1 : -1)}
+              >
                 <Text style={styles.stepperRowLabel}>RÉPÉTITIONS</Text>
-                <View style={styles.stepperValueRow}>
-                  <Text style={styles.stepperBigValue}>{currentReps}</Text>
-                  <Text style={styles.stepperUnit}>reps</Text>
+                <View style={styles.stepperValueBox}>
+                  <Text style={styles.stepperBigValue} numberOfLines={1} adjustsFontSizeToFit>
+                    {currentReps}
+                  </Text>
                 </View>
               </View>
-              <TouchableOpacity style={styles.stepperBtnLg} onPress={() => adjustReps(1)} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={styles.stepperBtnLg}
+                {...stepperPressProps((h) => adjustReps(1, h))}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Ajouter une répétition"
+              >
                 <Text style={styles.stepperBtnLgText}>+1</Text>
               </TouchableOpacity>
             </View>
@@ -787,30 +904,6 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           )}
         </LinearGradient>
 
-        {/* Validation de la série */}
-        <Text style={styles.sectionLabel}>VALIDER LA SÉRIE {currentSetNum}</Text>
-
-        {!!currentExercise && currentSetNum === currentExercise.numSets && (
-          <TouchableOpacity
-            style={styles.easyToggleRow}
-            onPress={() => {
-              triggerLightHaptic();
-              setEasyByExerciseId((prev) => ({ ...prev, [currentExercise.id]: !prev[currentExercise.id] }));
-            }}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.easyCheckbox, easyByExerciseId[currentExercise.id] && styles.easyCheckboxChecked]}>
-              {!!easyByExerciseId[currentExercise.id] && <Icon name="check" size={14} color="#FFFFFF" />}
-            </View>
-            <Text style={styles.easyToggleText}>Dernière série facile (2+ reps en réserve)</Text>
-          </TouchableOpacity>
-        )}
-
-        <TouchableOpacity style={styles.validateBtn} onPress={handleCompleteSet} activeOpacity={0.85}>
-          <Text style={styles.validateBtnText}>Valider la série</Text>
-          <Icon name="arrow-right" size={18} color="#FFFFFF" />
-        </TouchableOpacity>
-
         {/* Récapitulatif en direct de la séance */}
         <View style={styles.liveLogSection}>
           <View style={styles.liveLogHeader}>
@@ -821,7 +914,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           {completedExercises.length === 0 ? (
             <View style={styles.emptyLogsCard}>
               <Text style={styles.emptyLogsText}>Aucune série validée pour l'instant.</Text>
-              <Text style={styles.emptyLogsSubtext}>Renseigne ta charge et valide ta première série ci-dessus !</Text>
+              <Text style={styles.emptyLogsSubtext}>Tes séries validées apparaîtront ici.</Text>
             </View>
           ) : (
             <View style={styles.completedList}>
@@ -830,8 +923,13 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                   <Text style={styles.completedExName}>{cEx.exerciseName}</Text>
                   <View style={styles.completedSetsRow}>
                     {cEx.sets.map((s, sIdx) => (
-                      <View key={sIdx} style={[styles.setChip, { backgroundColor: FEELING_BG[s.feeling] }]}>
-                        <Dot color={FEELING_DOT[s.feeling]} size={7} />
+                      <View
+                        key={sIdx}
+                        style={[styles.setChip, { backgroundColor: FEELING_BG[s.feeling] }]}
+                        accessible
+                        accessibilityLabel={setA11yLabel(s.setNumber, s.repsDone, s.weight, s.feeling, s.markedEasy)}
+                      >
+                        <FeelingMark feeling={s.feeling} />
                         <Text style={[styles.setChipText, { color: FEELING_INK[s.feeling] }]}>
                           S{s.setNumber} · {s.repsDone} × {fmtKg(s.weight)}kg
                         </Text>
@@ -847,16 +945,60 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         {/* Bouton Terminer la séance */}
         <TouchableOpacity
           style={styles.finishBtn}
-          onPress={handleFinalizeSession}
+          onPress={() => {
+            // Séance vide : handleFinalizeSession affiche directement le message d'erreur.
+            if (completedExercises.length === 0) {
+              handleFinalizeSession();
+              return;
+            }
+            triggerLightHaptic();
+            setIsFinishSheetOpen(true);
+          }}
           activeOpacity={0.85}
+          accessibilityRole="button"
         >
           <Text style={styles.finishBtnText}>Terminer la séance</Text>
         </TouchableOpacity>
       </ScrollView>
 
+      {/* Barre fixe en bas d'écran : l'action principale reste visible quelle que soit la
+          hauteur de la carte (échauffement, disques…). La case "Dernière série facile" y
+          monte aussi, puisqu'elle porte sur la série qu'on valide. */}
+      <View style={[styles.bottomBar, isLastSetOfExercise && styles.bottomBarWithToggle]}>
+        {isLastSetOfExercise && !!currentExercise && (
+          <TouchableOpacity
+            style={styles.easyToggleRow}
+            onPress={() => {
+              triggerLightHaptic();
+              setEasyByExerciseId((prev) => ({ ...prev, [currentExercise.id]: !prev[currentExercise.id] }));
+            }}
+            activeOpacity={0.8}
+            accessibilityRole="checkbox"
+            accessibilityLabel="Dernière série facile, 2 reps ou plus en réserve"
+            accessibilityState={{ checked: !!easyByExerciseId[currentExercise.id] }}
+          >
+            <View style={[styles.easyCheckbox, easyByExerciseId[currentExercise.id] && styles.easyCheckboxChecked]}>
+              {!!easyByExerciseId[currentExercise.id] && <Icon name="check" size={14} color="#FFFFFF" />}
+            </View>
+            <Text style={styles.easyToggleText}>Dernière série facile (2+ reps en réserve)</Text>
+          </TouchableOpacity>
+        )}
+
+        <TouchableOpacity
+          style={styles.validateBtn}
+          onPress={handleCompleteSet}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Valider la série ${currentSetNum}`}
+        >
+          <Text style={styles.validateBtnText}>Valider la série {currentSetNum}</Text>
+          <Icon name="arrow-right" size={18} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
+
       {/* Toast "séance vide" */}
       {emptyToastVisible && (
-        <View style={styles.toast} pointerEvents="none">
+        <View style={styles.toast} pointerEvents="none" accessibilityLiveRegion="polite" accessibilityRole="alert">
           <Text style={styles.toastText}>Valide au moins une série avant de terminer.</Text>
         </View>
       )}
@@ -872,24 +1014,54 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           onSkip={closeRestOverlay}
           onFinish={closeRestOverlay}
           onUndo={isWarmupRest ? undefined : handleUndoFromRest}
+          lastSet={isWarmupRest ? undefined : lastValidatedSet ?? undefined}
         />
       )}
 
       {/* FEUILLE : QUITTER LA SÉANCE */}
       <BottomSheet visible={isQuitSheetOpen} onClose={() => setIsQuitSheetOpen(false)} maxHeightPercent={50}>
-        <Text style={styles.sheetTitle}>Quitter la séance ?</Text>
+        <Text style={styles.sheetTitle} accessibilityRole="header">Quitter la séance ?</Text>
         <Text style={styles.sheetBody}>Les séries effectuées pendant cette séance ne seront pas enregistrées.</Text>
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => setIsQuitSheetOpen(false)} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => setIsQuitSheetOpen(false)} activeOpacity={0.85} accessibilityRole="button">
           <Text style={styles.primaryBtnText}>Continuer</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.destructiveBtn} onPress={onQuitSession} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.destructiveBtn} onPress={onQuitSession} activeOpacity={0.85} accessibilityRole="button">
           <Text style={styles.destructiveBtnText}>Quitter</Text>
+        </TouchableOpacity>
+      </BottomSheet>
+
+      {/* FEUILLE : TERMINER LA SÉANCE */}
+      <BottomSheet visible={isFinishSheetOpen} onClose={() => setIsFinishSheetOpen(false)} maxHeightPercent={50}>
+        <Text style={styles.sheetTitle} accessibilityRole="header">Terminer la séance ?</Text>
+        <Text style={styles.sheetBody}>
+          {liveSetCount} série{liveSetCount > 1 ? 's' : ''} sur {completedExercises.length} exercice
+          {completedExercises.length > 1 ? 's' : ''} {liveSetCount > 1 ? 'seront enregistrées' : 'sera enregistrée'}, et
+          les charges de ta prochaine séance seront recalculées.
+        </Text>
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={() => {
+            setIsFinishSheetOpen(false);
+            handleFinalizeSession();
+          }}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+        >
+          <Text style={styles.primaryBtnText}>Terminer et voir le bilan</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.outlineBtn}
+          onPress={() => setIsFinishSheetOpen(false)}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+        >
+          <Text style={styles.outlineBtnText}>Continuer la séance</Text>
         </TouchableOpacity>
       </BottomSheet>
 
       {/* FEUILLE : SÉLECTEUR D'EXERCICE DU CATALOGUE */}
       <BottomSheet visible={isPickerSheetOpen} onClose={() => setIsPickerSheetOpen(false)}>
-        <Text style={styles.sheetTitle}>Choisir un exercice</Text>
+        <Text style={styles.sheetTitle} accessibilityRole="header">Choisir un exercice</Text>
         <Text style={styles.sheetSubtitle}>{workoutName} · {catalogExercises.length} exercices</Text>
 
         <ScrollView style={styles.catalogScroll} showsVerticalScrollIndicator={false}>
@@ -902,6 +1074,17 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 style={[styles.catalogItem, isSelected && { backgroundColor: split.tint }]}
                 onPress={() => handleSelectExercise(catEx)}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`${idx + 1}. ${catEx.name}, ${CATEGORY_SUB_LABEL[catEx.category]}, conseillé ${kgA11y(
+                  prescribedFor(catEx).weight
+                )}${doneSets.length > 0 ? `, ${doneSets.length} série${doneSets.length > 1 ? 's' : ''} faite${doneSets.length > 1 ? 's' : ''}` : ''}`}
+                accessibilityState={{ selected: isSelected }}
+                // La croix de suppression est imbriquée dans la ligne : sur Android, TalkBack ne
+                // l'atteint pas séparément, d'où cette action "Supprimer" sur la ligne elle-même.
+                accessibilityActions={[{ name: 'delete', label: 'Supprimer du catalogue' }]}
+                onAccessibilityAction={(e) => {
+                  if (e.nativeEvent.actionName === 'delete') handleDeleteCatalogExercise(catEx);
+                }}
               >
                 <View style={[styles.catalogIndexBadge, isSelected && styles.catalogIndexBadgeActive]}>
                   <Text style={[styles.catalogIndexText, isSelected && styles.catalogIndexTextActive]}>{idx + 1}</Text>
@@ -915,7 +1098,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 {doneSets.length > 0 && (
                   <View style={styles.catalogDoneDots}>
                     {doneSets.map((s, sIdx) => (
-                      <Dot key={sIdx} color={FEELING_DOT[s.feeling]} size={7} />
+                      <FeelingMark key={sIdx} feeling={s.feeling} />
                     ))}
                   </View>
                 )}
@@ -924,6 +1107,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                   onPress={() => handleDeleteCatalogExercise(catEx)}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   activeOpacity={0.6}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Supprimer ${catEx.name} du catalogue`}
                 >
                   <Icon name="x" size={14} color={THEME.colors.textSecondary} />
                 </TouchableOpacity>
@@ -939,6 +1124,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
             setIsCreateSheetOpen(true);
           }}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Nouvel exercice"
         >
           <Text style={styles.secondaryBtnText}>+ Nouvel exercice</Text>
         </TouchableOpacity>
@@ -947,14 +1134,15 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           style={styles.outlineBtn}
           onPress={() => setIsPickerSheetOpen(false)}
           activeOpacity={0.8}
+          accessibilityRole="button"
         >
           <Text style={styles.outlineBtnText}>Fermer</Text>
         </TouchableOpacity>
       </BottomSheet>
 
       {/* FEUILLE : CRÉER UN EXERCICE PERSONNALISÉ */}
-      <BottomSheet visible={isCreateSheetOpen} onClose={() => setIsCreateSheetOpen(false)} maxHeightPercent={70}>
-        <Text style={styles.sheetTitle}>Nouvel exercice</Text>
+      <BottomSheet visible={isCreateSheetOpen} onClose={() => setIsCreateSheetOpen(false)} maxHeightPercent={70} avoidKeyboard>
+        <Text style={styles.sheetTitle} accessibilityRole="header">Nouvel exercice</Text>
         <Text style={styles.sheetSubtitle}>Ajouter au catalogue permanent</Text>
 
         <Text style={styles.inputMiniLabel}>NOM DE LA MACHINE</Text>
@@ -964,13 +1152,18 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           onChangeText={setNewExName}
           placeholder="ex: HS Lateral Raise"
           placeholderTextColor={THEME.colors.textMuted}
+          accessibilityLabel="Nom de la machine"
         />
 
         <Text style={styles.inputMiniLabel}>TYPE D'ÉQUIPEMENT</Text>
-        <View style={styles.typeSegmentRow}>
+        <View style={styles.typeSegmentRow} accessibilityRole="radiogroup" accessibilityLabel="Type d'équipement">
           <TouchableOpacity
             style={[styles.typeSegment, newExCategory === 'HAMMER_STRENGTH' && styles.typeSegmentActive]}
             onPress={() => setNewExCategory('HAMMER_STRENGTH')}
+            hitSlop={{ top: 4, bottom: 4 }}
+            accessibilityRole="radio"
+            accessibilityLabel="Machine, 0 kilo à vide"
+            accessibilityState={{ checked: newExCategory === 'HAMMER_STRENGTH' }}
           >
             <Text style={[styles.typeSegmentText, newExCategory === 'HAMMER_STRENGTH' && styles.typeSegmentTextActive]}>
               Machine · 0 kg
@@ -979,6 +1172,10 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           <TouchableOpacity
             style={[styles.typeSegment, newExCategory === 'CABLE' && styles.typeSegmentActive]}
             onPress={() => setNewExCategory('CABLE')}
+            hitSlop={{ top: 4, bottom: 4 }}
+            accessibilityRole="radio"
+            accessibilityLabel="Poulie, 0 kilo à vide"
+            accessibilityState={{ checked: newExCategory === 'CABLE' }}
           >
             <Text style={[styles.typeSegmentText, newExCategory === 'CABLE' && styles.typeSegmentTextActive]}>
               Poulie · 0 kg
@@ -987,6 +1184,10 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           <TouchableOpacity
             style={[styles.typeSegment, newExCategory === 'FREE_WEIGHT' && styles.typeSegmentActive]}
             onPress={() => setNewExCategory('FREE_WEIGHT')}
+            hitSlop={{ top: 4, bottom: 4 }}
+            accessibilityRole="radio"
+            accessibilityLabel="Barre libre, barre de 20 kilos"
+            accessibilityState={{ checked: newExCategory === 'FREE_WEIGHT' }}
           >
             <Text style={[styles.typeSegmentText, newExCategory === 'FREE_WEIGHT' && styles.typeSegmentTextActive]}>
               Barre libre · 20 kg
@@ -1002,9 +1203,10 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           onChangeText={setNewExWeight}
           placeholder="40"
           placeholderTextColor={THEME.colors.textMuted}
+          accessibilityLabel="Charge initiale en kilos"
         />
 
-        <TouchableOpacity style={styles.primaryBtn} onPress={handleCreateCustomExercise} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.primaryBtn} onPress={handleCreateCustomExercise} activeOpacity={0.85} accessibilityRole="button">
           <Text style={styles.primaryBtnText}>Créer & sélectionner</Text>
         </TouchableOpacity>
 
@@ -1012,6 +1214,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           style={styles.outlineBtn}
           onPress={() => setIsCreateSheetOpen(false)}
           activeOpacity={0.8}
+          accessibilityRole="button"
         >
           <Text style={styles.outlineBtnText}>Annuler</Text>
         </TouchableOpacity>
@@ -1099,16 +1302,14 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   buffBadgeText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
     color: '#00296B',
   },
   timerText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: THEME.colors.textPrimary,
     fontSize: 14,
-    fontWeight: '800',
     letterSpacing: 0.3,
     fontVariant: ['tabular-nums'],
   },
@@ -1140,7 +1341,6 @@ const styles = StyleSheet.create({
   progressMetaText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
-    fontWeight: '700',
     color: THEME.colors.textSecondary,
   },
   changeExBtn: {
@@ -1152,7 +1352,6 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     color: THEME.colors.accentStrong,
     fontSize: 12,
-    fontWeight: '700',
   },
   heroCard: {
     borderRadius: THEME.radius.hero,
@@ -1175,16 +1374,14 @@ const styles = StyleSheet.create({
     borderRadius: THEME.radius.pill,
   },
   typeBadgeText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
     color: THEME.colors.textOnDark,
     letterSpacing: 0.4,
   },
   setCounterText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 12,
-    fontWeight: '800',
     color: 'rgba(242, 246, 252, 0.75)',
   },
   currentExName: {
@@ -1200,8 +1397,7 @@ const styles = StyleSheet.create({
   lastPerfLabel: {
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
-    fontWeight: '700',
-    color: 'rgba(242, 246, 252, 0.7)',
+    color: 'rgba(242, 246, 252, 0.78)',
   },
   lastPerfChipsRow: {
     flexDirection: 'row',
@@ -1220,17 +1416,10 @@ const styles = StyleSheet.create({
   lastPerfChipText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
-    fontWeight: '700',
     color: THEME.colors.textOnDark,
   },
   warmupBlock: {
     gap: 6,
-  },
-  warmupLabel: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 11,
-    fontWeight: '700',
-    color: 'rgba(242, 246, 252, 0.7)',
   },
   warmupChipsWrap: {
     position: 'relative',
@@ -1241,8 +1430,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   warmupChip: {
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
     borderRadius: THEME.radius.pill,
     borderWidth: 1,
     borderStyle: 'dashed',
@@ -1251,19 +1440,17 @@ const styles = StyleSheet.create({
   warmupChipText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
-    fontWeight: '700',
     color: 'rgba(242, 246, 252, 0.75)',
   },
   warmupRestBtn: {
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
     borderRadius: THEME.radius.pill,
     backgroundColor: 'rgba(242, 246, 252, 0.16)',
   },
   warmupRestBtnText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
-    fontWeight: '700',
     color: THEME.colors.textOnDark,
   },
   warmupPopup: {
@@ -1290,9 +1477,11 @@ const styles = StyleSheet.create({
     padding: 8,
     gap: 6,
   },
+  // Chaque ligne = libellé (18) au-dessus d'une bande de 56 où boutons et chiffre partagent
+  // exactement la même hauteur : le chiffre est centré pile entre les boutons, sur les deux axes.
   stepperFullRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: 8,
   },
   stepperBtnLg: {
@@ -1304,59 +1493,56 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stepperBtnLgText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: THEME.colors.textOnDark,
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 19,
   },
   stepperCenterCol: {
     flex: 1,
     alignItems: 'center',
   },
   stepperRowLabel: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
-    color: 'rgba(242, 246, 252, 0.7)',
+    lineHeight: 14,
+    height: 14,
+    marginBottom: 4,
+    color: 'rgba(242, 246, 252, 0.78)',
     letterSpacing: 0.4,
+    includeFontPadding: false,
   },
-  stepperValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
+  stepperValueBox: {
+    alignSelf: 'stretch',
+    height: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   stepperBigValue: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 40,
-    fontWeight: '800',
+    lineHeight: 48,
     color: THEME.colors.textOnDark,
     letterSpacing: -1,
     fontVariant: ['tabular-nums'],
-  },
-  stepperUnit: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 15,
-    fontWeight: '700',
-    color: 'rgba(242, 246, 252, 0.75)',
+    // Android ajoute sinon une marge haute/basse propre à la police, qui décale le chiffre.
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   sectionLabel: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
     color: THEME.colors.textSecondary,
     letterSpacing: 1,
   },
   suggestionReasonText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 12,
-    fontWeight: '600',
     color: THEME.colors.accent,
     marginTop: 2,
   },
   calibrationHintText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 12,
-    fontWeight: '600',
     color: 'rgba(242, 246, 252, 0.75)',
     fontStyle: 'italic',
   },
@@ -1364,13 +1550,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    minHeight: 44,
+  },
+  bottomBar: {
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 12,
+    gap: 4,
+    backgroundColor: 'rgba(245, 247, 251, 0.96)',
+    borderTopWidth: 1,
+    borderTopColor: THEME.colors.hairline,
+  },
+  bottomBarWithToggle: {
+    paddingTop: 6,
   },
   easyCheckbox: {
     width: 24,
     height: 24,
     borderRadius: 7,
     borderWidth: 1.5,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: THEME.colors.controlBorder,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1379,9 +1578,8 @@ const styles = StyleSheet.create({
     borderColor: THEME.colors.textPrimary,
   },
   easyToggleText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 13,
-    fontWeight: '600',
     color: THEME.colors.textSecondary,
   },
   validateBtn: {
@@ -1394,10 +1592,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   validateBtnText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '800',
   },
   liveLogSection: {
     gap: 8,
@@ -1408,9 +1605,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   liveVolumeText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 13,
-    fontWeight: '800',
     color: THEME.colors.accentStrong,
   },
   emptyLogsCard: {
@@ -1424,7 +1620,6 @@ const styles = StyleSheet.create({
   emptyLogsText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
   emptyLogsSubtext: {
@@ -1447,9 +1642,8 @@ const styles = StyleSheet.create({
     borderTopColor: THEME.colors.hairline,
   },
   completedExName: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 13,
-    fontWeight: '800',
     color: THEME.colors.textPrimary,
     marginBottom: 6,
   },
@@ -1468,8 +1662,7 @@ const styles = StyleSheet.create({
   },
   setChipText: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 11,
   },
   finishBtn: {
     height: 56,
@@ -1483,16 +1676,16 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
   },
   finishBtnText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: THEME.colors.accentTextDark,
     fontSize: 15,
-    fontWeight: '800',
   },
   toast: {
     position: 'absolute',
     left: 24,
     right: 24,
-    bottom: 28,
+    // Au-dessus de la barre fixe "Valider la série".
+    bottom: 104,
     backgroundColor: THEME.colors.textPrimary,
     borderRadius: 16,
     paddingVertical: 12,
@@ -1503,7 +1696,6 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '700',
     textAlign: 'center',
   },
   sheetTitle: {
@@ -1512,18 +1704,16 @@ const styles = StyleSheet.create({
     color: THEME.colors.textPrimary,
   },
   sheetSubtitle: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 12,
     color: THEME.colors.textSecondary,
-    fontWeight: '600',
     marginTop: 2,
     marginBottom: 14,
   },
   sheetBody: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansMedium,
     fontSize: 13,
     color: THEME.colors.textSecondary,
-    fontWeight: '500',
     marginTop: 8,
     marginBottom: 18,
     lineHeight: 19,
@@ -1536,10 +1726,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   primaryBtnText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '800',
   },
   destructiveBtn: {
     backgroundColor: THEME.colors.feelingHardBg,
@@ -1548,10 +1737,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   destructiveBtnText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: THEME.colors.feelingHardText,
     fontSize: 14,
-    fontWeight: '800',
   },
   secondaryBtn: {
     height: 52,
@@ -1565,7 +1753,6 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     color: THEME.colors.textPrimary,
     fontSize: 13,
-    fontWeight: '700',
   },
   outlineBtn: {
     paddingVertical: 13,
@@ -1578,7 +1765,6 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     color: THEME.colors.textSecondary,
     fontSize: 13,
-    fontWeight: '700',
   },
   catalogScroll: {
     maxHeight: 340,
@@ -1604,9 +1790,8 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.colors.textPrimary,
   },
   catalogIndexText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 13,
-    fontWeight: '800',
     color: THEME.colors.textSecondary,
   },
   catalogIndexTextActive: {
@@ -1615,13 +1800,11 @@ const styles = StyleSheet.create({
   catalogItemName: {
     fontFamily: THEME.fonts.sans,
     fontSize: 14,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
   catalogItemSub: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansMedium,
     fontSize: 12,
-    fontWeight: '500',
     color: THEME.colors.textSecondary,
     marginTop: 2,
   },
@@ -1638,9 +1821,8 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   inputMiniLabel: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 10,
-    fontWeight: '800',
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 11,
     color: THEME.colors.textSecondary,
     letterSpacing: 0.6,
     marginBottom: 6,
@@ -1651,7 +1833,6 @@ const styles = StyleSheet.create({
     color: THEME.colors.textPrimary,
     fontFamily: THEME.fonts.sans,
     fontSize: 14,
-    fontWeight: '700',
     paddingHorizontal: 14,
     borderRadius: THEME.radius.inner,
     borderWidth: 1,
@@ -1682,7 +1863,6 @@ const styles = StyleSheet.create({
   typeSegmentText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
-    fontWeight: '700',
     color: THEME.colors.textSecondary,
   },
   typeSegmentTextActive: {

@@ -35,6 +35,19 @@ const SPARK_MAX_HEIGHT = 34;
 
 interface DashboardSheetProps {
   summary: DashboardSummary;
+  /** Prévient l'écran parent quand le tiroir s'ouvre ou se ferme (pour masquer ce qu'il y a
+   * derrière au lecteur d'écran pendant que le tiroir est déplié). */
+  onExpandedChange?: (expanded: boolean) => void;
+}
+
+/** "27/10" : version courte pour l'axe des graphiques. */
+function formatShortDate(dateISO: string): string {
+  try {
+    const d = parseLocalDate(dateISO);
+    return `${d.getDate()}/${d.getMonth() + 1}`;
+  } catch {
+    return dateISO;
+  }
 }
 
 function formatWeekLabel(weekStartISO: string): string {
@@ -74,7 +87,7 @@ const MiniSparkline: React.FC<{ weeklyStats: DashboardSummary['weeklyStats'] }> 
   );
 };
 
-export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
+export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpandedChange }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const translateY = useRef(new Animated.Value(COLLAPSED_TRANSLATE)).current;
   const isExpandedRef = useRef(false);
@@ -154,6 +167,7 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
     triggerLightHaptic();
     isExpandedRef.current = expand;
     setIsExpanded(expand);
+    onExpandedChange?.(expand);
     Animated.spring(translateY, {
       toValue: expand ? 0 : COLLAPSED_TRANSLATE,
       useNativeDriver: true,
@@ -188,10 +202,12 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
 
   const volumeChartData = summary.weeklyStats.map((w) => ({
     label: formatWeekLabel(w.weekStart),
+    axisLabel: formatShortDate(w.weekStart),
     value: w.totalVolume,
   }));
   const sessionsChartData = summary.weeklyStats.map((w) => ({
     label: formatWeekLabel(w.weekStart),
+    axisLabel: formatShortDate(w.weekStart),
     value: w.sessionCount,
   }));
 
@@ -202,16 +218,33 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
         pointerEvents={isExpanded ? 'auto' : 'none'}
         style={[styles.backdrop, { opacity: backdropOpacity }]}
       >
-        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => snapTo(false)} />
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={() => snapTo(false)}
+          accessible={false}
+          importantForAccessibility="no"
+        />
       </Animated.View>
 
-      <Animated.View style={[styles.sheet, { height: EXPANDED_HEIGHT, transform: [{ translateY }] }]}>
+      <Animated.View
+        style={[styles.sheet, { height: EXPANDED_HEIGHT, transform: [{ translateY }] }]}
+        accessibilityViewIsModal={isExpanded}
+      >
         {/* Zone de poignée : seule cette zone capte le glissement, pour ne pas gêner le scroll/tap du contenu */}
         <View {...panResponder.panHandlers} style={styles.handleArea}>
           <View style={styles.handleBar} />
 
           {!isExpanded ? (
-            <TouchableOpacity style={styles.peekRow} onPress={() => snapTo(true)} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.peekRow}
+              onPress={() => snapTo(true)}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={`Ton progrès : ${summary.insightText}`}
+              accessibilityHint="Déplie le tableau de bord"
+              accessibilityState={{ expanded: false }}
+            >
               <View style={styles.peekTextCol}>
                 <Text style={styles.peekLabel}>TON PROGRÈS</Text>
                 <Text style={styles.peekInsight} numberOfLines={1}>
@@ -222,8 +255,16 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
             </TouchableOpacity>
           ) : (
             <View style={styles.expandedHeaderRow}>
-              <Text style={styles.sheetTitle}>Ton progrès</Text>
-              <TouchableOpacity style={styles.reduceBtn} onPress={() => snapTo(false)} activeOpacity={0.8}>
+              <Text style={styles.sheetTitle} accessibilityRole="header">Ton progrès</Text>
+              <TouchableOpacity
+                style={styles.reduceBtn}
+                onPress={() => snapTo(false)}
+                activeOpacity={0.8}
+                hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                accessibilityRole="button"
+                accessibilityLabel="Réduire le tableau de bord"
+                accessibilityState={{ expanded: true }}
+              >
                 <Icon name="chevron-down" size={14} color={THEME.colors.textSecondary} />
                 <Text style={styles.closeHint}>Réduire</Text>
               </TouchableOpacity>
@@ -236,33 +277,37 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
           contentContainerStyle={styles.bodyContent}
           scrollEnabled={isExpanded}
           showsVerticalScrollIndicator={false}
+          // Replié, le contenu est seulement décalé hors écran : on le retire de l'arbre
+          // d'accessibilité pour que TalkBack ne s'y promène pas à l'aveugle.
+          importantForAccessibility={isExpanded ? 'auto' : 'no-hide-descendants'}
+          accessibilityElementsHidden={!isExpanded}
         >
           <Text style={styles.insightFull}>{summary.insightText}</Text>
 
           {/* Bloc de stats unique, 3 colonnes séparées par des filets */}
           <View style={styles.statsBlock}>
-            <View style={styles.statCol}>
+            <View style={styles.statCol} accessible accessibilityLabel={`${Math.round(summary.totalVolumeAllTime)} kilos soulevés au total`}>
               <Text style={styles.statValue}>{Math.round(summary.totalVolumeAllTime)}</Text>
               <Text style={styles.statLabel}>KG SOULEVÉS</Text>
             </View>
             <View style={styles.statDivider} />
-            <View style={styles.statCol}>
+            <View style={styles.statCol} accessible accessibilityLabel={`${summary.totalSessions} séances`}>
               <Text style={styles.statValue}>{summary.totalSessions}</Text>
               <Text style={styles.statLabel}>SÉANCES</Text>
             </View>
             <View style={styles.statDivider} />
-            <View style={styles.statCol}>
+            <View style={styles.statCol} accessible accessibilityLabel={`${summary.streakWeeks} semaines de suite`}>
               <Text style={styles.statValue}>{summary.streakWeeks}</Text>
               <Text style={styles.statLabel}>SEM. DE SUITE</Text>
             </View>
           </View>
 
           {/* Graphique de volume hebdomadaire */}
-          <Text style={styles.sectionLabel}>VOLUME PAR SEMAINE (KG)</Text>
+          <Text style={styles.sectionLabel} accessibilityRole="header">VOLUME PAR SEMAINE (KG)</Text>
           <BarChart data={volumeChartData} color={THEME.colors.accent} formatValue={(v) => `${Math.round(v)} kg`} />
 
           {/* Graphique de régularité */}
-          <Text style={[styles.sectionLabel, { marginTop: 18 }]}>SÉANCES PAR SEMAINE</Text>
+          <Text style={[styles.sectionLabel, { marginTop: 18 }]} accessibilityRole="header">SÉANCES PAR SEMAINE</Text>
           <BarChart
             data={sessionsChartData}
             color={THEME.colors.accentStrong}
@@ -273,8 +318,14 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
           {/* Poids de corps (optionnellement accompagné d'une photo) */}
           <View style={{ marginTop: 18 }}>
             <View style={styles.bwHeaderRow}>
-              <Text style={styles.sectionLabel}>POIDS DE CORPS</Text>
-              <TouchableOpacity onPress={openAddWeightSheet} activeOpacity={0.8}>
+              <Text style={styles.sectionLabel} accessibilityRole="header">POIDS DE CORPS</Text>
+              <TouchableOpacity
+                onPress={openAddWeightSheet}
+                activeOpacity={0.8}
+                hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel="Ajouter une pesée"
+              >
                 <Text style={styles.bwAddLink}>+ Ajouter</Text>
               </TouchableOpacity>
             </View>
@@ -284,7 +335,7 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
             ) : (
               <>
                 <BarChart
-                  data={bodyWeightLogs.map((e) => ({ label: formatWeekLabel(e.date), value: e.weight }))}
+                  data={bodyWeightLogs.map((e) => ({ label: formatWeekLabel(e.date), axisLabel: formatShortDate(e.date), value: e.weight }))}
                   color={THEME.colors.accent}
                   height={80}
                   formatValue={(v) => `${fmtKg(v)} kg`}
@@ -308,8 +359,10 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
                         </View>
                         <TouchableOpacity
                           onPress={() => confirmDeleteWeightEntry(e)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                           activeOpacity={0.6}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Supprimer la pesée du ${formatWeekLabel(e.date)}, ${fmtKg(e.weight)} kilos`}
                         >
                           <Icon name="x" size={14} color={THEME.colors.textSecondary} />
                         </TouchableOpacity>
@@ -323,7 +376,7 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
           {/* Répartition du volume par groupe musculaire (4 dernières semaines) */}
           {summary.volumeByMuscleGroup.length > 0 && (
             <>
-              <Text style={[styles.sectionLabel, { marginTop: 18 }]}>RÉPARTITION PAR GROUPE · 4 SEM.</Text>
+              <Text style={[styles.sectionLabel, { marginTop: 18 }]} accessibilityRole="header">RÉPARTITION PAR GROUPE · 4 SEM.</Text>
               <View style={styles.muscleGroupList}>
                 {(() => {
                   const maxVolume = Math.max(1, ...summary.volumeByMuscleGroup.map((g) => g.volume));
@@ -351,7 +404,7 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
           {/* Force estimée (1RM, formule Epley) sur les exercices barre libre */}
           {summary.strengthCurves.length > 0 && (
             <>
-              <Text style={[styles.sectionLabel, { marginTop: 18 }]}>FORCE ESTIMÉE (1RM)</Text>
+              <Text style={[styles.sectionLabel, { marginTop: 18 }]} accessibilityRole="header">FORCE ESTIMÉE (1RM)</Text>
               {summary.strengthCurves.map((curve) => {
                 const lastPoint = curve.points[curve.points.length - 1];
                 return (
@@ -366,7 +419,11 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
                     </View>
                     {curve.points.length >= 2 ? (
                       <BarChart
-                        data={curve.points.map((p) => ({ label: formatWeekLabel(p.date), value: p.estimated1RM }))}
+                        data={curve.points.map((p) => ({
+                          label: formatWeekLabel(p.date),
+                          axisLabel: formatShortDate(p.date),
+                          value: p.estimated1RM,
+                        }))}
                         color={THEME.colors.accentStrong}
                         height={70}
                         formatValue={(v) => `~${Math.round(v)} kg estimés`}
@@ -383,7 +440,7 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
           {/* Records personnels */}
           {summary.personalRecords.length > 0 && (
             <>
-              <Text style={[styles.sectionLabel, { marginTop: 18 }]}>RECORDS PERSONNELS</Text>
+              <Text style={[styles.sectionLabel, { marginTop: 18 }]} accessibilityRole="header">RECORDS PERSONNELS</Text>
               <View style={styles.prList}>
                 {summary.personalRecords.map((pr, idx) => (
                   <View key={idx} style={[styles.prRow, idx > 0 && styles.prRowDivider]}>
@@ -400,11 +457,11 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
       </Animated.View>
 
       {/* FEUILLE : AJOUTER UNE PESÉE (poids du jour + photo optionnelle) */}
-      <BottomSheet visible={isAddWeightOpen} onClose={() => setIsAddWeightOpen(false)} maxHeightPercent={65}>
-        <Text style={styles.bwSheetTitle}>Ajouter une pesée</Text>
+      <BottomSheet visible={isAddWeightOpen} onClose={() => setIsAddWeightOpen(false)} maxHeightPercent={65} avoidKeyboard>
+        <Text style={styles.bwSheetTitle} accessibilityRole="header">Ajouter une pesée</Text>
         <Text style={styles.bwSheetSubtitle}>Aujourd'hui</Text>
 
-        <Text style={styles.sectionLabel}>POIDS (KG)</Text>
+        <Text style={styles.sectionLabel} accessibilityRole="header">POIDS (KG)</Text>
         <TextInput
           style={styles.bwWeightInput}
           value={newWeightText}
@@ -412,13 +469,19 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
           keyboardType="decimal-pad"
           placeholder="72,5"
           placeholderTextColor={THEME.colors.textMuted}
+          accessibilityLabel="Poids en kilos"
         />
 
-        <Text style={[styles.sectionLabel, { marginTop: 16 }]}>PHOTO (OPTIONNEL)</Text>
+        <Text style={[styles.sectionLabel, { marginTop: 16 }]} accessibilityRole="header">PHOTO (OPTIONNEL)</Text>
         {newWeightPhotoUri ? (
           <View style={styles.bwPhotoPreviewRow}>
             <Image source={{ uri: newWeightPhotoUri }} style={styles.bwPhotoPreview} />
-            <TouchableOpacity onPress={() => setNewWeightPhotoUri(null)}>
+            <TouchableOpacity
+              onPress={() => setNewWeightPhotoUri(null)}
+              hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Retirer la photo"
+            >
               <Text style={styles.bwRemovePhotoText}>Retirer</Text>
             </TouchableOpacity>
           </View>
@@ -429,6 +492,9 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
               onPress={() => handlePickWeightPhoto('camera')}
               disabled={isPickingPhoto}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Prendre une photo"
+              accessibilityState={{ disabled: isPickingPhoto, busy: isPickingPhoto }}
             >
               <Text style={styles.bwPhotoBtnText}>{isPickingPhoto ? '...' : 'Appareil photo'}</Text>
             </TouchableOpacity>
@@ -437,16 +503,19 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary }) => {
               onPress={() => handlePickWeightPhoto('library')}
               disabled={isPickingPhoto}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Choisir une photo dans la galerie"
+              accessibilityState={{ disabled: isPickingPhoto, busy: isPickingPhoto }}
             >
               <Text style={styles.bwPhotoBtnText}>{isPickingPhoto ? '...' : 'Galerie'}</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        <TouchableOpacity style={styles.bwSaveBtn} onPress={handleSaveWeight} activeOpacity={0.85}>
+        <TouchableOpacity style={styles.bwSaveBtn} onPress={handleSaveWeight} activeOpacity={0.85} accessibilityRole="button">
           <Text style={styles.bwSaveBtnText}>Enregistrer</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.bwCancelBtn} onPress={() => setIsAddWeightOpen(false)} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.bwCancelBtn} onPress={() => setIsAddWeightOpen(false)} activeOpacity={0.8} accessibilityRole="button">
           <Text style={styles.bwCancelBtnText}>Annuler</Text>
         </TouchableOpacity>
       </BottomSheet>
@@ -502,9 +571,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   peekLabel: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
     color: THEME.colors.accentStrong,
     letterSpacing: 1,
   },
@@ -535,7 +603,6 @@ const styles = StyleSheet.create({
   closeHint: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
-    fontWeight: '700',
     color: THEME.colors.textSecondary,
   },
   body: {
@@ -546,10 +613,9 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   insightFull: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 12,
     color: THEME.colors.textSecondary,
-    fontWeight: '600',
     marginBottom: 14,
   },
   statsBlock: {
@@ -573,18 +639,16 @@ const styles = StyleSheet.create({
     color: THEME.colors.textPrimary,
   },
   statLabel: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 8,
-    fontWeight: '800',
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 11,
     color: THEME.colors.textSecondary,
     letterSpacing: 0.5,
     marginTop: 2,
     textAlign: 'center',
   },
   sectionLabel: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 10,
-    fontWeight: '800',
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 11,
     color: THEME.colors.textSecondary,
     letterSpacing: 0.8,
     marginBottom: 8,
@@ -610,13 +674,11 @@ const styles = StyleSheet.create({
   muscleGroupLabel: {
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
   muscleGroupValue: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 13,
-    fontWeight: '800',
     color: THEME.colors.accentStrong,
   },
   muscleGroupBarTrack: {
@@ -642,15 +704,13 @@ const styles = StyleSheet.create({
   strengthCurveName: {
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
     flex: 1,
     marginRight: 8,
   },
   strengthCurveLast: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 13,
-    fontWeight: '800',
     color: THEME.colors.accentStrong,
   },
   strengthCurveHint: {
@@ -677,15 +737,13 @@ const styles = StyleSheet.create({
   prName: {
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
     flex: 1,
     marginRight: 8,
   },
   prWeight: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 15,
-    fontWeight: '800',
     color: THEME.colors.accentStrong,
   },
   bwHeaderRow: {
@@ -697,7 +755,6 @@ const styles = StyleSheet.create({
   bwAddLink: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
-    fontWeight: '700',
     color: THEME.colors.accentStrong,
   },
   bwEmptyText: {
@@ -732,15 +789,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bwEntryWeight: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 13,
-    fontWeight: '800',
     color: THEME.colors.textPrimary,
   },
   bwEntryDate: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 11,
-    fontWeight: '600',
     color: THEME.colors.textSecondary,
     marginTop: 1,
   },
@@ -750,10 +805,9 @@ const styles = StyleSheet.create({
     color: THEME.colors.textPrimary,
   },
   bwSheetSubtitle: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 12,
     color: THEME.colors.textSecondary,
-    fontWeight: '600',
     marginTop: 2,
     marginBottom: 14,
   },
@@ -763,7 +817,6 @@ const styles = StyleSheet.create({
     color: THEME.colors.textPrimary,
     fontFamily: THEME.fonts.sans,
     fontSize: 16,
-    fontWeight: '700',
     paddingHorizontal: 14,
     borderRadius: THEME.radius.inner,
     borderWidth: 1,
@@ -786,7 +839,6 @@ const styles = StyleSheet.create({
   bwPhotoBtnText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
   bwPhotoPreviewRow: {
@@ -804,7 +856,6 @@ const styles = StyleSheet.create({
   bwRemovePhotoText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
-    fontWeight: '700',
     color: THEME.colors.feelingHardText,
   },
   bwSaveBtn: {
@@ -817,10 +868,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   bwSaveBtnText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '800',
   },
   bwCancelBtn: {
     paddingVertical: 13,
@@ -833,6 +883,5 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     color: THEME.colors.textSecondary,
     fontSize: 13,
-    fontWeight: '700',
   },
 });
