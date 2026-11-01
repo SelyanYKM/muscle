@@ -7,10 +7,10 @@ import {
   AppStateStatus,
   DeviceEventEmitter,
   Modal,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
@@ -50,10 +50,11 @@ interface RestTimerOverlayProps {
   lastSet?: SetResult;
 }
 
-const RING_SIZE = 264;
+// Anneau : 264 px au maximum, réduit sur les écrans peu hauts pour que tout l'écran de repos
+// tienne sans défiler (le reste des éléments garde sa taille).
+const RING_MAX_SIZE = 264;
+const RING_MIN_SIZE = 190;
 const RING_STROKE = 13;
-const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   initialSeconds,
@@ -69,6 +70,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   const [secondsRemaining, setSecondsRemaining] = useState(initialSeconds);
   const [totalSeconds, setTotalSeconds] = useState(initialSeconds);
   const [isPaused, setIsPaused] = useState(false);
+  const { height: windowHeight } = useWindowDimensions();
 
   // Timestamp cible absolu pour ne jamais perdre le temps en arrière-plan
   const targetTimeRef = useRef<number>(Date.now() + initialSeconds * 1000);
@@ -294,7 +296,10 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   const formattedTotal = formatMinSec(totalSeconds);
 
   const progressFraction = totalSeconds > 0 ? secondsRemaining / totalSeconds : 0;
-  const dashOffset = RING_CIRCUMFERENCE * (1 - progressFraction);
+  const ringSize = Math.round(Math.max(RING_MIN_SIZE, Math.min(RING_MAX_SIZE, windowHeight * 0.31)));
+  const ringRadius = (ringSize - RING_STROKE) / 2;
+  const ringCircumference = 2 * Math.PI * ringRadius;
+  const dashOffset = ringCircumference * (1 - progressFraction);
 
   return (
     <Modal visible transparent animationType="fade">
@@ -307,9 +312,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
           style={StyleSheet.absoluteFill}
         />
 
-        {/* Défilement de secours : sur un petit écran (ou police agrandie), "Je suis prêt" ne
-            doit jamais sortir de l'écran. Sans effet quand tout tient. */}
-        <ScrollView contentContainerStyle={styles.scrollContent} bounces={false} showsVerticalScrollIndicator={false}>
+        {/* Écran plein, sans défilement : les blocs se répartissent sur la hauteur disponible. */}
         <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
           <View style={styles.topGroup}>
             <Text style={styles.topSub}>{isPaused ? 'EN PAUSE' : 'RÉCUPÉRATION'}</Text>
@@ -335,32 +338,32 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
             accessibilityRole="timer"
             accessibilityLabel={`${isPaused ? 'Repos en pause' : 'Repos'} : ${durationA11y(secondsRemaining)} restantes sur ${durationA11y(totalSeconds)}`}
           >
-            <Svg width={RING_SIZE} height={RING_SIZE}>
+            <Svg width={ringSize} height={ringSize}>
               <Circle
-                cx={RING_SIZE / 2}
-                cy={RING_SIZE / 2}
-                r={RING_RADIUS}
+                cx={ringSize / 2}
+                cy={ringSize / 2}
+                r={ringRadius}
                 stroke="rgba(255, 255, 255, 0.14)"
                 strokeWidth={RING_STROKE}
                 fill="none"
               />
               <Circle
-                cx={RING_SIZE / 2}
-                cy={RING_SIZE / 2}
-                r={RING_RADIUS}
+                cx={ringSize / 2}
+                cy={ringSize / 2}
+                r={ringRadius}
                 stroke={THEME.colors.accent}
                 strokeWidth={RING_STROKE}
                 fill="none"
                 strokeLinecap="round"
-                strokeDasharray={`${RING_CIRCUMFERENCE} ${RING_CIRCUMFERENCE}`}
+                strokeDasharray={`${ringCircumference} ${ringCircumference}`}
                 strokeDashoffset={dashOffset}
                 rotation={-90}
-                originX={RING_SIZE / 2}
-                originY={RING_SIZE / 2}
+                originX={ringSize / 2}
+                originY={ringSize / 2}
               />
             </Svg>
             <View style={[StyleSheet.absoluteFill, styles.ringInner]}>
-              <Text style={styles.timeBig}>{formattedTime}</Text>
+              <Text style={[styles.timeBig, { fontSize: Math.round(ringSize * 0.3) }]}>{formattedTime}</Text>
               <Text style={styles.timeOf}>sur {formattedTotal}</Text>
             </View>
           </Animated.View>
@@ -451,7 +454,6 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
           )}
           </View>
         </Animated.View>
-        </ScrollView>
       </View>
     </Modal>
   );
@@ -461,16 +463,14 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  scrollContent: {
-    flexGrow: 1,
-  },
   content: {
     flex: 1,
     alignItems: 'center',
-    paddingTop: 60,
+    justifyContent: 'space-between',
+    paddingTop: 52,
     paddingHorizontal: 24,
     paddingBottom: 34,
-    gap: 22,
+    gap: 12,
   },
   topSub: {
     fontFamily: THEME.fonts.sansHeavy,

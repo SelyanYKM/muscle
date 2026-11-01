@@ -457,7 +457,7 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
       </Animated.View>
 
       {/* FEUILLE : AJOUTER UNE PESÉE (poids du jour + photo optionnelle) */}
-      <BottomSheet visible={isAddWeightOpen} onClose={() => setIsAddWeightOpen(false)} maxHeightPercent={65}>
+      <BottomSheet visible={isAddWeightOpen} onClose={() => setIsAddWeightOpen(false)} maxHeightPercent={65} avoidKeyboard>
         <Text style={styles.bwSheetTitle} accessibilityRole="header">Ajouter une pesée</Text>
         <Text style={styles.bwSheetSubtitle}>Aujourd'hui</Text>
 

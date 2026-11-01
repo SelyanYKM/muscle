@@ -768,9 +768,6 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
           {!!warmupSets && (
             <View style={styles.warmupBlock}>
-              <Text style={styles.warmupLabel}>
-                ÉCHAUFFEMENT SUGGÉRÉ · MAINTENIR = DISQUES
-              </Text>
               <View style={styles.warmupChipsWrap}>
                 <View style={styles.warmupChipsRow}>
                   {warmupSets.map((w, idx) => (
@@ -781,7 +778,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                       onLongPress={() => setWarmupPopupIdx(idx)}
                       onPressOut={() => setWarmupPopupIdx(null)}
                       delayLongPress={350}
-                      hitSlop={{ top: 9, bottom: 9, left: 2, right: 2 }}
+                      hitSlop={{ top: 10, bottom: 10, left: 2, right: 2 }}
                       accessibilityRole="button"
                       accessibilityLabel={`Échauffement : ${kgA11y(w.weight)}, ${w.reps} reps. ${
                         currentExercise
@@ -796,7 +793,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                     style={styles.warmupRestBtn}
                     onPress={handleWarmupRestButton}
                     activeOpacity={0.7}
-                    hitSlop={{ top: 9, bottom: 9, left: 2, right: 2 }}
+                    hitSlop={{ top: 10, bottom: 10, left: 2, right: 2 }}
                     accessibilityRole="button"
                     accessibilityLabel="Lancer un repos de 60 secondes après l'échauffement"
                   >
@@ -839,10 +836,11 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
                 onAccessibilityAction={(e) => adjustWeight(e.nativeEvent.actionName === 'increment' ? 2.5 : -2.5)}
               >
-                <Text style={styles.stepperRowLabel}>CHARGE</Text>
-                <View style={styles.stepperValueRow}>
-                  <Text style={styles.stepperBigValue}>{fmtKg(currentWeight)}</Text>
-                  <Text style={styles.stepperUnit}>kg</Text>
+                <Text style={styles.stepperRowLabel}>CHARGE · KG</Text>
+                <View style={styles.stepperValueBox}>
+                  <Text style={styles.stepperBigValue} numberOfLines={1} adjustsFontSizeToFit>
+                    {fmtKg(currentWeight)}
+                  </Text>
                 </View>
               </View>
               <TouchableOpacity
@@ -878,14 +876,11 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 onAccessibilityAction={(e) => adjustReps(e.nativeEvent.actionName === 'increment' ? 1 : -1)}
               >
                 <Text style={styles.stepperRowLabel}>RÉPÉTITIONS</Text>
-                <View style={styles.stepperValueRow}>
-                  <Text style={styles.stepperBigValue}>{currentReps}</Text>
-                  <Text style={styles.stepperUnit}>reps</Text>
+                <View style={styles.stepperValueBox}>
+                  <Text style={styles.stepperBigValue} numberOfLines={1} adjustsFontSizeToFit>
+                    {currentReps}
+                  </Text>
                 </View>
-                {/* Objectif toujours visible : c'est lui qui décide Réussi / Échec à la validation. */}
-                {!!currentExercise && (
-                  <Text style={styles.stepperObjectiveText}>objectif {currentExercise.currentTargetReps}</Text>
-                )}
               </View>
               <TouchableOpacity
                 style={styles.stepperBtnLg}
@@ -1146,7 +1141,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       </BottomSheet>
 
       {/* FEUILLE : CRÉER UN EXERCICE PERSONNALISÉ */}
-      <BottomSheet visible={isCreateSheetOpen} onClose={() => setIsCreateSheetOpen(false)} maxHeightPercent={70}>
+      <BottomSheet visible={isCreateSheetOpen} onClose={() => setIsCreateSheetOpen(false)} maxHeightPercent={70} avoidKeyboard>
         <Text style={styles.sheetTitle} accessibilityRole="header">Nouvel exercice</Text>
         <Text style={styles.sheetSubtitle}>Ajouter au catalogue permanent</Text>
 
@@ -1426,11 +1421,6 @@ const styles = StyleSheet.create({
   warmupBlock: {
     gap: 6,
   },
-  warmupLabel: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 11,
-    color: 'rgba(242, 246, 252, 0.78)',
-  },
   warmupChipsWrap: {
     position: 'relative',
   },
@@ -1440,8 +1430,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   warmupChip: {
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
     borderRadius: THEME.radius.pill,
     borderWidth: 1,
     borderStyle: 'dashed',
@@ -1453,8 +1443,8 @@ const styles = StyleSheet.create({
     color: 'rgba(242, 246, 252, 0.75)',
   },
   warmupRestBtn: {
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
     borderRadius: THEME.radius.pill,
     backgroundColor: 'rgba(242, 246, 252, 0.16)',
   },
@@ -1487,9 +1477,11 @@ const styles = StyleSheet.create({
     padding: 8,
     gap: 6,
   },
+  // Chaque ligne = libellé (18) au-dessus d'une bande de 56 où boutons et chiffre partagent
+  // exactement la même hauteur : le chiffre est centré pile entre les boutons, sur les deux axes.
   stepperFullRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: 8,
   },
   stepperBtnLg: {
@@ -1503,7 +1495,7 @@ const styles = StyleSheet.create({
   stepperBtnLgText: {
     fontFamily: THEME.fonts.sansHeavy,
     color: THEME.colors.textOnDark,
-    fontSize: 15,
+    fontSize: 19,
   },
   stepperCenterCol: {
     flex: 1,
@@ -1512,25 +1504,29 @@ const styles = StyleSheet.create({
   stepperRowLabel: {
     fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
+    lineHeight: 14,
+    height: 14,
+    marginBottom: 4,
     color: 'rgba(242, 246, 252, 0.78)',
     letterSpacing: 0.4,
+    includeFontPadding: false,
   },
-  stepperValueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
+  stepperValueBox: {
+    alignSelf: 'stretch',
+    height: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   stepperBigValue: {
     fontFamily: THEME.fonts.sansHeavy,
     fontSize: 40,
+    lineHeight: 48,
     color: THEME.colors.textOnDark,
     letterSpacing: -1,
     fontVariant: ['tabular-nums'],
-  },
-  stepperUnit: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 15,
-    color: 'rgba(242, 246, 252, 0.75)',
+    // Android ajoute sinon une marge haute/basse propre à la police, qui décale le chiffre.
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   sectionLabel: {
     fontFamily: THEME.fonts.sansHeavy,
@@ -1567,12 +1563,6 @@ const styles = StyleSheet.create({
   },
   bottomBarWithToggle: {
     paddingTop: 6,
-  },
-  stepperObjectiveText: {
-    fontFamily: THEME.fonts.sansSemi,
-    fontSize: 11,
-    color: 'rgba(242, 246, 252, 0.78)',
-    marginTop: 1,
   },
   easyCheckbox: {
     width: 24,
