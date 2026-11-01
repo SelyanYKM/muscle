@@ -93,6 +93,7 @@ export const THEME_SOFT_STRENGTH = {
     textSecondary: '#6B6875',   // Gris ardoise chaleureux
     textMuted: '#9E9AA7',       // Légendes adoucies
     controlBorder: '#8A8694',   // bord des cases à cocher (3:1 minimum)
+    chartMuted: '#8A8694',      // barres secondaires des graphiques
     textOnDark: '#F4EDF7',      // Texte clair sur fond sombre (carte de série violette)
 
     // Accents du moodboard — terracotta doux (remplace l'orange vif d'origine)
@@ -176,6 +177,8 @@ export const THEME_BLUE_GOLD = {
     textMuted: '#667086',
     // Bord des contrôles (cases à cocher) : 3,5:1 sur le fond, seuil WCAG des éléments d'interface.
     controlBorder: '#7A8498',
+    // Barres secondaires des graphiques (la barre mise en avant est en textPrimary) : 3:1 sur blanc.
+    chartMuted: '#6A97CF',
     textOnDark: '#F2F6FC',
 
     // ⚠ accent (or) = surfaces / pastilles / barres UNIQUEMENT, jamais en texte sur fond clair.

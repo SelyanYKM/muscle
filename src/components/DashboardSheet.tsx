@@ -21,6 +21,7 @@ import { pickBodyWeightPhoto } from '../utils/bodyPhoto';
 import { fmtKg, parseLocalDate } from '../utils/format';
 import { triggerLightHaptic, triggerMediumHaptic } from '../utils/haptics';
 import { BarChart } from './BarChart';
+import { LineChart } from './LineChart';
 import { BottomSheet } from './BottomSheet';
 import { Icon } from './Icon';
 
@@ -58,6 +59,16 @@ function formatWeekLabel(weekStartISO: string): string {
   }
 }
 
+/** Arrondi au dixième, pour les poids calculés (bornes d'axe, écarts) : 0,1 + 0,2 ≠ 0,3. */
+function round1(v: number): number {
+  return Math.round(v * 10) / 10;
+}
+
+/** "4 520" : séparateur de milliers français. */
+function fmtInt(v: number): string {
+  return Math.round(v).toLocaleString('fr-FR');
+}
+
 /** Mini-histogramme (6 dernières semaines de volume) affiché dans le tiroir replié. */
 const MiniSparkline: React.FC<{ weeklyStats: DashboardSummary['weeklyStats'] }> = ({ weeklyStats }) => {
   const bars = weeklyStats.slice(-6);
@@ -78,8 +89,9 @@ const MiniSparkline: React.FC<{ weeklyStats: DashboardSummary['weeklyStats'] }> 
             width={SPARK_BAR_WIDTH}
             height={barHeight}
             rx={2}
-            fill={THEME.colors.accent}
-            opacity={isLast ? 1 : 0.4}
+            // Mêmes deux tons que les graphiques du tiroir déplié : semaine en cours en bleu
+            // foncé, les précédentes en bleu moyen (l'or pâle à 40 % se perdait sur le blanc).
+            fill={isLast ? THEME.colors.textPrimary : THEME.colors.chartMuted}
           />
         );
       })}
@@ -210,6 +222,20 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
     axisLabel: formatShortDate(w.weekStart),
     value: w.sessionCount,
   }));
+  const bodyWeightChartData = bodyWeightLogs.map((e) => ({
+    label: formatWeekLabel(e.date),
+    axisLabel: formatShortDate(e.date),
+    value: e.weight,
+  }));
+  // Légende de la dernière pesée : l'écart depuis la première pesée affichée.
+  const bodyWeightCaption = (() => {
+    if (bodyWeightLogs.length < 2) return 'dernière pesée';
+    const first = bodyWeightLogs[0];
+    const delta = round1(bodyWeightLogs[bodyWeightLogs.length - 1].weight - first.weight);
+    const since = `depuis le ${formatShortDate(first.date)}`;
+    if (delta === 0) return `stable ${since}`;
+    return `${delta > 0 ? '+' : '−'}${fmtKg(Math.abs(delta))} kg ${since}`;
+  })();
 
   return (
     <>
@@ -286,8 +312,10 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
 
           {/* Bloc de stats unique, 3 colonnes séparées par des filets */}
           <View style={styles.statsBlock}>
-            <View style={styles.statCol} accessible accessibilityLabel={`${Math.round(summary.totalVolumeAllTime)} kilos soulevés au total`}>
-              <Text style={styles.statValue}>{Math.round(summary.totalVolumeAllTime)}</Text>
+            <View style={styles.statCol} accessible accessibilityLabel={`${fmtInt(summary.totalVolumeAllTime)} kilos soulevés au total`}>
+              <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>
+                {fmtInt(summary.totalVolumeAllTime)}
+              </Text>
               <Text style={styles.statLabel}>KG SOULEVÉS</Text>
             </View>
             <View style={styles.statDivider} />
@@ -304,15 +332,15 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
 
           {/* Graphique de volume hebdomadaire */}
           <Text style={styles.sectionLabel} accessibilityRole="header">VOLUME PAR SEMAINE (KG)</Text>
-          <BarChart data={volumeChartData} color={THEME.colors.accent} formatValue={(v) => `${Math.round(v)} kg`} />
+          <BarChart data={volumeChartData} formatValue={(v) => `${fmtInt(v)} kg`} lastCaption="semaine en cours" />
 
           {/* Graphique de régularité */}
           <Text style={[styles.sectionLabel, { marginTop: 18 }]} accessibilityRole="header">SÉANCES PAR SEMAINE</Text>
           <BarChart
             data={sessionsChartData}
-            color={THEME.colors.accentStrong}
             height={80}
             formatValue={(v) => `${v} séance${v > 1 ? 's' : ''}`}
+            lastCaption="semaine en cours"
           />
 
           {/* Poids de corps (optionnellement accompagné d'une photo) */}
@@ -334,11 +362,14 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
               <Text style={styles.bwEmptyText}>Pas encore de pesée enregistrée.</Text>
             ) : (
               <>
-                <BarChart
-                  data={bodyWeightLogs.map((e) => ({ label: formatWeekLabel(e.date), axisLabel: formatShortDate(e.date), value: e.weight }))}
-                  color={THEME.colors.accent}
-                  height={80}
-                  formatValue={(v) => `${fmtKg(v)} kg`}
+                {/* Courbe à axe resserré : en barres partant de 0, quelques centaines de grammes
+                    d'écart restaient invisibles. */}
+                <LineChart
+                  data={bodyWeightChartData}
+                  padding={0.3}
+                  formatValue={(v) => `${fmtKg(round1(v))} kg`}
+                  formatAxis={(v) => fmtKg(round1(v))}
+                  lastCaption={bodyWeightCaption}
                 />
                 {/* Dernières pesées : chacune supprimable (photo comprise), pas seulement
                     celles avec photo — sinon impossible de corriger une pesée sans photo. */}
@@ -418,15 +449,16 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
                       )}
                     </View>
                     {curve.points.length >= 2 ? (
-                      <BarChart
+                      <LineChart
                         data={curve.points.map((p) => ({
                           label: formatWeekLabel(p.date),
                           axisLabel: formatShortDate(p.date),
                           value: p.estimated1RM,
                         }))}
-                        color={THEME.colors.accentStrong}
                         height={70}
+                        padding={2}
                         formatValue={(v) => `~${Math.round(v)} kg estimés`}
+                        formatAxis={(v) => String(Math.round(v))}
                       />
                     ) : (
                       <Text style={styles.strengthCurveHint}>Encore une séance ou deux pour voir la tendance.</Text>
@@ -447,7 +479,7 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
                     <Text style={styles.prName} numberOfLines={1}>
                       {pr.exerciseName}
                     </Text>
-                    <Text style={styles.prWeight}>{pr.maxWeight} kg</Text>
+                    <Text style={styles.prWeight}>{fmtKg(pr.maxWeight)} kg</Text>
                   </View>
                 ))}
               </View>
@@ -538,7 +570,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.97)',
+    // Opaque : à 97 %, les cartes Push / Pull / Legs transparaissaient derrière les graphiques.
+    backgroundColor: THEME.colors.cardBg,
     borderTopLeftRadius: THEME.radius.sheet,
     borderTopRightRadius: THEME.radius.sheet,
     shadowColor: THEME.colors.shadow,
@@ -690,7 +723,8 @@ const styles = StyleSheet.create({
   muscleGroupBarFill: {
     height: 6,
     borderRadius: 3,
-    backgroundColor: THEME.colors.accent,
+    // Bleu acier plutôt qu'or : l'or pâle sur le rail clair passait sous 3:1.
+    backgroundColor: THEME.colors.accentStrong,
   },
   strengthCurveBlock: {
     marginBottom: 14,
