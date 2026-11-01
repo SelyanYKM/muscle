@@ -651,7 +651,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 <Text style={styles.timerText}>{formatElapsedTime(elapsedSeconds)}</Text>
                 {isBuffRemanent && (
                   <View style={styles.buffBadge}>
-                    <Text style={styles.buffBadgeText}>🦈 BUFF · {formatElapsedTime(buffSecondsLeft)}</Text>
+                    <Icon name="fin" size={14} color={THEME.colors.textPrimary} strokeWidth={2} />
+                    <Text style={styles.buffBadgeText}>BUFF · {formatElapsedTime(buffSecondsLeft)}</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -681,7 +682,9 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                     key={ex.id}
                     style={[
                       styles.progressSegment,
-                      { backgroundColor: isActive ? THEME.colors.textPrimary : isDone ? split.gradient[1] : 'rgba(0, 41, 107, 0.12)' },
+                      // Exercices faits en bleu atténué pour tous les splits (l'or de Push et le
+                      // bleu nuit de Legs se confondaient avec l'exercice en cours).
+                      { backgroundColor: isActive ? THEME.colors.textPrimary : isDone ? 'rgba(0, 41, 107, 0.42)' : 'rgba(0, 41, 107, 0.12)' },
                     ]}
                   />
                 );
@@ -755,7 +758,14 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 ))}
               </View>
               {!!currentReason && !currentExercise?.isCalibrating && (
-                <Text style={styles.suggestionReasonText}>→ {currentReason}</Text>
+                // Raison de la charge proposée : texte clair (l'or est réservé au temps et aux
+                // récompenses), icône de tendance alignée sur la 1re ligne, retour à la ligne aligné.
+                <View style={styles.suggestionReasonRow}>
+                  <View style={styles.suggestionReasonIcon}>
+                    <Icon name="trending-up" size={13} color={THEME.colors.textOnDark} strokeWidth={2.4} />
+                  </View>
+                  <Text style={styles.suggestionReasonText}>{currentReason.replace(/ kg/g, '\u00A0kg')}</Text>
+                </View>
               )}
             </View>
           ) : (
@@ -797,7 +807,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                     accessibilityRole="button"
                     accessibilityLabel="Lancer un repos de 60 secondes après l'échauffement"
                   >
-                    <Text style={styles.warmupRestBtnText}>⏱ Repos 60s</Text>
+                    <Icon name="timer" size={12} color={THEME.colors.textOnDark} strokeWidth={2.4} />
+                    <Text style={styles.warmupRestBtnText}>Repos 60s</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -1295,6 +1306,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FDC500',
   },
   buffBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: '#FDC500',
     borderRadius: THEME.radius.pill,
     paddingHorizontal: 8,
@@ -1443,6 +1457,9 @@ const styles = StyleSheet.create({
     color: 'rgba(242, 246, 252, 0.75)',
   },
   warmupRestBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 7,
     paddingVertical: 4,
     borderRadius: THEME.radius.pill,
@@ -1534,11 +1551,22 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary,
     letterSpacing: 1,
   },
+  suggestionReasonRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: 4,
+  },
+  suggestionReasonIcon: {
+    height: 17,
+    justifyContent: 'center',
+  },
   suggestionReasonText: {
+    flex: 1,
     fontFamily: THEME.fonts.sansSemi,
     fontSize: 12,
-    color: THEME.colors.accent,
-    marginTop: 2,
+    lineHeight: 17,
+    color: 'rgba(242, 246, 252, 0.88)',
   },
   calibrationHintText: {
     fontFamily: THEME.fonts.sansSemi,
@@ -1664,20 +1692,20 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
   },
+  // Action secondaire, en contour : "Valider la série" (barre fixe, bleu plein) reste la seule
+  // action principale à l'écran, et l'or n'est plus utilisé pour les boutons.
   finishBtn: {
-    height: 56,
-    backgroundColor: THEME.colors.accent,
+    height: 52,
+    backgroundColor: THEME.colors.cardBg,
+    borderWidth: 1.5,
+    borderColor: THEME.colors.textPrimary,
     borderRadius: THEME.radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: THEME.colors.accent,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.45,
-    shadowRadius: 24,
   },
   finishBtnText: {
     fontFamily: THEME.fonts.sansHeavy,
-    color: THEME.colors.accentTextDark,
+    color: THEME.colors.textPrimary,
     fontSize: 15,
   },
   toast: {

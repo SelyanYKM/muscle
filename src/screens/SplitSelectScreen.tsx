@@ -188,8 +188,10 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
                   <View style={styles.cardTopRow}>
                     <Text style={[styles.cardTitle, { color: split.fg }]}>{w.name}</Text>
                     {isToFollow && (
-                      <View style={styles.toFollowChip}>
-                        <Text style={styles.toFollowChipText}>À suivre</Text>
+                      // Mêmes couleurs que le bouton flèche : visible sur chaque carte (en bleu
+                      // impérial, la puce disparaissait sur la carte Legs).
+                      <View style={[styles.toFollowChip, { backgroundColor: split.btnBg }]}>
+                        <Text style={[styles.toFollowChipText, { color: split.btnFg }]}>À suivre</Text>
                       </View>
                     )}
                   </View>

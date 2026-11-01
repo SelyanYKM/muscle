@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { FEELING_DOT } from '../constants/feeling';
+import { Icon } from './Icon';
 import { THEME } from '../theme';
 import { SetResult } from '../types';
 import { durationA11y, kgA11y } from '../utils/a11y';
@@ -377,7 +378,8 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
             accessibilityRole="button"
             accessibilityLabel={isPaused ? 'Reprendre le repos' : 'Mettre le repos en pause'}
           >
-            <Text style={styles.pauseToggleText}>{isPaused ? '▶  Reprendre' : '⏸  Pause'}</Text>
+            <Icon name={isPaused ? 'play' : 'pause'} size={13} color="#FFFFFF" strokeWidth={1.6} />
+            <Text style={styles.pauseToggleText}>{isPaused ? 'Reprendre' : 'Pause'}</Text>
           </TouchableOpacity>
 
           {/* Boutons d'ajustement du repos */}
@@ -472,10 +474,11 @@ const styles = StyleSheet.create({
     paddingBottom: 34,
     gap: 12,
   },
+  // L'or est réservé au temps (l'anneau) : les libellés passent en blanc atténué.
   topSub: {
     fontFamily: THEME.fonts.sansHeavy,
     fontSize: 12,
-    color: THEME.colors.accent,
+    color: 'rgba(255, 255, 255, 0.72)',
     letterSpacing: 2.4,
   },
   ringInner: {
@@ -497,6 +500,9 @@ const styles = StyleSheet.create({
   },
   pauseToggleBtn: {
     height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     justifyContent: 'center',
     paddingHorizontal: 20,
     borderRadius: THEME.radius.pill,
@@ -538,7 +544,7 @@ const styles = StyleSheet.create({
   nextSetLabel: {
     fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    color: THEME.colors.accent,
+    color: 'rgba(255, 255, 255, 0.72)',
     letterSpacing: 1,
     marginBottom: 6,
   },
@@ -555,13 +561,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   nextSetHighlight: {
-    color: THEME.colors.accent,
+    color: '#FFFFFF',
     fontFamily: THEME.fonts.sansHeavy,
   },
+  // Action principale sur fond bleu : blanc plein, comme "Valider la série" en bleu plein
+  // sur fond clair. L'or n'est plus utilisé pour les boutons.
   skipButton: {
     width: '100%',
     height: 56,
-    backgroundColor: THEME.colors.accent,
+    backgroundColor: '#FFFFFF',
     borderRadius: THEME.radius.pill,
     alignItems: 'center',
     justifyContent: 'center',

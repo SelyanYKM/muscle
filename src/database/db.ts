@@ -1533,9 +1533,11 @@ function computeStreakWeeks(weeklyStats: WeeklyStat[]): number {
   return streak;
 }
 
+// Espaces fines insécables (\u202F) avant « ! », « ? » et « % » : typographie française, et pas
+// de retour à la ligne qui laisserait le signe seul en début de ligne.
 function buildInsightText(weeklyStats: WeeklyStat[]): string {
   if (weeklyStats.length < 4) {
-    return 'Continue à enregistrer tes séances pour voir ta progression apparaître ici !';
+    return 'Continue à enregistrer tes séances pour voir ta progression apparaître ici\u202F!';
   }
 
   const last2 = weeklyStats.slice(-2);
@@ -1545,13 +1547,13 @@ function buildInsightText(weeklyStats: WeeklyStat[]): string {
 
   if (prevVolume === 0) {
     return lastVolume > 0
-      ? 'Belle reprise ! Continue sur cette lancée.'
-      : 'Continue à enregistrer tes séances pour voir ta progression apparaître ici !';
+      ? 'Belle reprise\u202F! Continue sur cette lancée.'
+      : 'Continue à enregistrer tes séances pour voir ta progression apparaître ici\u202F!';
   }
 
   const changePercent = Math.round(((lastVolume - prevVolume) / prevVolume) * 100);
-  if (changePercent >= 10) return `Volume en hausse de ${changePercent}% sur les 2 dernières semaines !`;
-  if (changePercent <= -15) return `Volume en baisse de ${Math.abs(changePercent)}% sur 2 semaines — une séance de plus cette semaine ?`;
+  if (changePercent >= 10) return `Volume en hausse de ${changePercent}\u202F% sur les 2 dernières semaines\u202F!`;
+  if (changePercent <= -15) return `Volume en baisse de ${Math.abs(changePercent)}\u202F% sur 2 semaines — une séance de plus cette semaine\u202F?`;
   return 'Volume stable sur les 2 dernières semaines — régularité au rendez-vous.';
 }
 

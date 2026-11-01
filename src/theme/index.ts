@@ -232,10 +232,13 @@ export const THEME_BLUE_GOLD = {
     backdrop: 'rgba(0, 41, 107, 0.4)',
   },
   // Couleur signature par split (workoutId 1 = Push, 2 = Pull, 3 = Legs)
+  // Identité des splits, écartée en clarté (clair / moyen / foncé) : Pull et Legs se
+  // distinguent désormais sans la lettre (5,5:1 entre eux, contre 1,3 à 1,7:1 avant).
+  // Boutons et puces en bleu impérial ou en blanc : l'or n'y sert plus.
   splits: {
     1: { gradient: ['#FFD500', '#FDC500'] as [string, string], fg: '#00296B', tint: '#FFF4C2', ink: '#00296B', chipBg: 'rgba(255,255,255,0.55)', btnBg: '#00296B', btnFg: '#FFFFFF' },
-    2: { gradient: ['#00509D', '#003F88'] as [string, string], fg: '#FFFFFF', tint: '#DCE8F5', ink: '#00509D', chipBg: 'rgba(255,255,255,0.16)', btnBg: '#FDC500', btnFg: '#00296B' },
-    3: { gradient: ['#003F88', '#00296B'] as [string, string], fg: '#FFFFFF', tint: '#D9E1EF', ink: '#00296B', chipBg: 'rgba(255,255,255,0.16)', btnBg: '#FDC500', btnFg: '#00296B' },
+    2: { gradient: ['#93BCEA', '#74A7E0'] as [string, string], fg: '#00296B', tint: '#E1ECF9', ink: '#00509D', chipBg: 'rgba(255,255,255,0.5)', btnBg: '#00296B', btnFg: '#FFFFFF' },
+    3: { gradient: ['#00296B', '#001D4F'] as [string, string], fg: '#FFFFFF', tint: '#D9E1EF', ink: '#00296B', chipBg: 'rgba(255,255,255,0.16)', btnBg: '#FFFFFF', btnFg: '#00296B' },
   } as Record<number, { gradient: [string, string]; fg: string; tint: string; ink: string; chipBg: string; btnBg: string; btnFg: string }>,
   radius: { sheet: 28, hero: 28, card: 20, inner: 14, pill: 999 },
 };
