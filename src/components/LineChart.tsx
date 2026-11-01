@@ -65,13 +65,13 @@ export const LineChart: React.FC<LineChartProps> = ({
           <>
             <Svg width={width} height={height} accessible={false} importantForAccessibility="no-hide-descendants">
               {/* Repères pointillés du haut et du bas */}
-              <Line x1={0} y1={INSET} x2={plotWidth} y2={INSET} stroke="rgba(0, 41, 107, 0.08)" strokeWidth={1} strokeDasharray="3 3" />
+              <Line x1={0} y1={INSET} x2={plotWidth} y2={INSET} stroke="rgba(0, 41, 107, 0.2)" strokeWidth={1} strokeDasharray="3 3" />
               <Line
                 x1={0}
                 y1={height - INSET}
                 x2={plotWidth}
                 y2={height - INSET}
-                stroke="rgba(0, 41, 107, 0.08)"
+                stroke="rgba(0, 41, 107, 0.2)"
                 strokeWidth={1}
                 strokeDasharray="3 3"
               />
