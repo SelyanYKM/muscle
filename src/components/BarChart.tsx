@@ -4,7 +4,10 @@ import Svg, { Line, Path } from 'react-native-svg';
 import { THEME } from '../theme';
 
 interface BarChartDatum {
+  /** Libellé complet (bulle au tap, lecteur d'écran), ex. "27 oct.". */
   label: string;
+  /** Libellé court sous la barre, ex. "27/10" ; à défaut, `label`. */
+  axisLabel?: string;
   value: number;
 }
 
@@ -20,6 +23,10 @@ const CHART_WIDTH = 300;
 const BAR_GAP = 4;
 const TOP_RADIUS = 6;
 const BOTTOM_RADIUS = 2;
+// Largeur mini d'une étiquette d'axe en 11 px ("27/10") : quand les colonnes sont plus
+// étroites, on n'affiche qu'une étiquette sur deux (ou trois…), en partant de la dernière barre.
+const MIN_AXIS_LABEL_WIDTH = 34;
+const AXIS_LABEL_BOX = 44;
 
 // Rectangle à coins indépendants (SVG <rect rx> ne supporte qu'un rayon uniforme) :
 // coins du haut plus arrondis que ceux du bas, pour des barres en forme de "pilule" aplatie.
@@ -46,6 +53,7 @@ export const BarChart: React.FC<BarChartProps> = ({ data, color, height = 120, f
   const maxValue = Math.max(1, ...data.map((d) => d.value));
   const barWidth = data.length > 0 ? CHART_WIDTH / data.length - BAR_GAP : 0;
   const lastIdx = data.length - 1;
+  const labelStep = Math.max(1, Math.ceil(MIN_AXIS_LABEL_WIDTH / (barWidth + BAR_GAP)));
 
   const valueText = (v: number) => (formatValue ? formatValue(v) : String(v));
 
@@ -80,11 +88,22 @@ export const BarChart: React.FC<BarChartProps> = ({ data, color, height = 120, f
 
         {/* Étiquettes de l'axe (visuelles seulement : chaque colonne tactile porte déjà la sienne) */}
         <View style={styles.labelsRow} importantForAccessibility="no-hide-descendants">
-          {data.map((d, idx) => (
-            <Text key={idx} style={[styles.axisLabel, { width: barWidth + BAR_GAP }]} numberOfLines={1}>
-              {d.label}
-            </Text>
-          ))}
+          {data.map((d, idx) =>
+            (lastIdx - idx) % labelStep === 0 ? (
+              // Étiquette centrée sous sa barre, plus large que la colonne : elle déborde sur les
+              // colonnes voisines, laissées sans étiquette par labelStep.
+              <Text
+                key={idx}
+                style={[
+                  styles.axisLabel,
+                  { left: idx * (barWidth + BAR_GAP) + barWidth / 2 - AXIS_LABEL_BOX / 2, width: AXIS_LABEL_BOX },
+                ]}
+                numberOfLines={1}
+              >
+                {d.axisLabel ?? d.label}
+              </Text>
+            ) : null
+          )}
         </View>
 
         {/* Zones tactiles superposées : une colonne par barre, sur toute la hauteur (barre +
@@ -112,22 +131,22 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   tooltipText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
     color: THEME.colors.textPrimary,
   },
   labelsRow: {
-    flexDirection: 'row',
+    height: 16,
     marginTop: 4,
   },
   touchOverlay: {
     flexDirection: 'row',
   },
   axisLabel: {
+    position: 'absolute',
+    top: 0,
     fontFamily: THEME.fonts.sans,
-    fontSize: 8,
-    fontWeight: '700',
+    fontSize: 11,
     color: THEME.colors.textMuted,
     textAlign: 'center',
   },

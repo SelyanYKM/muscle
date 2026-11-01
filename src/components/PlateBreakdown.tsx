@@ -140,10 +140,9 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   valueLabel: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 9,
-    fontWeight: '800',
-    color: 'rgba(242, 246, 252, 0.65)',
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 11,
+    color: 'rgba(242, 246, 252, 0.78)',
     letterSpacing: 0.6,
   },
   valueText: {
@@ -152,17 +151,16 @@ const styles = StyleSheet.create({
     color: THEME.colors.textOnDark,
   },
   summaryText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(242, 246, 252, 0.72)',
+    color: 'rgba(242, 246, 252, 0.78)',
     marginTop: 1,
     maxWidth: '100%',
   },
   emptyText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
-    color: 'rgba(242, 246, 252, 0.55)',
+    color: 'rgba(242, 246, 252, 0.78)',
     fontStyle: 'italic',
   },
 });

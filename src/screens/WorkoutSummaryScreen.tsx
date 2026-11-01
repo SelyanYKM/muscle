@@ -358,9 +358,8 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   workoutSubtitle: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 13,
-    fontWeight: '600',
     color: THEME.colors.textSecondary,
     marginTop: 4,
   },
@@ -384,24 +383,21 @@ const styles = StyleSheet.create({
     color: THEME.colors.textPrimary,
   },
   statUnit: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 13,
-    fontWeight: '600',
     color: THEME.colors.textSecondary,
     marginTop: 1,
   },
   statLabel: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
     color: THEME.colors.textSecondary,
     letterSpacing: 0.6,
     marginTop: 4,
   },
   sectionHeading: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
     color: THEME.colors.textSecondary,
     letterSpacing: 1,
   },
@@ -419,7 +415,6 @@ const styles = StyleSheet.create({
   exerciseName: {
     fontFamily: THEME.fonts.sans,
     fontSize: 15,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
     flex: 1,
     marginRight: 8,
@@ -430,9 +425,8 @@ const styles = StyleSheet.create({
     borderRadius: THEME.radius.pill,
   },
   verdictBadgeText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
   },
   setsSummaryRow: {
     flexDirection: 'row',
@@ -452,30 +446,26 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
     color: THEME.colors.textPrimary,
-    fontWeight: '700',
   },
   cardHairline: {
     height: 1,
     backgroundColor: THEME.colors.hairline,
   },
   nextSessionLabel: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
     color: THEME.colors.textSecondary,
     letterSpacing: 0.6,
     marginBottom: 3,
   },
   nextWeightsText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 20,
-    fontWeight: '800',
     marginBottom: 3,
   },
   planMessageText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansMedium,
     fontSize: 13,
-    fontWeight: '500',
     color: THEME.colors.textSecondary,
     lineHeight: 18,
   },
@@ -489,9 +479,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   feelingScaleLabel: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
     color: THEME.colors.textSecondary,
     letterSpacing: 0.6,
   },
@@ -511,9 +500,8 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.colors.textPrimary,
   },
   feelingPillText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 15,
-    fontWeight: '800',
     color: THEME.colors.textSecondary,
   },
   feelingPillTextActive: {
@@ -524,9 +512,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   feelingScaleEndText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 11,
-    fontWeight: '600',
     color: THEME.colors.textMuted,
   },
   stretchRow: {
@@ -539,7 +526,7 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 7,
     borderWidth: 1.5,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: THEME.colors.controlBorder,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -548,9 +535,8 @@ const styles = StyleSheet.create({
     borderColor: THEME.colors.textPrimary,
   },
   stretchText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 13,
-    fontWeight: '600',
     color: THEME.colors.textSecondary,
   },
   closeButton: {
@@ -561,9 +547,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   closeButtonText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 15,
-    fontWeight: '800',
     color: '#FFFFFF',
   },
 });

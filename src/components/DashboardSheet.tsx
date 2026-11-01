@@ -40,6 +40,16 @@ interface DashboardSheetProps {
   onExpandedChange?: (expanded: boolean) => void;
 }
 
+/** "27/10" : version courte pour l'axe des graphiques. */
+function formatShortDate(dateISO: string): string {
+  try {
+    const d = parseLocalDate(dateISO);
+    return `${d.getDate()}/${d.getMonth() + 1}`;
+  } catch {
+    return dateISO;
+  }
+}
+
 function formatWeekLabel(weekStartISO: string): string {
   try {
     return parseLocalDate(weekStartISO).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
@@ -192,10 +202,12 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
 
   const volumeChartData = summary.weeklyStats.map((w) => ({
     label: formatWeekLabel(w.weekStart),
+    axisLabel: formatShortDate(w.weekStart),
     value: w.totalVolume,
   }));
   const sessionsChartData = summary.weeklyStats.map((w) => ({
     label: formatWeekLabel(w.weekStart),
+    axisLabel: formatShortDate(w.weekStart),
     value: w.sessionCount,
   }));
 
@@ -323,7 +335,7 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
             ) : (
               <>
                 <BarChart
-                  data={bodyWeightLogs.map((e) => ({ label: formatWeekLabel(e.date), value: e.weight }))}
+                  data={bodyWeightLogs.map((e) => ({ label: formatWeekLabel(e.date), axisLabel: formatShortDate(e.date), value: e.weight }))}
                   color={THEME.colors.accent}
                   height={80}
                   formatValue={(v) => `${fmtKg(v)} kg`}
@@ -407,7 +419,11 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
                     </View>
                     {curve.points.length >= 2 ? (
                       <BarChart
-                        data={curve.points.map((p) => ({ label: formatWeekLabel(p.date), value: p.estimated1RM }))}
+                        data={curve.points.map((p) => ({
+                          label: formatWeekLabel(p.date),
+                          axisLabel: formatShortDate(p.date),
+                          value: p.estimated1RM,
+                        }))}
                         color={THEME.colors.accentStrong}
                         height={70}
                         formatValue={(v) => `~${Math.round(v)} kg estimés`}
@@ -555,9 +571,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   peekLabel: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
     color: THEME.colors.accentStrong,
     letterSpacing: 1,
   },
@@ -588,7 +603,6 @@ const styles = StyleSheet.create({
   closeHint: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
-    fontWeight: '700',
     color: THEME.colors.textSecondary,
   },
   body: {
@@ -599,10 +613,9 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   insightFull: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 12,
     color: THEME.colors.textSecondary,
-    fontWeight: '600',
     marginBottom: 14,
   },
   statsBlock: {
@@ -626,18 +639,16 @@ const styles = StyleSheet.create({
     color: THEME.colors.textPrimary,
   },
   statLabel: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 8,
-    fontWeight: '800',
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 11,
     color: THEME.colors.textSecondary,
     letterSpacing: 0.5,
     marginTop: 2,
     textAlign: 'center',
   },
   sectionLabel: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 10,
-    fontWeight: '800',
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 11,
     color: THEME.colors.textSecondary,
     letterSpacing: 0.8,
     marginBottom: 8,
@@ -663,13 +674,11 @@ const styles = StyleSheet.create({
   muscleGroupLabel: {
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
   muscleGroupValue: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 13,
-    fontWeight: '800',
     color: THEME.colors.accentStrong,
   },
   muscleGroupBarTrack: {
@@ -695,15 +704,13 @@ const styles = StyleSheet.create({
   strengthCurveName: {
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
     flex: 1,
     marginRight: 8,
   },
   strengthCurveLast: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 13,
-    fontWeight: '800',
     color: THEME.colors.accentStrong,
   },
   strengthCurveHint: {
@@ -730,15 +737,13 @@ const styles = StyleSheet.create({
   prName: {
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
     flex: 1,
     marginRight: 8,
   },
   prWeight: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 15,
-    fontWeight: '800',
     color: THEME.colors.accentStrong,
   },
   bwHeaderRow: {
@@ -750,7 +755,6 @@ const styles = StyleSheet.create({
   bwAddLink: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
-    fontWeight: '700',
     color: THEME.colors.accentStrong,
   },
   bwEmptyText: {
@@ -785,15 +789,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bwEntryWeight: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 13,
-    fontWeight: '800',
     color: THEME.colors.textPrimary,
   },
   bwEntryDate: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 11,
-    fontWeight: '600',
     color: THEME.colors.textSecondary,
     marginTop: 1,
   },
@@ -803,10 +805,9 @@ const styles = StyleSheet.create({
     color: THEME.colors.textPrimary,
   },
   bwSheetSubtitle: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 12,
     color: THEME.colors.textSecondary,
-    fontWeight: '600',
     marginTop: 2,
     marginBottom: 14,
   },
@@ -816,7 +817,6 @@ const styles = StyleSheet.create({
     color: THEME.colors.textPrimary,
     fontFamily: THEME.fonts.sans,
     fontSize: 16,
-    fontWeight: '700',
     paddingHorizontal: 14,
     borderRadius: THEME.radius.inner,
     borderWidth: 1,
@@ -839,7 +839,6 @@ const styles = StyleSheet.create({
   bwPhotoBtnText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
   bwPhotoPreviewRow: {
@@ -857,7 +856,6 @@ const styles = StyleSheet.create({
   bwRemovePhotoText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
-    fontWeight: '700',
     color: THEME.colors.feelingHardText,
   },
   bwSaveBtn: {
@@ -870,10 +868,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   bwSaveBtnText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '800',
   },
   bwCancelBtn: {
     paddingVertical: 13,
@@ -886,6 +883,5 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     color: THEME.colors.textSecondary,
     fontSize: 13,
-    fontWeight: '700',
   },
 });

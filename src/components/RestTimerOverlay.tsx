@@ -432,9 +432,8 @@ const styles = StyleSheet.create({
     gap: 22,
   },
   topSub: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 12,
-    fontWeight: '800',
     color: THEME.colors.accent,
     letterSpacing: 2.4,
   },
@@ -452,7 +451,6 @@ const styles = StyleSheet.create({
   timeOf: {
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '700',
     color: 'rgba(255, 255, 255, 0.72)',
     marginTop: 2,
   },
@@ -465,10 +463,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   pauseToggleText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '800',
   },
   adjustRow: {
     flexDirection: 'row',
@@ -484,10 +481,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.22)',
   },
   adjustBtnText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '800',
   },
   nextSetInfoCard: {
     width: '100%',
@@ -499,9 +495,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.16)',
   },
   nextSetLabel: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
     color: THEME.colors.accent,
     letterSpacing: 1,
     marginBottom: 6,
@@ -513,15 +508,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   nextSetDetails: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 13,
     color: 'rgba(255, 255, 255, 0.85)',
     marginTop: 4,
-    fontWeight: '600',
   },
   nextSetHighlight: {
     color: THEME.colors.accent,
-    fontWeight: '800',
+    fontFamily: THEME.fonts.sansHeavy,
   },
   skipButton: {
     width: '100%',
@@ -532,10 +526,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   skipButtonText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: THEME.colors.accentTextDark,
     fontSize: 15,
-    fontWeight: '800',
   },
   undoLink: {
     paddingVertical: 4,
@@ -544,7 +537,6 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     color: 'rgba(255, 255, 255, 0.85)',
     fontSize: 13,
-    fontWeight: '700',
     textDecorationLine: 'underline',
   },
 });

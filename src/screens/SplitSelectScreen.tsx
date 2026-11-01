@@ -267,9 +267,8 @@ const styles = StyleSheet.create({
     color: THEME.colors.accent,
   },
   brandSubtitle: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 12,
-    fontWeight: '600',
     color: THEME.colors.textSecondary,
     marginTop: 1,
   },
@@ -286,7 +285,6 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     color: THEME.colors.textPrimary,
     fontSize: 12,
-    fontWeight: '700',
   },
   stepTitleBox: {
     marginBottom: 22,
@@ -298,9 +296,8 @@ const styles = StyleSheet.create({
     letterSpacing: -0.6,
   },
   stepSubheading: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansMedium,
     fontSize: 14,
-    fontWeight: '500',
     color: THEME.colors.textSecondary,
     marginTop: 4,
   },
@@ -351,15 +348,13 @@ const styles = StyleSheet.create({
     borderRadius: THEME.radius.pill,
   },
   toFollowChipText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
     color: '#FFFFFF',
   },
   cardSubtitle: {
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '700',
     marginTop: 6,
   },
   cardBottomRow: {
@@ -376,7 +371,6 @@ const styles = StyleSheet.create({
   cardMetaText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
-    fontWeight: '700',
   },
   arrowBtn: {
     width: 44,

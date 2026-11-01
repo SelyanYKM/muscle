@@ -1020,9 +1020,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   backupLabel: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 10,
-    fontWeight: '800',
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 11,
     color: THEME.colors.textSecondary,
     letterSpacing: 0.6,
   },
@@ -1040,7 +1039,6 @@ const styles = StyleSheet.create({
   backupBtnText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
-    fontWeight: '700',
     color: THEME.colors.accentStrong,
   },
   backButton: {
@@ -1074,7 +1072,6 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     color: THEME.colors.textPrimary,
     fontSize: 12,
-    fontWeight: '700',
   },
   emptyContainer: {
     alignItems: 'center',
@@ -1085,7 +1082,6 @@ const styles = StyleSheet.create({
   emptyText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 15,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
     textAlign: 'center',
     marginBottom: 4,
@@ -1104,16 +1100,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   monthLabel: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
     color: THEME.colors.textSecondary,
     letterSpacing: 0.8,
   },
   monthSummary: {
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
-    fontWeight: '700',
     color: THEME.colors.textSecondary,
   },
   monthContainer: {
@@ -1147,7 +1141,6 @@ const styles = StyleSheet.create({
   editSessionBtnText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
-    fontWeight: '700',
     color: THEME.colors.accentStrong,
   },
   letterBadge: {
@@ -1167,7 +1160,6 @@ const styles = StyleSheet.create({
   dateText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
-    fontWeight: '700',
     color: THEME.colors.textSecondary,
     marginBottom: 1,
   },
@@ -1177,23 +1169,21 @@ const styles = StyleSheet.create({
     color: THEME.colors.textPrimary,
   },
   sessionMetricsSummary: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 12,
     color: THEME.colors.textSecondary,
-    fontWeight: '600',
     marginTop: 2,
   },
   sessionBilanText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 11,
     color: THEME.colors.accentStrong,
-    fontWeight: '600',
     fontStyle: 'italic',
     marginTop: 3,
   },
   volumeHighlight: {
     color: THEME.colors.textPrimary,
-    fontWeight: '800',
+    fontFamily: THEME.fonts.sansHeavy,
   },
   chevronCircle: {
     width: 32,
@@ -1217,7 +1207,6 @@ const styles = StyleSheet.create({
   exerciseDetailName: {
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
     flex: 1,
   },
@@ -1237,8 +1226,7 @@ const styles = StyleSheet.create({
   },
   setChipText: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 11,
     color: THEME.colors.textSecondary,
   },
   loadMoreBtn: {
@@ -1255,7 +1243,6 @@ const styles = StyleSheet.create({
   loadMoreBtnText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '700',
     color: THEME.colors.accentStrong,
   },
   clearHistoryBtn: {
@@ -1269,7 +1256,6 @@ const styles = StyleSheet.create({
   clearHistoryBtnText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '700',
     color: THEME.colors.feelingHardText,
   },
   legendRow: {
@@ -1284,9 +1270,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   legendText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 12,
-    fontWeight: '600',
     color: THEME.colors.textSecondary,
   },
   sheetTitle: {
@@ -1295,17 +1280,15 @@ const styles = StyleSheet.create({
     color: THEME.colors.textPrimary,
   },
   sheetSubtitle: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 12,
     color: THEME.colors.textSecondary,
-    fontWeight: '600',
     marginTop: 2,
     marginBottom: 14,
   },
   inputSectionLabel: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 10,
-    fontWeight: '800',
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 11,
     color: THEME.colors.textSecondary,
     letterSpacing: 0.6,
     marginBottom: 6,
@@ -1334,7 +1317,6 @@ const styles = StyleSheet.create({
   programBtnText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '700',
     color: THEME.colors.textSecondary,
   },
   programBtnTextActive: {
@@ -1363,7 +1345,6 @@ const styles = StyleSheet.create({
     color: THEME.colors.textPrimary,
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '700',
     paddingHorizontal: 12,
     borderRadius: THEME.radius.inner,
     borderWidth: 1,
@@ -1382,16 +1363,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   setNumberBadge: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
     color: THEME.colors.textPrimary,
   },
   deleteSetLink: {
     fontFamily: THEME.fonts.sans,
     color: THEME.colors.feelingHardText,
     fontSize: 11,
-    fontWeight: '700',
   },
   steppersRow: {
     flexDirection: 'row',
@@ -1402,9 +1381,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stepperLabel: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 9,
-    fontWeight: '800',
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 11,
     color: THEME.colors.textSecondary,
     marginBottom: 3,
   },
@@ -1422,18 +1400,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stepBtnText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: THEME.colors.textPrimary,
     fontSize: 11,
-    fontWeight: '800',
   },
   stepValText: {
     flex: 1,
     textAlign: 'center',
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: THEME.colors.accentStrong,
     fontSize: 12,
-    fontWeight: '800',
   },
   feelingRow: {
     flexDirection: 'row',
@@ -1452,7 +1428,6 @@ const styles = StyleSheet.create({
   feelBtnText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
-    fontWeight: '700',
     color: THEME.colors.textSecondary,
   },
   addSetBtn: {
@@ -1466,7 +1441,6 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     color: THEME.colors.textPrimary,
     fontSize: 12,
-    fontWeight: '700',
   },
   primaryBtn: {
     backgroundColor: THEME.colors.textPrimary,
@@ -1476,10 +1450,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   primaryBtnText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '800',
   },
   destructiveBtn: {
     backgroundColor: THEME.colors.feelingHardBg,
@@ -1489,10 +1462,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   destructiveBtnText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: THEME.colors.feelingHardText,
     fontSize: 13,
-    fontWeight: '800',
   },
   outlineBtn: {
     paddingVertical: 13,
@@ -1505,6 +1477,5 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     color: THEME.colors.textSecondary,
     fontSize: 13,
-    fontWeight: '700',
   },
 });

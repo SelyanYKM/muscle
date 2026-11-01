@@ -1265,16 +1265,14 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   buffBadgeText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
     color: '#00296B',
   },
   timerText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: THEME.colors.textPrimary,
     fontSize: 14,
-    fontWeight: '800',
     letterSpacing: 0.3,
     fontVariant: ['tabular-nums'],
   },
@@ -1306,7 +1304,6 @@ const styles = StyleSheet.create({
   progressMetaText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
-    fontWeight: '700',
     color: THEME.colors.textSecondary,
   },
   changeExBtn: {
@@ -1318,7 +1315,6 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     color: THEME.colors.accentStrong,
     fontSize: 12,
-    fontWeight: '700',
   },
   heroCard: {
     borderRadius: THEME.radius.hero,
@@ -1341,16 +1337,14 @@ const styles = StyleSheet.create({
     borderRadius: THEME.radius.pill,
   },
   typeBadgeText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
     color: THEME.colors.textOnDark,
     letterSpacing: 0.4,
   },
   setCounterText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 12,
-    fontWeight: '800',
     color: 'rgba(242, 246, 252, 0.75)',
   },
   currentExName: {
@@ -1366,8 +1360,7 @@ const styles = StyleSheet.create({
   lastPerfLabel: {
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
-    fontWeight: '700',
-    color: 'rgba(242, 246, 252, 0.7)',
+    color: 'rgba(242, 246, 252, 0.78)',
   },
   lastPerfChipsRow: {
     flexDirection: 'row',
@@ -1386,7 +1379,6 @@ const styles = StyleSheet.create({
   lastPerfChipText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
-    fontWeight: '700',
     color: THEME.colors.textOnDark,
   },
   warmupBlock: {
@@ -1395,8 +1387,7 @@ const styles = StyleSheet.create({
   warmupLabel: {
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
-    fontWeight: '700',
-    color: 'rgba(242, 246, 252, 0.7)',
+    color: 'rgba(242, 246, 252, 0.78)',
   },
   warmupChipsWrap: {
     position: 'relative',
@@ -1417,7 +1408,6 @@ const styles = StyleSheet.create({
   warmupChipText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
-    fontWeight: '700',
     color: 'rgba(242, 246, 252, 0.75)',
   },
   warmupRestBtn: {
@@ -1429,7 +1419,6 @@ const styles = StyleSheet.create({
   warmupRestBtnText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
-    fontWeight: '700',
     color: THEME.colors.textOnDark,
   },
   warmupPopup: {
@@ -1470,20 +1459,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stepperBtnLgText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: THEME.colors.textOnDark,
     fontSize: 15,
-    fontWeight: '800',
   },
   stepperCenterCol: {
     flex: 1,
     alignItems: 'center',
   },
   stepperRowLabel: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
-    color: 'rgba(242, 246, 252, 0.7)',
+    color: 'rgba(242, 246, 252, 0.78)',
     letterSpacing: 0.4,
   },
   stepperValueRow: {
@@ -1492,9 +1479,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   stepperBigValue: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 40,
-    fontWeight: '800',
     color: THEME.colors.textOnDark,
     letterSpacing: -1,
     fontVariant: ['tabular-nums'],
@@ -1502,27 +1488,23 @@ const styles = StyleSheet.create({
   stepperUnit: {
     fontFamily: THEME.fonts.sans,
     fontSize: 15,
-    fontWeight: '700',
     color: 'rgba(242, 246, 252, 0.75)',
   },
   sectionLabel: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
-    fontWeight: '800',
     color: THEME.colors.textSecondary,
     letterSpacing: 1,
   },
   suggestionReasonText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 12,
-    fontWeight: '600',
     color: THEME.colors.accent,
     marginTop: 2,
   },
   calibrationHintText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 12,
-    fontWeight: '600',
     color: 'rgba(242, 246, 252, 0.75)',
     fontStyle: 'italic',
   },
@@ -1536,7 +1518,7 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 7,
     borderWidth: 1.5,
-    borderColor: THEME.colors.cardBorder,
+    borderColor: THEME.colors.controlBorder,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1545,9 +1527,8 @@ const styles = StyleSheet.create({
     borderColor: THEME.colors.textPrimary,
   },
   easyToggleText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 13,
-    fontWeight: '600',
     color: THEME.colors.textSecondary,
   },
   validateBtn: {
@@ -1560,10 +1541,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   validateBtnText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '800',
   },
   liveLogSection: {
     gap: 8,
@@ -1574,9 +1554,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   liveVolumeText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 13,
-    fontWeight: '800',
     color: THEME.colors.accentStrong,
   },
   emptyLogsCard: {
@@ -1590,7 +1569,6 @@ const styles = StyleSheet.create({
   emptyLogsText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
   emptyLogsSubtext: {
@@ -1613,9 +1591,8 @@ const styles = StyleSheet.create({
     borderTopColor: THEME.colors.hairline,
   },
   completedExName: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 13,
-    fontWeight: '800',
     color: THEME.colors.textPrimary,
     marginBottom: 6,
   },
@@ -1634,8 +1611,7 @@ const styles = StyleSheet.create({
   },
   setChipText: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 11,
   },
   finishBtn: {
     height: 56,
@@ -1649,10 +1625,9 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
   },
   finishBtnText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: THEME.colors.accentTextDark,
     fontSize: 15,
-    fontWeight: '800',
   },
   toast: {
     position: 'absolute',
@@ -1669,7 +1644,6 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '700',
     textAlign: 'center',
   },
   sheetTitle: {
@@ -1678,18 +1652,16 @@ const styles = StyleSheet.create({
     color: THEME.colors.textPrimary,
   },
   sheetSubtitle: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansSemi,
     fontSize: 12,
     color: THEME.colors.textSecondary,
-    fontWeight: '600',
     marginTop: 2,
     marginBottom: 14,
   },
   sheetBody: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansMedium,
     fontSize: 13,
     color: THEME.colors.textSecondary,
-    fontWeight: '500',
     marginTop: 8,
     marginBottom: 18,
     lineHeight: 19,
@@ -1702,10 +1674,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   primaryBtnText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '800',
   },
   destructiveBtn: {
     backgroundColor: THEME.colors.feelingHardBg,
@@ -1714,10 +1685,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   destructiveBtnText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     color: THEME.colors.feelingHardText,
     fontSize: 14,
-    fontWeight: '800',
   },
   secondaryBtn: {
     height: 52,
@@ -1731,7 +1701,6 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     color: THEME.colors.textPrimary,
     fontSize: 13,
-    fontWeight: '700',
   },
   outlineBtn: {
     paddingVertical: 13,
@@ -1744,7 +1713,6 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     color: THEME.colors.textSecondary,
     fontSize: 13,
-    fontWeight: '700',
   },
   catalogScroll: {
     maxHeight: 340,
@@ -1770,9 +1738,8 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.colors.textPrimary,
   },
   catalogIndexText: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansHeavy,
     fontSize: 13,
-    fontWeight: '800',
     color: THEME.colors.textSecondary,
   },
   catalogIndexTextActive: {
@@ -1781,13 +1748,11 @@ const styles = StyleSheet.create({
   catalogItemName: {
     fontFamily: THEME.fonts.sans,
     fontSize: 14,
-    fontWeight: '700',
     color: THEME.colors.textPrimary,
   },
   catalogItemSub: {
-    fontFamily: THEME.fonts.sans,
+    fontFamily: THEME.fonts.sansMedium,
     fontSize: 12,
-    fontWeight: '500',
     color: THEME.colors.textSecondary,
     marginTop: 2,
   },
@@ -1804,9 +1769,8 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
   inputMiniLabel: {
-    fontFamily: THEME.fonts.sans,
-    fontSize: 10,
-    fontWeight: '800',
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 11,
     color: THEME.colors.textSecondary,
     letterSpacing: 0.6,
     marginBottom: 6,
@@ -1817,7 +1781,6 @@ const styles = StyleSheet.create({
     color: THEME.colors.textPrimary,
     fontFamily: THEME.fonts.sans,
     fontSize: 14,
-    fontWeight: '700',
     paddingHorizontal: 14,
     borderRadius: THEME.radius.inner,
     borderWidth: 1,
@@ -1848,7 +1811,6 @@ const styles = StyleSheet.create({
   typeSegmentText: {
     fontFamily: THEME.fonts.sans,
     fontSize: 11,
-    fontWeight: '700',
     color: THEME.colors.textSecondary,
   },
   typeSegmentTextActive: {

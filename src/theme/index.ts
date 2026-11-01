@@ -69,6 +69,9 @@ export const THEME_SOFT_STRENGTH = {
     // Poids exacts recommandés par l'export de design (soft-strength-tokens.ts).
     serif: 'Petrona_600SemiBold',
     sans: 'Manrope_700Bold',
+    sansMedium: 'Manrope_500Medium',
+    sansSemi: 'Manrope_600SemiBold',
+    sansHeavy: 'Manrope_800ExtraBold',
   },
   colors: {
     // Fonds & Cartes douces texturées "peluche"
@@ -89,6 +92,7 @@ export const THEME_SOFT_STRENGTH = {
     textPrimary: '#1C1C1E',     // Noir mat profond
     textSecondary: '#6B6875',   // Gris ardoise chaleureux
     textMuted: '#9E9AA7',       // Légendes adoucies
+    controlBorder: '#8A8694',   // bord des cases à cocher (3:1 minimum)
     textOnDark: '#F4EDF7',      // Texte clair sur fond sombre (carte de série violette)
 
     // Accents du moodboard — terracotta doux (remplace l'orange vif d'origine)
@@ -168,7 +172,10 @@ export const THEME_BLUE_GOLD = {
 
     textPrimary: '#00296B',   // Imperial Blue
     textSecondary: '#55617A',
-    textMuted: '#8A93A6',     // décoratif uniquement (contraste < 4.5)
+    // Gris le plus clair autorisé pour du texte : 4,97:1 sur blanc, 4,63:1 sur le fond.
+    textMuted: '#667086',
+    // Bord des contrôles (cases à cocher) : 3,5:1 sur le fond, seuil WCAG des éléments d'interface.
+    controlBorder: '#7A8498',
     textOnDark: '#F2F6FC',
 
     // ⚠ accent (or) = surfaces / pastilles / barres UNIQUEMENT, jamais en texte sur fond clair.
