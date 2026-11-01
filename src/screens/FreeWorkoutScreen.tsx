@@ -712,7 +712,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                     accessible
                     accessibilityLabel={setA11yLabel(idx + 1, s.repsDone, s.weight, s.feeling)}
                   >
-                    <FeelingMark feeling={s.feeling} />
+                    <FeelingMark feeling={s.feeling} size={8} />
                     <Text style={styles.lastPerfChipText}>{fmtKg(s.weight)} × {s.repsDone}</Text>
                   </View>
                 ))}

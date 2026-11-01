@@ -728,7 +728,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
           <View style={styles.legendRow}>
             {(['EASY', 'MEDIUM', 'HARD'] as Feeling[]).map((f) => (
               <View key={f} style={styles.legendItem}>
-                <FeelingMark feeling={f} />
+                <FeelingMark feeling={f} size={8} />
                 <Text style={styles.legendText}>{FEELING_LABEL[f]}</Text>
               </View>
             ))}
