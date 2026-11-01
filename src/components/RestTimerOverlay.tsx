@@ -7,13 +7,16 @@ import {
   AppStateStatus,
   DeviceEventEmitter,
   Modal,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { FEELING_DOT } from '../constants/feeling';
 import { THEME } from '../theme';
+import { SetResult } from '../types';
 import { durationA11y, kgA11y } from '../utils/a11y';
 import { playRestTimerAlarm } from '../utils/audio';
 import { fmtKg, formatMinSec } from '../utils/format';
@@ -43,6 +46,8 @@ interface RestTimerOverlayProps {
   onFinish: () => void;
   /** Ferme le repos et annule la dernière série validée (accessible directement depuis cet écran). */
   onUndo?: () => void;
+  /** Série qui vient d'être validée, rappelée en haut de l'écran (absente pour un repos d'échauffement). */
+  lastSet?: SetResult;
 }
 
 const RING_SIZE = 264;
@@ -59,6 +64,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   onSkip,
   onFinish,
   onUndo,
+  lastSet,
 }) => {
   const [secondsRemaining, setSecondsRemaining] = useState(initialSeconds);
   const [totalSeconds, setTotalSeconds] = useState(initialSeconds);
@@ -82,6 +88,13 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const setInfo = { exerciseName, nextSetNumber, nextWeight, nextReps };
+
+  // Retour sur la série validée : réussie si l'objectif de reps est atteint (même règle que
+  // FreeWorkoutScreen.handleCompleteSet), sinon "sous l'objectif".
+  const lastSetMet = !!lastSet && lastSet.feeling !== 'HARD';
+  const lastSetText = lastSet
+    ? `Série ${lastSet.setNumber} ${lastSetMet ? 'réussie' : "sous l'objectif"} · ${lastSet.repsDone}/${lastSet.targetReps} reps`
+    : null;
   const notificationBody = `${exerciseName} • Série ${nextSetNumber} • ${nextWeight} kg`;
 
   // Déclenche l'alerte de fin de repos une seule fois, quel que soit le chemin qui la détecte
@@ -189,6 +202,12 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
       useNativeDriver: true,
     }).start();
 
+    if (lastSet) {
+      AccessibilityInfo.announceForAccessibility(
+        `Série ${lastSet.setNumber} ${lastSet.feeling !== 'HARD' ? 'réussie' : "sous l'objectif"}, ${lastSet.repsDone} reps sur ${lastSet.targetReps}`
+      );
+    }
+
     // Service au premier plan Android avec notification persistante (chronomètre natif +
     // boutons Pause/Passer) : contrairement au son/vibration ci-dessus (qui dépendent du code
     // JS en cours d'exécution), ça garde l'app active pendant tout le repos, donc l'alarme
@@ -288,8 +307,26 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
           style={StyleSheet.absoluteFill}
         />
 
+        {/* Défilement de secours : sur un petit écran (ou police agrandie), "Je suis prêt" ne
+            doit jamais sortir de l'écran. Sans effet quand tout tient. */}
+        <ScrollView contentContainerStyle={styles.scrollContent} bounces={false} showsVerticalScrollIndicator={false}>
         <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-          <Text style={styles.topSub}>{isPaused ? 'EN PAUSE' : 'RÉCUPÉRATION'}</Text>
+          <View style={styles.topGroup}>
+            <Text style={styles.topSub}>{isPaused ? 'EN PAUSE' : 'RÉCUPÉRATION'}</Text>
+            {!!lastSetText && (
+              <View style={styles.lastSetPill}>
+                <View
+                  style={[
+                    styles.lastSetMark,
+                    lastSetMet
+                      ? { backgroundColor: FEELING_DOT[lastSet!.feeling] }
+                      : { borderWidth: 2, borderColor: FEELING_DOT.HARD },
+                  ]}
+                />
+                <Text style={styles.lastSetText}>{lastSetText}</Text>
+              </View>
+            )}
+          </View>
 
           {/* Anneau de progression avec chronomètre centré */}
           <Animated.View
@@ -388,7 +425,8 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
             </Text>
           </View>
 
-          {/* Bouton Prêt */}
+          {/* Bouton Prêt + correction, groupés et serrés */}
+          <View style={styles.bottomGroup}>
           <TouchableOpacity
             style={styles.skipButton}
             onPress={handleSkip}
@@ -402,18 +440,18 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
           {/* Correction d'une erreur de validation, sans attendre la fin du repos */}
           {onUndo && (
             <TouchableOpacity
-              style={styles.undoLink}
+              style={styles.undoBtn}
               onPress={handleUndo}
               activeOpacity={0.7}
-              hitSlop={{ top: 9, bottom: 9, left: 12, right: 12 }}
               accessibilityRole="button"
-              accessibilityLabel="Corriger la dernière série"
               accessibilityHint="Annule la série que tu viens de valider"
             >
-              <Text style={styles.undoLinkText}>Erreur ? Corriger la dernière série</Text>
+              <Text style={styles.undoBtnText}>Corriger la dernière série</Text>
             </TouchableOpacity>
           )}
+          </View>
         </Animated.View>
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -422,6 +460,9 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   content: {
     flex: 1,
@@ -530,13 +571,47 @@ const styles = StyleSheet.create({
     color: THEME.colors.accentTextDark,
     fontSize: 15,
   },
-  undoLink: {
-    paddingVertical: 4,
+  topGroup: {
+    alignItems: 'center',
+    gap: 10,
   },
-  undoLinkText: {
+  lastSetPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    height: 32,
+    paddingHorizontal: 14,
+    borderRadius: THEME.radius.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.16)',
+  },
+  lastSetMark: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  lastSetText: {
     fontFamily: THEME.fonts.sans,
-    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.92)',
+  },
+  bottomGroup: {
+    width: '100%',
+    gap: 10,
+  },
+  undoBtn: {
+    width: '100%',
+    height: 44,
+    borderRadius: THEME.radius.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  undoBtnText: {
+    fontFamily: THEME.fonts.sans,
+    color: '#FFFFFF',
     fontSize: 13,
-    textDecorationLine: 'underline',
   },
 });

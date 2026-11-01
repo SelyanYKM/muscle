@@ -5,6 +5,7 @@ import {
   AccessibilityInfo,
   Alert,
   Animated,
+  BackHandler,
   Easing,
   Pressable,
   ScrollView,
@@ -53,6 +54,7 @@ import { durationA11y, kgA11y, setA11yLabel } from '../utils/a11y';
 import { preloadBuffRequinSounds } from '../utils/audio';
 import { fmtKg, parseLocalDate } from '../utils/format';
 import { triggerLightHaptic, triggerMediumHaptic, triggerSuccessHaptic, triggerWarningHaptic } from '../utils/haptics';
+import { useRepeatPress } from '../utils/useRepeatPress';
 
 interface FreeWorkoutScreenProps {
   workoutId: number;
@@ -168,6 +170,24 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   // validant une vraie série : masque le lien "corriger la dernière série" côté écran de repos
   // (rien à annuler, aucune série loguée pour un échauffement).
   const [isWarmupRest, setIsWarmupRest] = useState<boolean>(false);
+
+  // Dernière série validée, rappelée en haut de l'écran de repos ("Série 2 sous l'objectif ·
+  // 7/8 reps") : seul retour visible du verdict, la validation ouvrant le repos aussitôt.
+  const [lastValidatedSet, setLastValidatedSet] = useState<SetResult | null>(null);
+
+  // Répétition à l'appui long des boutons − / + (charge et reps).
+  const repeatPress = useRepeatPress();
+
+  // Geste / bouton retour Android : ouvre la même feuille "Quitter la séance ?" que le bouton ×
+  // (au lieu d'une alerte système au texte différent). Quand une feuille ou le repos est ouvert,
+  // c'est leur propre fenêtre qui reçoit le retour, pas cet écouteur.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setIsQuitSheetOpen(true);
+      return true;
+    });
+    return () => sub.remove();
+  }, []);
 
   // Index de la pastille d'échauffement actuellement maintenue (appui long) : affiche la
   // répartition des disques pour SA charge dans une fenêtre contextuelle, masquée au relâchement.
@@ -364,15 +384,27 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   };
 
   // Ajustements de charge et reps pour la série en cours
-  const adjustWeight = (delta: number) => {
-    triggerLightHaptic();
+  const adjustWeight = (delta: number, withHaptic: boolean = true) => {
+    if (withHaptic) triggerLightHaptic();
     setCurrentWeight((prev) => Math.max(0, Math.round((prev + delta) * 100) / 100));
   };
 
-  const adjustReps = (delta: number) => {
-    triggerLightHaptic();
+  const adjustReps = (delta: number, withHaptic: boolean = true) => {
+    if (withHaptic) triggerLightHaptic();
     setCurrentReps((prev) => Math.max(1, prev + delta));
   };
+
+  // Props communes aux 4 boutons − / + : tap = un pas, maintenir = répétition accélérée
+  // (une vibration au déclenchement, pas une par pas).
+  const stepperPressProps = (step: (withHaptic: boolean) => void) => ({
+    onPress: () => step(true),
+    onLongPress: () => {
+      triggerMediumHaptic();
+      repeatPress.start(() => step(false));
+    },
+    onPressOut: repeatPress.stop,
+    delayLongPress: 350,
+  });
 
   // Calcul du numéro de la prochaine série pour l'exercice actuel
   const getCurrentSetNumber = () => {
@@ -427,6 +459,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       }
     });
 
+    setLastValidatedSet(newSet);
     setRestDuration(currentExercise.restSeconds);
     setIsWarmupRest(false);
     setIsResting(true);
@@ -562,6 +595,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   };
 
   const currentSetNum = getCurrentSetNumber();
+  const isLastSetOfExercise = !!currentExercise && currentSetNum === currentExercise.numSets;
   // Raison affichée sous la suggestion : la reprise après pause si elle s'applique, sinon la
   // dernière décision du moteur.
   const currentReason = currentExercise ? prescribedFor(currentExercise).reason : null;
@@ -789,7 +823,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
             <View style={styles.stepperFullRow}>
               <TouchableOpacity
                 style={styles.stepperBtnLg}
-                onPress={() => adjustWeight(-2.5)}
+                {...stepperPressProps((h) => adjustWeight(-2.5, h))}
                 activeOpacity={0.7}
                 accessibilityRole="button"
                 accessibilityLabel="Retirer 2,5 kilos"
@@ -813,7 +847,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
               </View>
               <TouchableOpacity
                 style={styles.stepperBtnLg}
-                onPress={() => adjustWeight(2.5)}
+                {...stepperPressProps((h) => adjustWeight(2.5, h))}
                 activeOpacity={0.7}
                 accessibilityRole="button"
                 accessibilityLabel="Ajouter 2,5 kilos"
@@ -825,7 +859,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
             <View style={styles.stepperFullRow}>
               <TouchableOpacity
                 style={styles.stepperBtnLg}
-                onPress={() => adjustReps(-1)}
+                {...stepperPressProps((h) => adjustReps(-1, h))}
                 activeOpacity={0.7}
                 accessibilityRole="button"
                 accessibilityLabel="Retirer une répétition"
@@ -837,7 +871,9 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 accessible
                 accessibilityRole="adjustable"
                 accessibilityLabel="Répétitions"
-                accessibilityValue={{ text: `${currentReps} reps` }}
+                accessibilityValue={{
+                  text: `${currentReps} reps${currentExercise ? `, objectif ${currentExercise.currentTargetReps}` : ''}`,
+                }}
                 accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
                 onAccessibilityAction={(e) => adjustReps(e.nativeEvent.actionName === 'increment' ? 1 : -1)}
               >
@@ -846,10 +882,14 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                   <Text style={styles.stepperBigValue}>{currentReps}</Text>
                   <Text style={styles.stepperUnit}>reps</Text>
                 </View>
+                {/* Objectif toujours visible : c'est lui qui décide Réussi / Échec à la validation. */}
+                {!!currentExercise && (
+                  <Text style={styles.stepperObjectiveText}>objectif {currentExercise.currentTargetReps}</Text>
+                )}
               </View>
               <TouchableOpacity
                 style={styles.stepperBtnLg}
-                onPress={() => adjustReps(1)}
+                {...stepperPressProps((h) => adjustReps(1, h))}
                 activeOpacity={0.7}
                 accessibilityRole="button"
                 accessibilityLabel="Ajouter une répétition"
@@ -869,40 +909,6 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           )}
         </LinearGradient>
 
-        {/* Validation de la série */}
-        <Text style={styles.sectionLabel}>VALIDER LA SÉRIE {currentSetNum}</Text>
-
-        {!!currentExercise && currentSetNum === currentExercise.numSets && (
-          <TouchableOpacity
-            style={styles.easyToggleRow}
-            onPress={() => {
-              triggerLightHaptic();
-              setEasyByExerciseId((prev) => ({ ...prev, [currentExercise.id]: !prev[currentExercise.id] }));
-            }}
-            activeOpacity={0.8}
-            hitSlop={{ top: 10, bottom: 10 }}
-            accessibilityRole="checkbox"
-            accessibilityLabel="Dernière série facile, 2 reps ou plus en réserve"
-            accessibilityState={{ checked: !!easyByExerciseId[currentExercise.id] }}
-          >
-            <View style={[styles.easyCheckbox, easyByExerciseId[currentExercise.id] && styles.easyCheckboxChecked]}>
-              {!!easyByExerciseId[currentExercise.id] && <Icon name="check" size={14} color="#FFFFFF" />}
-            </View>
-            <Text style={styles.easyToggleText}>Dernière série facile (2+ reps en réserve)</Text>
-          </TouchableOpacity>
-        )}
-
-        <TouchableOpacity
-          style={styles.validateBtn}
-          onPress={handleCompleteSet}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel={`Valider la série ${currentSetNum}`}
-        >
-          <Text style={styles.validateBtnText}>Valider la série</Text>
-          <Icon name="arrow-right" size={18} color="#FFFFFF" />
-        </TouchableOpacity>
-
         {/* Récapitulatif en direct de la séance */}
         <View style={styles.liveLogSection}>
           <View style={styles.liveLogHeader}>
@@ -913,7 +919,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           {completedExercises.length === 0 ? (
             <View style={styles.emptyLogsCard}>
               <Text style={styles.emptyLogsText}>Aucune série validée pour l'instant.</Text>
-              <Text style={styles.emptyLogsSubtext}>Renseigne ta charge et valide ta première série ci-dessus !</Text>
+              <Text style={styles.emptyLogsSubtext}>Tes séries validées apparaîtront ici.</Text>
             </View>
           ) : (
             <View style={styles.completedList}>
@@ -960,6 +966,41 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         </TouchableOpacity>
       </ScrollView>
 
+      {/* Barre fixe en bas d'écran : l'action principale reste visible quelle que soit la
+          hauteur de la carte (échauffement, disques…). La case "Dernière série facile" y
+          monte aussi, puisqu'elle porte sur la série qu'on valide. */}
+      <View style={[styles.bottomBar, isLastSetOfExercise && styles.bottomBarWithToggle]}>
+        {isLastSetOfExercise && !!currentExercise && (
+          <TouchableOpacity
+            style={styles.easyToggleRow}
+            onPress={() => {
+              triggerLightHaptic();
+              setEasyByExerciseId((prev) => ({ ...prev, [currentExercise.id]: !prev[currentExercise.id] }));
+            }}
+            activeOpacity={0.8}
+            accessibilityRole="checkbox"
+            accessibilityLabel="Dernière série facile, 2 reps ou plus en réserve"
+            accessibilityState={{ checked: !!easyByExerciseId[currentExercise.id] }}
+          >
+            <View style={[styles.easyCheckbox, easyByExerciseId[currentExercise.id] && styles.easyCheckboxChecked]}>
+              {!!easyByExerciseId[currentExercise.id] && <Icon name="check" size={14} color="#FFFFFF" />}
+            </View>
+            <Text style={styles.easyToggleText}>Dernière série facile (2+ reps en réserve)</Text>
+          </TouchableOpacity>
+        )}
+
+        <TouchableOpacity
+          style={styles.validateBtn}
+          onPress={handleCompleteSet}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`Valider la série ${currentSetNum}`}
+        >
+          <Text style={styles.validateBtnText}>Valider la série {currentSetNum}</Text>
+          <Icon name="arrow-right" size={18} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
+
       {/* Toast "séance vide" */}
       {emptyToastVisible && (
         <View style={styles.toast} pointerEvents="none" accessibilityLiveRegion="polite" accessibilityRole="alert">
@@ -978,6 +1019,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           onSkip={closeRestOverlay}
           onFinish={closeRestOverlay}
           onUndo={isWarmupRest ? undefined : handleUndoFromRest}
+          lastSet={isWarmupRest ? undefined : lastValidatedSet ?? undefined}
         />
       )}
 
@@ -1512,6 +1554,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    minHeight: 44,
+  },
+  bottomBar: {
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 12,
+    gap: 4,
+    backgroundColor: 'rgba(245, 247, 251, 0.96)',
+    borderTopWidth: 1,
+    borderTopColor: THEME.colors.hairline,
+  },
+  bottomBarWithToggle: {
+    paddingTop: 6,
+  },
+  stepperObjectiveText: {
+    fontFamily: THEME.fonts.sansSemi,
+    fontSize: 11,
+    color: 'rgba(242, 246, 252, 0.78)',
+    marginTop: 1,
   },
   easyCheckbox: {
     width: 24,
@@ -1633,7 +1694,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 24,
     right: 24,
-    bottom: 28,
+    // Au-dessus de la barre fixe "Valider la série".
+    bottom: 104,
     backgroundColor: THEME.colors.textPrimary,
     borderRadius: 16,
     paddingVertical: 12,

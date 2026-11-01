@@ -34,6 +34,7 @@ import { exportBackupFile, importBackupFile } from '../utils/backup';
 import { exportHistoryAsText } from '../utils/exportHistory';
 import { fmtKg, parseLocalDate } from '../utils/format';
 import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
+import { useRepeatPress } from '../utils/useRepeatPress';
 
 interface HistoryScreenProps {
   onBack: () => void;
@@ -396,15 +397,27 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
     });
   };
 
-  const adjustEditingSetWeight = (exIdx: number, setIdx: number, delta: number) => {
-    triggerLightHaptic();
+  const adjustEditingSetWeight = (exIdx: number, setIdx: number, delta: number, withHaptic: boolean = true) => {
+    if (withHaptic) triggerLightHaptic();
     patchEditingSet(exIdx, setIdx, (s) => ({ weight: Math.max(0, Math.round((s.weight + delta) * 100) / 100) }));
   };
 
-  const adjustEditingSetReps = (exIdx: number, setIdx: number, delta: number) => {
-    triggerLightHaptic();
+  const adjustEditingSetReps = (exIdx: number, setIdx: number, delta: number, withHaptic: boolean = true) => {
+    if (withHaptic) triggerLightHaptic();
     patchEditingSet(exIdx, setIdx, (s) => ({ repsDone: Math.max(0, s.repsDone + delta) }));
   };
+
+  // Boutons − / + de l'éditeur : tap = un pas, maintenir = répétition accélérée (comme en séance).
+  const repeatPress = useRepeatPress();
+  const stepPressProps = (step: (withHaptic: boolean) => void) => ({
+    onPress: () => step(true),
+    onLongPress: () => {
+      triggerMediumHaptic();
+      repeatPress.start(() => step(false));
+    },
+    onPressOut: repeatPress.stop,
+    delayLongPress: 350,
+  });
 
   const setEditingSetFeeling = (exIdx: number, setIdx: number, feeling: Feeling) => {
     triggerLightHaptic();
@@ -866,7 +879,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                       <View style={styles.stepperWrap}>
                         <TouchableOpacity
                           style={styles.stepBtn}
-                          onPress={() => adjustEditingSetWeight(exIdx, setIdx, -2.5)}
+                          {...stepPressProps((h) => adjustEditingSetWeight(exIdx, setIdx, -2.5, h))}
                           hitSlop={{ top: 7, bottom: 7, left: 4, right: 4 }}
                           accessibilityRole="button"
                           accessibilityLabel={`Retirer 2,5 kilos à la série ${s.setNumber}`}
@@ -887,7 +900,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                         </Text>
                         <TouchableOpacity
                           style={styles.stepBtn}
-                          onPress={() => adjustEditingSetWeight(exIdx, setIdx, 2.5)}
+                          {...stepPressProps((h) => adjustEditingSetWeight(exIdx, setIdx, 2.5, h))}
                           hitSlop={{ top: 7, bottom: 7, left: 4, right: 4 }}
                           accessibilityRole="button"
                           accessibilityLabel={`Ajouter 2,5 kilos à la série ${s.setNumber}`}
@@ -902,7 +915,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                       <View style={styles.stepperWrap}>
                         <TouchableOpacity
                           style={styles.stepBtn}
-                          onPress={() => adjustEditingSetReps(exIdx, setIdx, -1)}
+                          {...stepPressProps((h) => adjustEditingSetReps(exIdx, setIdx, -1, h))}
                           hitSlop={{ top: 7, bottom: 7, left: 4, right: 4 }}
                           accessibilityRole="button"
                           accessibilityLabel={`Retirer une rep à la série ${s.setNumber}`}
@@ -923,7 +936,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                         </Text>
                         <TouchableOpacity
                           style={styles.stepBtn}
-                          onPress={() => adjustEditingSetReps(exIdx, setIdx, 1)}
+                          {...stepPressProps((h) => adjustEditingSetReps(exIdx, setIdx, 1, h))}
                           hitSlop={{ top: 7, bottom: 7, left: 4, right: 4 }}
                           accessibilityRole="button"
                           accessibilityLabel={`Ajouter une rep à la série ${s.setNumber}`}
