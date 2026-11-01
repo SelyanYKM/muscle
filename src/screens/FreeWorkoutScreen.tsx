@@ -153,6 +153,9 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   const [isPickerSheetOpen, setIsPickerSheetOpen] = useState<boolean>(false);
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState<boolean>(false);
   const [isQuitSheetOpen, setIsQuitSheetOpen] = useState<boolean>(false);
+  // Confirmation avant "Terminer la séance" : un seul tap enregistrait tout et recalculait la
+  // progression, sans retour possible.
+  const [isFinishSheetOpen, setIsFinishSheetOpen] = useState<boolean>(false);
   const [newExName, setNewExName] = useState<string>('');
   const [newExCategory, setNewExCategory] = useState<EquipmentCategory>('HAMMER_STRENGTH');
   const [newExWeight, setNewExWeight] = useState<string>('40');
@@ -941,7 +944,15 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         {/* Bouton Terminer la séance */}
         <TouchableOpacity
           style={styles.finishBtn}
-          onPress={handleFinalizeSession}
+          onPress={() => {
+            // Séance vide : handleFinalizeSession affiche directement le message d'erreur.
+            if (completedExercises.length === 0) {
+              handleFinalizeSession();
+              return;
+            }
+            triggerLightHaptic();
+            setIsFinishSheetOpen(true);
+          }}
           activeOpacity={0.85}
           accessibilityRole="button"
         >
@@ -979,6 +990,35 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         </TouchableOpacity>
         <TouchableOpacity style={styles.destructiveBtn} onPress={onQuitSession} activeOpacity={0.85} accessibilityRole="button">
           <Text style={styles.destructiveBtnText}>Quitter</Text>
+        </TouchableOpacity>
+      </BottomSheet>
+
+      {/* FEUILLE : TERMINER LA SÉANCE */}
+      <BottomSheet visible={isFinishSheetOpen} onClose={() => setIsFinishSheetOpen(false)} maxHeightPercent={50}>
+        <Text style={styles.sheetTitle} accessibilityRole="header">Terminer la séance ?</Text>
+        <Text style={styles.sheetBody}>
+          {liveSetCount} série{liveSetCount > 1 ? 's' : ''} sur {completedExercises.length} exercice
+          {completedExercises.length > 1 ? 's' : ''} {liveSetCount > 1 ? 'seront enregistrées' : 'sera enregistrée'}, et
+          les charges de ta prochaine séance seront recalculées.
+        </Text>
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={() => {
+            setIsFinishSheetOpen(false);
+            handleFinalizeSession();
+          }}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+        >
+          <Text style={styles.primaryBtnText}>Terminer et voir le bilan</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.outlineBtn}
+          onPress={() => setIsFinishSheetOpen(false)}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+        >
+          <Text style={styles.outlineBtnText}>Continuer la séance</Text>
         </TouchableOpacity>
       </BottomSheet>
 

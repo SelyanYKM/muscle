@@ -1,7 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import {
-  Alert,
   Image,
   Pressable,
   SafeAreaView,
@@ -13,11 +12,11 @@ import {
 import { DashboardSheet } from '../components/DashboardSheet';
 import { Icon } from '../components/Icon';
 import { SPLIT_LETTERS, SPLIT_SUBTITLES } from '../constants/splits';
-import { clearAllWorkoutLogs, getDashboardSummary, getExercisesForWorkout, getRecentLogs, getWorkouts } from '../database/db';
+import { getDashboardSummary, getExercisesForWorkout, getRecentLogs, getWorkouts } from '../database/db';
 import { THEME } from '../theme';
 import { Workout } from '../types';
 import { parseLocalDate } from '../utils/format';
-import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
+import { triggerLightHaptic, triggerMediumHaptic } from '../utils/haptics';
 
 interface SplitMeta {
   exerciseCount: number;
@@ -144,23 +143,8 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
               triggerLightHaptic();
               onOpenHistory();
             }}
-            onLongPress={() => {
-              triggerWarningHaptic();
-              Alert.alert(
-                "Effacer l'historique ?",
-                "Toutes les séances enregistrées seront définitivement supprimées.",
-                [
-                  { text: 'Annuler', style: 'cancel' },
-                  {
-                    text: 'Tout effacer',
-                    style: 'destructive',
-                    onPress: () => {
-                      clearAllWorkoutLogs();
-                    },
-                  },
-                ]
-              );
-            }}
+            // L'effacement de l'historique n'est plus caché ici (appui long) : il a son propre
+            // bouton, visible, en bas de l'écran Historique.
             activeOpacity={0.8}
           >
             <Text style={styles.historyBtnText}>Historique</Text>

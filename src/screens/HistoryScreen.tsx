@@ -18,10 +18,11 @@ import { Icon } from '../components/Icon';
 import { FEELING_BG, FEELING_INK, FEELING_LABEL, resolveFeelingLabel } from '../constants/feeling';
 import {
   clearAllWorkoutLogs,
+  countWorkoutSessions,
   deleteExerciseFromSession,
   deleteWorkoutSession,
   getAllSessionFeedback,
-  getRecentLogs,
+  getLogsForRecentSessions,
   insertExerciseLogsForSession,
   SessionFeedbackRow,
   updateWorkoutSessionType,
@@ -37,6 +38,10 @@ import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '.
 interface HistoryScreenProps {
   onBack: () => void;
 }
+
+// Séances chargées par page : l'historique se lit par séances entières (jamais tronquées),
+// "Voir plus" en ajoute une page à chaque fois.
+const SESSIONS_PAGE_SIZE = 30;
 
 interface GroupedExerciseLogs {
   exerciseName: string;
@@ -164,13 +169,20 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
   // Édition unifiée d'une séance passée : programme + tous ses exercices/séries en un seul
   // endroit, plutôt que deux feuilles séparées avec un bouton "Modifier" différent chacune.
   const [editingSession, setEditingSession] = useState<EditableSessionState | null>(null);
+  // Copie figée de la séance à l'ouverture de l'éditeur, pour savoir s'il y a des modifications
+  // à ne pas perdre au moment de fermer.
+  const editingSnapshotRef = useRef<string | null>(null);
+
+  const [sessionLimit, setSessionLimit] = useState<number>(SESSIONS_PAGE_SIZE);
+  const [totalSessionCount, setTotalSessionCount] = useState<number>(0);
 
   useEffect(() => {
     loadHierarchicalLogs();
   }, []);
 
-  const loadHierarchicalLogs = () => {
-    const rawLogs = getRecentLogs(300);
+  const loadHierarchicalLogs = (limit: number = sessionLimit, resetExpanded: boolean = true) => {
+    const rawLogs = getLogsForRecentSessions(limit);
+    setTotalSessionCount(countWorkoutSessions());
 
     const feedbackMap: Record<string, SessionFeedbackRow> = {};
     for (const f of getAllSessionFeedback()) {
@@ -226,10 +238,17 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
     const sessionList = Array.from(sessionMap.values()).reverse();
     setSessions(sessionList);
 
-    if (sessionList.length > 0) {
+    if (resetExpanded && sessionList.length > 0) {
       const firstKey = `${sessionList[0].date}_${sessionList[0].workoutId}`;
       setExpandedSessions({ [firstKey]: true });
     }
+  };
+
+  const loadMoreSessions = () => {
+    triggerLightHaptic();
+    const next = sessionLimit + SESSIONS_PAGE_SIZE;
+    setSessionLimit(next);
+    loadHierarchicalLogs(next, false);
   };
 
   const toggleSessionExpand = (sessionKey: string) => {
@@ -241,13 +260,16 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
     });
   };
 
+  // Seul point d'entrée de l'effacement total (plus d'appui long caché) : propose de
+  // sauvegarder d'abord, puisque rien ne permet de revenir en arrière ensuite.
   const promptClearHistory = () => {
     triggerWarningHaptic();
     Alert.alert(
-      "Effacer l'historique ?",
-      "Toutes les séances et performances enregistrées seront définitivement supprimées.",
+      "Effacer tout l'historique ?",
+      'Toutes les séances et performances enregistrées seront définitivement supprimées. Pense à faire une sauvegarde avant.',
       [
         { text: 'Annuler', style: 'cancel' },
+        { text: "Sauvegarder d'abord", onPress: handleBackup },
         {
           text: 'Tout effacer',
           style: 'destructive',
@@ -255,6 +277,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
             clearAllWorkoutLogs();
             setSessions([]);
             setExpandedSessions({});
+            setTotalSessionCount(0);
           },
         },
       ]
@@ -314,7 +337,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
   // tous les exercices/séries), rien n'est écrit en base avant "Enregistrer les modifications".
   const openEditSessionModal = (session: GroupedSession) => {
     triggerLightHaptic();
-    setEditingSession({
+    const initial: EditableSessionState = {
       date: session.date,
       originalWorkoutId: session.workoutId,
       workoutId: session.workoutId,
@@ -331,7 +354,23 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
         })),
       })),
       removedExerciseNames: [],
-    });
+    };
+    editingSnapshotRef.current = JSON.stringify(initial);
+    setEditingSession(initial);
+  };
+
+  // Fermeture de l'éditeur (bouton Fermer, tap sur le fond, geste retour) : demande confirmation
+  // s'il y a des modifications non enregistrées, au lieu de les jeter sans prévenir.
+  const requestCloseEditor = () => {
+    if (editingSession && JSON.stringify(editingSession) !== editingSnapshotRef.current) {
+      triggerWarningHaptic();
+      Alert.alert('Abandonner les modifications ?', 'Tes changements sur cette séance ne seront pas enregistrés.', [
+        { text: "Continuer l'édition", style: 'cancel' },
+        { text: 'Abandonner', style: 'destructive', onPress: () => setEditingSession(null) },
+      ]);
+      return;
+    }
+    setEditingSession(null);
   };
 
   const updateEditingExerciseName = (exIdx: number, name: string) => {
@@ -538,13 +577,9 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
           <Icon name="arrow-left" size={18} color={THEME.colors.textPrimary} />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.titleWrapper}
-          onLongPress={promptClearHistory}
-          activeOpacity={0.8}
-        >
+        <View style={styles.titleWrapper}>
           <Text style={styles.title} accessibilityRole="header">Historique</Text>
-        </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           style={styles.exportButton}
@@ -724,6 +759,20 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
             );
           })}
 
+          {sessions.length < totalSessionCount && (
+            <TouchableOpacity
+              style={styles.loadMoreBtn}
+              onPress={loadMoreSessions}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+            >
+              <Text style={styles.loadMoreBtnText}>
+                Voir plus de séances ({totalSessionCount - sessions.length} restante
+                {totalSessionCount - sessions.length > 1 ? 's' : ''})
+              </Text>
+            </TouchableOpacity>
+          )}
+
           {/* Légende des pastilles */}
           <View style={styles.legendRow}>
             {(['EASY', 'MEDIUM', 'HARD'] as Feeling[]).map((f) => (
@@ -733,13 +782,22 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
               </View>
             ))}
           </View>
+
+          <TouchableOpacity
+            style={styles.clearHistoryBtn}
+            onPress={promptClearHistory}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+          >
+            <Text style={styles.clearHistoryBtnText}>Effacer tout l'historique</Text>
+          </TouchableOpacity>
         </View>
       )}
 
       {/* FEUILLE UNIQUE : MODIFIER LA SÉANCE — programme, tous les exercices et toutes les
           séries d'un coup (remplace les deux feuilles séparées d'avant, chacune avec son
           propre bouton "Modifier"). */}
-      <BottomSheet visible={!!editingSession} onClose={() => setEditingSession(null)} maxHeightPercent={88}>
+      <BottomSheet visible={!!editingSession} onClose={requestCloseEditor} maxHeightPercent={88}>
         <Text style={styles.sheetTitle} accessibilityRole="header">Modifier la séance</Text>
         <Text style={styles.sheetSubtitle}>
           Séance du {editingSession ? formatDate(editingSession.date) : ''}
@@ -919,7 +977,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
           <Text style={styles.destructiveBtnText}>Supprimer cette séance</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.outlineBtn} onPress={() => setEditingSession(null)} activeOpacity={0.8} accessibilityRole="button">
+        <TouchableOpacity style={styles.outlineBtn} onPress={requestCloseEditor} activeOpacity={0.8} accessibilityRole="button">
           <Text style={styles.outlineBtnText}>Fermer</Text>
         </TouchableOpacity>
       </BottomSheet>
@@ -1182,6 +1240,37 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: THEME.colors.textSecondary,
+  },
+  loadMoreBtn: {
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    borderRadius: THEME.radius.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+  },
+  loadMoreBtnText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 13,
+    fontWeight: '700',
+    color: THEME.colors.accentStrong,
+  },
+  clearHistoryBtn: {
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    paddingHorizontal: 16,
+    marginTop: 8,
+  },
+  clearHistoryBtnText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 13,
+    fontWeight: '700',
+    color: THEME.colors.feelingHardText,
   },
   legendRow: {
     flexDirection: 'row',

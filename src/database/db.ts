@@ -1139,6 +1139,91 @@ export function getRecentLogs(limit: number = 200): WorkoutLogEntry[] {
   }
 }
 
+type WorkoutLogRow = {
+  id: number;
+  workout_id: number;
+  exercise_id: number;
+  exercise_name: string;
+  date: string;
+  set_number: number;
+  weight: number;
+  reps_target: number;
+  reps_done: number;
+  feeling: 'EASY' | 'MEDIUM' | 'HARD';
+  mode: 'GUIDED' | 'FREE' | null;
+  marked_easy: number | null;
+};
+
+function mapWorkoutLogRow(r: WorkoutLogRow): WorkoutLogEntry {
+  return {
+    id: r.id,
+    workoutId: r.workout_id,
+    exerciseId: r.exercise_id,
+    exerciseName: r.exercise_name,
+    date: r.date,
+    setNumber: r.set_number,
+    weight: r.weight,
+    repsTarget: r.reps_target,
+    repsDone: r.reps_done,
+    feeling: r.feeling,
+    mode: r.mode,
+    markedEasy: !!r.marked_easy,
+  };
+}
+
+/**
+ * Toutes les séries des `sessionLimit` séances les plus récentes (une séance = une date + un
+ * programme), du plus récent au plus ancien. Contrairement à getRecentLogs(limit), qui coupe
+ * au nombre de séries, aucune séance n'est jamais tronquée : l'Historique s'en sert pour
+ * charger page par page ("Voir plus").
+ */
+export function getLogsForRecentSessions(sessionLimit: number): WorkoutLogEntry[] {
+  if (!db || Platform.OS === 'web') {
+    const keys: string[] = [];
+    for (const l of [...memoryLogs].reverse()) {
+      const key = `${l.date}_${l.workoutId}`;
+      if (!keys.includes(key)) keys.push(key);
+    }
+    const kept = new Set(keys.slice(0, sessionLimit));
+    return [...memoryLogs].reverse().filter((l) => kept.has(`${l.date}_${l.workoutId}`));
+  }
+
+  try {
+    const rows = db.getAllSync<WorkoutLogRow>(
+      `SELECT * FROM workout_logs
+       WHERE (date, workout_id) IN (
+         SELECT date, workout_id FROM workout_logs
+         GROUP BY date, workout_id
+         ORDER BY date DESC, MAX(id) DESC
+         LIMIT ?
+       )
+       ORDER BY id DESC;`,
+      [sessionLimit]
+    );
+    return rows.map(mapWorkoutLogRow);
+  } catch (error) {
+    console.error('Erreur getLogsForRecentSessions:', error);
+    return [];
+  }
+}
+
+/** Nombre total de séances enregistrées (une séance = une date + un programme). */
+export function countWorkoutSessions(): number {
+  if (!db || Platform.OS === 'web') {
+    return new Set(memoryLogs.map((l) => `${l.date}_${l.workoutId}`)).size;
+  }
+
+  try {
+    const row = db.getFirstSync<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM (SELECT 1 FROM workout_logs GROUP BY date, workout_id);`
+    );
+    return row?.n ?? 0;
+  } catch (error) {
+    console.error('Erreur countWorkoutSessions:', error);
+    return 0;
+  }
+}
+
 /**
  * Supprime la totalité des logs d'entraînement (clear history).
  */

@@ -118,10 +118,19 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
   const [mentalFeeling, setMentalFeeling] = useState<number | null>(null);
   const [stretched, setStretched] = useState(false);
 
-  const handleClose = () => {
-    if (physicalFeeling !== null || mentalFeeling !== null || stretched || summary.sharkAppeared) {
-      saveSessionFeedback(summary.date, summary.workoutId, physicalFeeling, mentalFeeling, stretched, summary.sharkAppeared);
+  // Sauvegarde à chaque changement (et d'emblée si le buff requin est apparu) plutôt qu'au seul
+  // tap sur le bouton du bas : quitter par le geste retour ne perd plus le ressenti. La séance
+  // elle-même est déjà enregistrée depuis "Terminer la séance".
+  const isFirstFeedbackRun = useRef(true);
+  useEffect(() => {
+    if (isFirstFeedbackRun.current) {
+      isFirstFeedbackRun.current = false;
+      if (!summary.sharkAppeared) return;
     }
+    saveSessionFeedback(summary.date, summary.workoutId, physicalFeeling, mentalFeeling, stretched, summary.sharkAppeared);
+  }, [physicalFeeling, mentalFeeling, stretched]);
+
+  const handleClose = () => {
     onClose();
   };
 
@@ -306,7 +315,7 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
 
         {/* Bouton de Fermeture */}
         <TouchableOpacity style={styles.closeButton} onPress={handleClose} activeOpacity={0.85} accessibilityRole="button">
-          <Text style={styles.closeButtonText}>Enregistrer & revenir</Text>
+          <Text style={styles.closeButtonText}>Retour à l'accueil</Text>
         </TouchableOpacity>
       </Animated.View>
       </ScrollView>
