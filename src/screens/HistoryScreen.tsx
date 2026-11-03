@@ -24,6 +24,7 @@ import {
   getAllSessionFeedback,
   getLogsForRecentSessions,
   insertExerciseLogsForSession,
+  recomputeProgressionForExerciseNames,
   SessionFeedbackRow,
   updateWorkoutSessionType,
 } from '../database/db';
@@ -516,6 +517,12 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
     for (const ex of exercises) {
       insertExerciseLogsForSession(date, workoutId, ex.name.trim(), ex.sets);
     }
+    // La progression ne dépend que de l'historique : on la recalcule pour chaque exercice
+    // touché, sous son nom d'avant comme d'après la correction.
+    recomputeProgressionForExerciseNames([
+      ...exercises.flatMap((ex) => [ex.originalName, ex.name.trim()]),
+      ...removedExerciseNames,
+    ]);
 
     setEditingSession(null);
     loadHierarchicalLogs();
@@ -535,6 +542,10 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
           style: 'destructive',
           onPress: () => {
             deleteWorkoutSession(editingSession.date, editingSession.originalWorkoutId);
+            recomputeProgressionForExerciseNames([
+              ...editingSession.exercises.map((ex) => ex.originalName),
+              ...editingSession.removedExerciseNames,
+            ]);
             setEditingSession(null);
             loadHierarchicalLogs();
           },
@@ -619,7 +630,6 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
             onPress={handleBackup}
             disabled={isBackingUp}
             activeOpacity={0.8}
-            hitSlop={{ top: 7, bottom: 7, left: 2, right: 2 }}
             accessibilityRole="button"
             accessibilityLabel="Sauvegarder toutes les données"
             accessibilityState={{ disabled: isBackingUp, busy: isBackingUp }}
@@ -631,7 +641,6 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
             onPress={confirmRestore}
             disabled={isRestoring}
             activeOpacity={0.8}
-            hitSlop={{ top: 7, bottom: 7, left: 2, right: 2 }}
             accessibilityRole="button"
             accessibilityLabel="Restaurer une sauvegarde"
             accessibilityState={{ disabled: isRestoring, busy: isRestoring }}
@@ -1022,15 +1031,15 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     gap: 12,
   },
+  // Libellé au-dessus, boutons en dessous qui se partagent la largeur : sur une seule ligne,
+  // "Restaurer" débordait du cadre sur les écrans étroits.
   backupRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.6)',
     borderRadius: THEME.radius.inner,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 14,
     marginBottom: 20,
+    gap: 10,
   },
   backupLabel: {
     fontFamily: THEME.fonts.sansHeavy,
@@ -1043,15 +1052,17 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   backupBtn: {
-    height: 30,
+    flex: 1,
+    height: 44,
     justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: THEME.colors.cardInner,
     paddingHorizontal: 12,
     borderRadius: THEME.radius.pill,
   },
   backupBtnText: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 11,
+    fontSize: 13,
     color: THEME.colors.accentStrong,
   },
   backButton: {

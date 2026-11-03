@@ -93,6 +93,7 @@ export const THEME_SOFT_STRENGTH = {
     textSecondary: '#6B6875',   // Gris ardoise chaleureux
     textMuted: '#9E9AA7',       // Légendes adoucies
     controlBorder: '#8A8694',   // bord des cases à cocher (3:1 minimum)
+    chartMuted: '#8A8694',      // barres secondaires des graphiques
     textOnDark: '#F4EDF7',      // Texte clair sur fond sombre (carte de série violette)
 
     // Accents du moodboard — terracotta doux (remplace l'orange vif d'origine)
@@ -176,6 +177,8 @@ export const THEME_BLUE_GOLD = {
     textMuted: '#667086',
     // Bord des contrôles (cases à cocher) : 3,5:1 sur le fond, seuil WCAG des éléments d'interface.
     controlBorder: '#7A8498',
+    // Barres secondaires des graphiques (la barre mise en avant est en textPrimary) : 3:1 sur blanc.
+    chartMuted: '#6A97CF',
     textOnDark: '#F2F6FC',
 
     // ⚠ accent (or) = surfaces / pastilles / barres UNIQUEMENT, jamais en texte sur fond clair.
@@ -228,12 +231,15 @@ export const THEME_BLUE_GOLD = {
     shadow: '#00296B',
     backdrop: 'rgba(0, 41, 107, 0.4)',
   },
-  // Couleur signature par split (workoutId 1 = Push, 2 = Pull, 3 = Legs)
+  // Couleur signature par split (workoutId 1 = Push, 2 = Pull, 3 = Legs), écartée en clarté
+  // (clair / moyen / foncé) : Pull et Legs se distinguent sans la lettre (5,5:1 entre eux,
+  // contre 1,3 à 1,7:1 avant). `mark` = la couleur pleine du split dans les petits repères
+  // (calendrier, semaine du tiroir replié, jauges de récupération).
   splits: {
-    1: { gradient: ['#FFD500', '#FDC500'] as [string, string], fg: '#00296B', tint: '#FFF4C2', ink: '#00296B', chipBg: 'rgba(255,255,255,0.55)', btnBg: '#00296B', btnFg: '#FFFFFF' },
-    2: { gradient: ['#00509D', '#003F88'] as [string, string], fg: '#FFFFFF', tint: '#DCE8F5', ink: '#00509D', chipBg: 'rgba(255,255,255,0.16)', btnBg: '#FDC500', btnFg: '#00296B' },
-    3: { gradient: ['#003F88', '#00296B'] as [string, string], fg: '#FFFFFF', tint: '#D9E1EF', ink: '#00296B', chipBg: 'rgba(255,255,255,0.16)', btnBg: '#FDC500', btnFg: '#00296B' },
-  } as Record<number, { gradient: [string, string]; fg: string; tint: string; ink: string; chipBg: string; btnBg: string; btnFg: string }>,
+    1: { gradient: ['#FFD500', '#FDC500'] as [string, string], fg: '#00296B', tint: '#FFF4C2', ink: '#00296B', chipBg: 'rgba(255,255,255,0.55)', btnBg: '#00296B', btnFg: '#FFFFFF', mark: '#FDC500' },
+    2: { gradient: ['#93BCEA', '#74A7E0'] as [string, string], fg: '#00296B', tint: '#E1ECF9', ink: '#00509D', chipBg: 'rgba(255,255,255,0.5)', btnBg: '#00296B', btnFg: '#FFFFFF', mark: '#74A7E0' },
+    3: { gradient: ['#00296B', '#001D4F'] as [string, string], fg: '#FFFFFF', tint: '#D9E1EF', ink: '#00296B', chipBg: 'rgba(255,255,255,0.16)', btnBg: '#FFFFFF', btnFg: '#00296B', mark: '#00296B' },
+  } as Record<number, { gradient: [string, string]; fg: string; tint: string; ink: string; chipBg: string; btnBg: string; btnFg: string; mark: string }>,
   radius: { sheet: 28, hero: 28, card: 20, inner: 14, pill: 999 },
 };
 

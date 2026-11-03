@@ -12,7 +12,14 @@ import {
 import { DashboardSheet } from '../components/DashboardSheet';
 import { Icon } from '../components/Icon';
 import { SPLIT_LETTERS, SPLIT_SUBTITLES } from '../constants/splits';
-import { getDashboardSummary, getExercisesForWorkout, getRecentLogs, getWorkouts } from '../database/db';
+import {
+  dismissRestBannerForToday,
+  getDashboardSummary,
+  getExercisesForWorkout,
+  getRecentLogs,
+  getWorkouts,
+  isRestBannerDismissedToday,
+} from '../database/db';
 import { THEME } from '../theme';
 import { Workout } from '../types';
 import { parseLocalDate } from '../utils/format';
@@ -97,6 +104,11 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
   const toFollowWorkoutId = getToFollowWorkoutId(workouts, splitMeta);
   // Tiroir "Ton progrès" déplié : le reste de l'écran est masqué au lecteur d'écran.
   const [isDashboardExpanded, setIsDashboardExpanded] = useState(false);
+  // Incrémenté quand un réglage du tiroir change (objectif de la semaine) : le résumé, calculé
+  // à chaque rendu, est alors recalculé.
+  const [, setDataVersion] = useState(0);
+  const [isRestBannerDismissed, setIsRestBannerDismissed] = useState(isRestBannerDismissedToday);
+  const restAdvice = isRestBannerDismissed ? null : dashboardSummary.restAdvice;
 
   const handleSelect = (wId: number, wName: string) => {
     triggerMediumHaptic();
@@ -151,10 +163,46 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Titre de sélection */}
-        <View style={styles.stepTitleBox}>
+        {/* Titre de sélection ; le bandeau de repos remplace la phrase d'accroche quand un signal
+            est là (objectif atteint, jours d'affilée, énergie en baisse). Il ne bloque rien. */}
+        <View style={[styles.stepTitleBox, restAdvice && styles.stepTitleBoxWithBanner]}>
           <Text style={styles.stepHeading} accessibilityRole="header">Choisis ton split</Text>
-          <Text style={styles.stepSubheading}>Quelle séance attaques-tu aujourd'hui ?</Text>
+          {restAdvice ? (
+            <View style={styles.restBanner}>
+              <View
+                style={styles.restBannerMain}
+                accessible
+                accessibilityLabel={`${restAdvice.trainedToday ? 'Repos conseillé demain' : 'Repos conseillé aujourd’hui'} : ${restAdvice.reasons.join(', ')}`}
+              >
+                <View style={styles.restBannerIcon}>
+                  <Icon name="moon" size={20} color={THEME.colors.textPrimary} />
+                </View>
+                <View style={styles.restBannerTextCol}>
+                  <Text style={styles.restBannerTitle}>
+                    {restAdvice.trainedToday ? 'Repos conseillé demain' : 'Repos conseillé aujourd’hui'}
+                  </Text>
+                  <Text style={styles.restBannerReasons} numberOfLines={2}>
+                    {restAdvice.reasons.join(' · ')}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.restBannerClose}
+                hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                onPress={() => {
+                  triggerLightHaptic();
+                  dismissRestBannerForToday();
+                  setIsRestBannerDismissed(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Masquer le conseil de repos pour aujourd’hui"
+              >
+                <Icon name="x" size={16} color={THEME.colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <Text style={styles.stepSubheading}>Quelle séance attaques-tu aujourd'hui ?</Text>
+          )}
         </View>
 
         {/* 3 Cartes de Split P/P/L, qui se partagent tout l'espace restant jusqu'au tiroir */}
@@ -188,8 +236,9 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
                   <View style={styles.cardTopRow}>
                     <Text style={[styles.cardTitle, { color: split.fg }]}>{w.name}</Text>
                     {isToFollow && (
-                      <View style={styles.toFollowChip}>
-                        <Text style={styles.toFollowChipText}>À suivre</Text>
+                      // Mêmes couleurs que le bouton flèche, pour rester visible sur chaque carte.
+                      <View style={[styles.toFollowChip, { backgroundColor: split.btnBg }]}>
+                        <Text style={[styles.toFollowChipText, { color: split.btnFg }]}>À suivre</Text>
                       </View>
                     )}
                   </View>
@@ -216,7 +265,11 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
       </View>
       </SafeAreaView>
 
-      <DashboardSheet summary={dashboardSummary} onExpandedChange={setIsDashboardExpanded} />
+      <DashboardSheet
+        summary={dashboardSummary}
+        onExpandedChange={setIsDashboardExpanded}
+        onDataChange={() => setDataVersion((v) => v + 1)}
+      />
     </View>
   );
 };
@@ -289,11 +342,65 @@ const styles = StyleSheet.create({
   stepTitleBox: {
     marginBottom: 22,
   },
+  // Avec le bandeau, l'en-tête gagne en hauteur : on resserre pour laisser la place aux cartes.
+  stepTitleBoxWithBanner: {
+    marginBottom: 14,
+  },
   stepHeading: {
     fontFamily: THEME.fonts.serif,
     fontSize: 32,
     color: THEME.colors.textPrimary,
     letterSpacing: -0.6,
+  },
+  restBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingLeft: 12,
+    paddingVertical: 6,
+    borderRadius: 18,
+    backgroundColor: THEME.colors.cardBg,
+    borderWidth: 1,
+    borderColor: THEME.colors.cardBorder,
+    shadowColor: THEME.colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 2,
+  },
+  restBannerMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  restBannerIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: THEME.splits[1].tint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  restBannerTextCol: {
+    flex: 1,
+  },
+  restBannerTitle: {
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 14,
+    color: THEME.colors.textPrimary,
+  },
+  restBannerReasons: {
+    fontFamily: THEME.fonts.sansSemi,
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    marginTop: 1,
+  },
+  restBannerClose: {
+    width: 40,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   stepSubheading: {
     fontFamily: THEME.fonts.sansMedium,
@@ -314,7 +421,9 @@ const styles = StyleSheet.create({
   splitCard: {
     flex: 1,
     borderRadius: THEME.radius.sheet,
-    padding: 22,
+    paddingHorizontal: 22,
+    // 18 en vertical (et pas 22) : les trois cartes tiennent aussi quand le bandeau de repos est affiché.
+    paddingVertical: 18,
     overflow: 'hidden',
     justifyContent: 'space-between',
     shadowColor: THEME.colors.shadow,

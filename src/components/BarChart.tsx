@@ -3,8 +3,8 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Line, Path } from 'react-native-svg';
 import { THEME } from '../theme';
 
-interface BarChartDatum {
-  /** Libellé complet (bulle au tap, lecteur d'écran), ex. "27 oct.". */
+export interface ChartDatum {
+  /** Libellé complet (ligne de valeur, lecteur d'écran), ex. "27 oct.". */
   label: string;
   /** Libellé court sous la barre, ex. "27/10" ; à défaut, `label`. */
   axisLabel?: string;
@@ -12,21 +12,24 @@ interface BarChartDatum {
 }
 
 interface BarChartProps {
-  data: BarChartDatum[];
-  color: string;
+  data: ChartDatum[];
   height?: number;
-  /** Formatte la valeur affichée au tap sur une barre (ex: "120 kg"). */
+  /** Formatte la valeur affichée (ex: "120 kg"). */
   formatValue?: (value: number) => string;
+  /**
+   * Précision ajoutée à la dernière valeur, affichée d'office quand aucune barre n'est
+   * sélectionnée (ex. "semaine en cours"). Sans elle, la ligne de valeur n'apparaît qu'au tap.
+   */
+  lastCaption?: string;
 }
 
-const CHART_WIDTH = 300;
 const BAR_GAP = 4;
 const TOP_RADIUS = 6;
 const BOTTOM_RADIUS = 2;
 // Largeur mini d'une étiquette d'axe en 11 px ("27/10") : quand les colonnes sont plus
 // étroites, on n'affiche qu'une étiquette sur deux (ou trois…), en partant de la dernière barre.
-const MIN_AXIS_LABEL_WIDTH = 34;
-const AXIS_LABEL_BOX = 44;
+export const MIN_AXIS_LABEL_WIDTH = 34;
+export const AXIS_LABEL_BOX = 44;
 
 // Rectangle à coins indépendants (SVG <rect rx> ne supporte qu'un rayon uniforme) :
 // coins du haut plus arrondis que ceux du bas, pour des barres en forme de "pilule" aplatie.
@@ -47,84 +50,120 @@ function roundedBarPath(x: number, y: number, width: number, height: number): st
   `;
 }
 
-export const BarChart: React.FC<BarChartProps> = ({ data, color, height = 120, formatValue }) => {
+/**
+ * Ligne de valeur au-dessus d'un graphique : la sélection en cours, sinon la dernière valeur
+ * suivie de sa précision (si `lastCaption` est fourni). Partagée avec LineChart.
+ */
+export const ChartValueRow: React.FC<{
+  data: ChartDatum[];
+  selectedIdx: number | null;
+  valueText: (v: number) => string;
+  lastCaption?: string;
+}> = ({ data, selectedIdx, valueText, lastCaption }) => {
+  const shown = selectedIdx !== null ? data[selectedIdx] : lastCaption ? data[data.length - 1] : undefined;
+  if (!shown) return null;
+  return (
+    <View style={styles.tooltipRow}>
+      <Text style={styles.tooltipText}>
+        {shown.label} · {valueText(shown.value)}
+        {selectedIdx === null && !!lastCaption && <Text style={styles.tooltipCaption}> ({lastCaption})</Text>}
+      </Text>
+    </View>
+  );
+};
+
+export const BarChart: React.FC<BarChartProps> = ({ data, height = 120, formatValue, lastCaption }) => {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  // Largeur réelle du conteneur : le graphique occupe toute la largeur du tiroir.
+  const [width, setWidth] = useState(0);
 
   const maxValue = Math.max(1, ...data.map((d) => d.value));
-  const barWidth = data.length > 0 ? CHART_WIDTH / data.length - BAR_GAP : 0;
+  const colWidth = data.length > 0 ? width / data.length : 0;
+  const barWidth = Math.max(2, colWidth - BAR_GAP);
   const lastIdx = data.length - 1;
-  const labelStep = Math.max(1, Math.ceil(MIN_AXIS_LABEL_WIDTH / (barWidth + BAR_GAP)));
+  const highlightIdx = selectedIdx ?? lastIdx;
+  const labelStep = colWidth > 0 ? Math.max(1, Math.ceil(MIN_AXIS_LABEL_WIDTH / colWidth)) : 1;
 
   const valueText = (v: number) => (formatValue ? formatValue(v) : String(v));
 
   return (
     <View>
-      {selectedIdx !== null && data[selectedIdx] && (
-        <View style={styles.tooltipRow}>
-          <Text style={styles.tooltipText}>
-            {data[selectedIdx].label} · {valueText(data[selectedIdx].value)}
-          </Text>
-        </View>
-      )}
+      <ChartValueRow data={data} selectedIdx={selectedIdx} valueText={valueText} lastCaption={lastCaption} />
 
-      <View>
-        <Svg width={CHART_WIDTH} height={height} accessible={false} importantForAccessibility="no-hide-descendants">
-          {/* Ligne de base, discrète */}
-          <Line x1={0} y1={height - 1} x2={CHART_WIDTH} y2={height - 1} stroke="rgba(0, 41, 107, 0.07)" strokeWidth={1} />
+      <View onLayout={(e) => setWidth(Math.floor(e.nativeEvent.layout.width))} style={{ minHeight: height }}>
+        {width > 0 && (
+          <>
+            <Svg width={width} height={height} accessible={false} importantForAccessibility="no-hide-descendants">
+              {/* Ligne de base, discrète */}
+              <Line x1={0} y1={height - 1} x2={width} y2={height - 1} stroke="rgba(0, 41, 107, 0.07)" strokeWidth={1} />
 
-          {data.map((d, idx) => {
-            const barHeight = d.value > 0 ? Math.max(3, (d.value / maxValue) * (height - 8)) : 2;
-            const x = idx * (barWidth + BAR_GAP);
-            const y = height - barHeight - 1;
-            const isSelected = selectedIdx === idx;
-            // La semaine courante (dernière barre) ressort par défaut, les autres sont en retrait.
-            const opacity = isSelected ? 1 : idx === lastIdx ? 1 : 0.45;
+              {data.map((d, idx) => {
+                const barHeight = d.value > 0 ? Math.max(3, (d.value / maxValue) * (height - 8)) : 2;
+                const x = idx * colWidth;
+                const y = height - barHeight - 1;
+                // Barre mise en avant (sélection, sinon la plus récente) en bleu foncé, les autres
+                // en bleu moyen : deux tons pleins, lisibles sur blanc (3:1 et plus).
+                const fill = idx === highlightIdx ? THEME.colors.textPrimary : THEME.colors.chartMuted;
+                return <Path key={idx} d={roundedBarPath(x, y, barWidth, barHeight)} fill={fill} />;
+              })}
+            </Svg>
 
-            return (
-              <Path key={idx} d={roundedBarPath(x, y, Math.max(2, barWidth), barHeight)} fill={color} opacity={opacity} />
-            );
-          })}
-        </Svg>
+            {/* Étiquettes de l'axe (visuelles seulement : chaque colonne tactile porte déjà la sienne) */}
+            <View style={styles.labelsRow} importantForAccessibility="no-hide-descendants">
+              {data.map((d, idx) =>
+                (lastIdx - idx) % labelStep === 0 ? (
+                  // Étiquette centrée sous sa barre, plus large que la colonne : elle déborde sur les
+                  // colonnes voisines, laissées sans étiquette par labelStep.
+                  <Text
+                    key={idx}
+                    style={[
+                      styles.axisLabel,
+                      { left: idx * colWidth + barWidth / 2 - AXIS_LABEL_BOX / 2, width: AXIS_LABEL_BOX },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {d.axisLabel ?? d.label}
+                  </Text>
+                ) : null
+              )}
+            </View>
 
-        {/* Étiquettes de l'axe (visuelles seulement : chaque colonne tactile porte déjà la sienne) */}
-        <View style={styles.labelsRow} importantForAccessibility="no-hide-descendants">
-          {data.map((d, idx) =>
-            (lastIdx - idx) % labelStep === 0 ? (
-              // Étiquette centrée sous sa barre, plus large que la colonne : elle déborde sur les
-              // colonnes voisines, laissées sans étiquette par labelStep.
-              <Text
-                key={idx}
-                style={[
-                  styles.axisLabel,
-                  { left: idx * (barWidth + BAR_GAP) + barWidth / 2 - AXIS_LABEL_BOX / 2, width: AXIS_LABEL_BOX },
-                ]}
-                numberOfLines={1}
-              >
-                {d.axisLabel ?? d.label}
-              </Text>
-            ) : null
-          )}
-        </View>
-
-        {/* Zones tactiles superposées : une colonne par barre, sur toute la hauteur (barre +
-            étiquette), au lieu de la seule étiquette de quelques pixels sous le graphique. */}
-        <View style={[StyleSheet.absoluteFill, styles.touchOverlay]}>
-          {data.map((d, idx) => (
-            <TouchableOpacity
-              key={idx}
-              style={{ width: barWidth + BAR_GAP, height: '100%' }}
-              onPress={() => setSelectedIdx(selectedIdx === idx ? null : idx)}
-              activeOpacity={0.6}
-              accessibilityRole="button"
-              accessibilityLabel={`${d.label} : ${valueText(d.value)}`}
-              accessibilityState={{ selected: selectedIdx === idx }}
-            />
-          ))}
-        </View>
+            {/* Zones tactiles superposées : une colonne par barre, sur toute la hauteur (barre +
+                étiquette), au lieu de la seule étiquette de quelques pixels sous le graphique. */}
+            <View style={[StyleSheet.absoluteFill, styles.touchOverlay]}>
+              {data.map((d, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={{ width: colWidth, height: '100%' }}
+                  onPress={() => setSelectedIdx(selectedIdx === idx ? null : idx)}
+                  activeOpacity={0.6}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${d.label} : ${valueText(d.value)}`}
+                  accessibilityState={{ selected: selectedIdx === idx }}
+                />
+              ))}
+            </View>
+          </>
+        )}
       </View>
     </View>
   );
 };
+
+export const chartStyles = StyleSheet.create({
+  labelsRow: {
+    height: 16,
+    marginTop: 4,
+  },
+  axisLabel: {
+    position: 'absolute',
+    top: 0,
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
+    color: THEME.colors.textMuted,
+    textAlign: 'center',
+  },
+});
 
 const styles = StyleSheet.create({
   tooltipRow: {
@@ -135,19 +174,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: THEME.colors.textPrimary,
   },
-  labelsRow: {
-    height: 16,
-    marginTop: 4,
+  tooltipCaption: {
+    fontFamily: THEME.fonts.sansSemi,
+    color: THEME.colors.textSecondary,
   },
   touchOverlay: {
     flexDirection: 'row',
   },
-  axisLabel: {
-    position: 'absolute',
-    top: 0,
-    fontFamily: THEME.fonts.sans,
-    fontSize: 11,
-    color: THEME.colors.textMuted,
-    textAlign: 'center',
-  },
+  ...chartStyles,
 });

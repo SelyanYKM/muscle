@@ -6,8 +6,38 @@ import {
   replayHistory,
   resolveSessionWeight,
 } from '../engine/progressionV2';
+import {
+  CatalogEntry,
+  groupSessionsByDate,
+  HistoryLogRow,
+  LINK_SQL,
+  LinkedLogRow,
+  planRelink,
+  resolveExerciseLink,
+} from './exerciseLinks';
 import { BodyWeightEntry, ConfiguredExercise, EquipmentCategory, Exercise, ExerciseProgressionState, ProgressionMode, Workout, WorkoutLogEntry } from '../types';
 import { SEED_EXERCISES, SEED_WORKOUTS } from './seed';
+import {
+  addDays,
+  averageSessionsPerWeek,
+  buildCalendar,
+  buildRestAdvice,
+  CalendarWeek,
+  consecutiveTrainingDays,
+  daysSinceBySplit,
+  energyTrend,
+  exerciseKey,
+  exerciseProgression,
+  goalStreakWeeks,
+  lastRestDay,
+  ProgressionSummary,
+  RecordRow,
+  recordsWithRecent,
+  RestAdvice,
+  sessionsByDate,
+  Trend,
+  volumeTrendPercent,
+} from '../utils/progressStats';
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -570,36 +600,83 @@ export async function initDatabase(): Promise<void> {
     // historique réel dans le moteur v3 : la première suggestion après la mise à jour part de la
     // dernière séance réellement faite. Exercices jamais pratiqués : inchangés.
     runOnceMigration(db, 'replay_progression_v3', 'rejeu de l\'historique (moteur v3)', (database) => {
-      const trainingDates = database
-        .getAllSync<{ date: string }>('SELECT DISTINCT date FROM workout_logs ORDER BY date ASC;')
-        .map((r: { date: string }) => r.date);
-      const exercises = database.getAllSync<ExerciseRow>(`${EXERCISE_JOIN_SELECT};`).map(rowToConfiguredExercise);
+      recomputeProgression(database, null, false);
+    });
 
-      for (const ex of exercises) {
-        const rows = database.getAllSync<{ date: string; weight: number; reps_done: number; marked_easy: number | null }>(
-          `SELECT date, weight, reps_done, marked_easy FROM workout_logs
-           WHERE exercise_id = ? AND exercise_name = ?
-           ORDER BY date ASC, set_number ASC, id ASC;`,
-          [ex.id, ex.name]
-        );
-        if (rows.length === 0) continue;
-
-        type ReplayedSession = { date: string; sets: { weight: number; reps: number }[]; easy: boolean };
-        const byDate = new Map<string, ReplayedSession>();
-        for (const r of rows) {
-          const session: ReplayedSession = byDate.get(r.date) ?? { date: r.date, sets: [], easy: false };
-          session.sets.push({ weight: r.weight, reps: r.reps_done });
-          session.easy = session.easy || !!r.marked_easy;
-          byDate.set(r.date, session);
-        }
-
-        const state = replayHistory(progressionSettingsOf(ex), progressionStateOf(ex), [...byDate.values()], trainingDates);
-        saveExerciseProgressionState(ex.id, state);
-      }
+    // Des lignes de workout_logs ne désignaient pas le bon exercice : id 0 laissé par une
+    // ancienne version de l'éditeur d'historique alors que le nom existe au catalogue, ou id
+    // réattribué par la synchronisation du catalogue (« Leg curl » resté sous l'id 15, devenu
+    // « Extension triceps à la poulie »). Le moteur, qui lit l'historique par id ET nom, ne voyait
+    // pas ces séances (ex. Decline Press jamais calibré). On relie chaque ligne par son nom (anciens
+    // noms rattachés à leur exercice actuel, voir EXERCISE_ALIASES ; nom inconnu → id 0), puis on
+    // rejoue l'historique de chaque exercice pratiqué. Le rejeu applique les règles du moteur,
+    // dont « une mauvaise séance fait stagner la charge, sans la faire baisser ».
+    runOnceMigration(db, 'relink_logs_by_name_v1', 'reliage de l\'historique par nom', (database) => {
+      relinkWorkoutLogs(database);
+      recomputeProgression(database, null, false);
     });
   } catch (error) {
     console.warn('Erreur initialisation SQLite, utilisation du mode mémoire de secours:', error);
     initMemoryFallback();
+  }
+}
+
+/**
+ * Relie chaque ligne de workout_logs à l'exercice du catalogue qui porte son nom (voir
+ * exerciseLinks.ts). Ne touche jamais aux dates, charges ni répétitions. Renvoie le nombre de
+ * lignes corrigées.
+ */
+function relinkWorkoutLogs(database: SQLite.SQLiteDatabase): number {
+  const catalog = database.getAllSync<CatalogEntry>(LINK_SQL.catalog);
+  const changes = planRelink(database.getAllSync<LinkedLogRow>(LINK_SQL.allLogLinks), catalog);
+  if (changes.length === 0) return 0;
+  database.withTransactionSync(() => {
+    for (const c of changes) database.runSync(LINK_SQL.relinkLog, [c.exerciseId, c.exerciseName, c.id]);
+  });
+  return changes.length;
+}
+
+/**
+ * Recalcule l'état de progression en rejouant l'historique réel dans le moteur (replayHistory).
+ * L'état ne dépend que de l'historique : le rejouer après une correction ou une restauration
+ * redonne exactement ce qu'une séance en direct aurait produit.
+ * `onlyIds` : exercices à recalculer (null = tous). `resetWhenEmpty` : un exercice sans plus
+ * aucune séance repasse en calibration (sinon il est laissé tel quel).
+ */
+function recomputeProgression(
+  database: SQLite.SQLiteDatabase,
+  onlyIds: ReadonlySet<number> | null,
+  resetWhenEmpty: boolean
+): void {
+  const trainingDates = database
+    .getAllSync<{ date: string }>(LINK_SQL.trainingDates)
+    .map((r: { date: string }) => r.date);
+  const exercises = database.getAllSync<ExerciseRow>(`${EXERCISE_JOIN_SELECT};`).map(rowToConfiguredExercise);
+
+  for (const ex of exercises) {
+    if (onlyIds && !onlyIds.has(ex.id)) continue;
+    const rows = database.getAllSync<HistoryLogRow>(LINK_SQL.exerciseHistory, [ex.id, ex.name]);
+    if (rows.length === 0 && !resetWhenEmpty) continue;
+    const state = replayHistory(progressionSettingsOf(ex), progressionStateOf(ex), groupSessionsByDate(rows), trainingDates);
+    saveExerciseProgressionState(ex.id, state);
+  }
+}
+
+/**
+ * À appeler après une correction de l'historique (éditeur, suppression de séance) : recalcule la
+ * progression des exercices dont les noms sont donnés (avant ET après la correction).
+ */
+export function recomputeProgressionForExerciseNames(names: string[]): void {
+  if (!db || Platform.OS === 'web') return; // repli mémoire : pas d'état persistant à recalculer
+
+  try {
+    const catalog = db.getAllSync<CatalogEntry>(LINK_SQL.catalog);
+    const ids = new Set(
+      names.map((n) => resolveExerciseLink(n, catalog).exerciseId).filter((id) => id !== 0)
+    );
+    if (ids.size > 0) recomputeProgression(db, ids, true);
+  } catch (error) {
+    console.error('Erreur recomputeProgressionForExerciseNames:', error);
   }
 }
 
@@ -700,13 +777,16 @@ export interface LastExercisePerformance {
 
 /**
  * Dernière performance connue sur un exercice donné (toutes séances confondues), pour
- * l'afficher comme repère pendant la séance en cours ("la dernière fois tu avais fait...").
+ * l'afficher comme repère pendant la séance en cours ("la dernière fois tu avais fait...") et la
+ * transmettre au moteur comme séance précédente. Filtre sur l'id ET le nom (un id a pu désigner
+ * un autre exercice), et prend la séance la plus récente par sa DATE : une séance passée corrigée
+ * dans l'historique est réenregistrée avec des id plus récents, sans être la dernière.
  */
-export function getLastExercisePerformance(exerciseId: number): LastExercisePerformance | null {
+export function getLastExercisePerformance(exerciseId: number, exerciseName: string): LastExercisePerformance | null {
   if (!db || Platform.OS === 'web') {
-    const logs = memoryLogs.filter((l) => l.exerciseId === exerciseId).sort((a, b) => (a.date < b.date ? 1 : -1));
+    const logs = memoryLogs.filter((l) => l.exerciseId === exerciseId && l.exerciseName === exerciseName);
     if (logs.length === 0) return null;
-    const lastDate = logs[0].date;
+    const lastDate = logs.reduce((max, l) => (l.date > max ? l.date : max), logs[0].date);
     const sets = logs
       .filter((l) => l.date === lastDate)
       .sort((a, b) => a.setNumber - b.setNumber)
@@ -715,10 +795,7 @@ export function getLastExercisePerformance(exerciseId: number): LastExercisePerf
   }
 
   try {
-    const lastDateRow = db.getFirstSync<{ date: string }>(
-      `SELECT date FROM workout_logs WHERE exercise_id = ? ORDER BY id DESC LIMIT 1;`,
-      [exerciseId]
-    );
+    const lastDateRow = db.getFirstSync<{ date: string }>(LINK_SQL.lastSessionDate, [exerciseId, exerciseName]);
     if (!lastDateRow) return null;
 
     const rows = db.getAllSync<{
@@ -726,11 +803,7 @@ export function getLastExercisePerformance(exerciseId: number): LastExercisePerf
       weight: number;
       reps_done: number;
       feeling: 'EASY' | 'MEDIUM' | 'HARD';
-    }>(
-      `SELECT set_number, weight, reps_done, feeling FROM workout_logs
-       WHERE exercise_id = ? AND date = ? ORDER BY set_number ASC;`,
-      [exerciseId, lastDateRow.date]
-    );
+    }>(LINK_SQL.sessionSets, [exerciseId, exerciseName, lastDateRow.date]);
 
     return {
       date: lastDateRow.date,
@@ -1300,11 +1373,11 @@ export function deleteWorkoutSession(date: string, workoutId: number): void {
  * renommé vers le nom d'origine de l'autre) : le DELETE du second effaçait les lignes tout
  * juste insérées par le premier.
  *
- * Résout exercise_id en retrouvant l'exercice du catalogue par son nom (sinon 0, comme pour un
- * exercice purement personnalisé) : sans ça, toute séance passée par cet éditeur perdait son
- * lien vers le catalogue, et disparaissait silencieusement de getLastExercisePerformance(),
- * buildStrengthCurves() et de la répartition par groupe musculaire (tous filtrent/joignent sur
- * exercise_id).
+ * Relie l'exercice au catalogue par son nom, sans tenir compte des majuscules ni des espaces,
+ * anciens noms compris (resolveExerciseLink) : id ET nom exact du catalogue, sinon id 0 et le nom
+ * saisi. Sans ça, une séance passée par cet éditeur perdait son lien vers le catalogue et
+ * disparaissait du moteur de progression. Penser à appeler recomputeProgressionForExerciseNames()
+ * une fois toutes les corrections enregistrées.
  */
 export function insertExerciseLogsForSession(
   date: string,
@@ -1320,13 +1393,12 @@ export function insertExerciseLogsForSession(
   }[]
 ): void {
   if (!db || Platform.OS === 'web') {
-    const matched = memoryExercises.find((e) => e.name === exerciseName);
-    const exerciseId = matched ? matched.id : 0;
+    const { exerciseId, exerciseName: linkedName } = resolveExerciseLink(exerciseName, memoryExercises);
     for (const s of sets) {
       memoryLogs.push({
         workoutId,
         exerciseId,
-        exerciseName,
+        exerciseName: linkedName,
         date,
         setNumber: s.setNumber,
         weight: s.weight,
@@ -1340,14 +1412,13 @@ export function insertExerciseLogsForSession(
   }
 
   try {
-    const matched = db.getFirstSync<{ id: number }>('SELECT id FROM exercises WHERE name = ?;', [exerciseName]);
-    const exerciseId = matched?.id ?? 0;
+    const link = resolveExerciseLink(exerciseName, db.getAllSync<CatalogEntry>(LINK_SQL.catalog));
     for (const s of sets) {
       db.runSync(
         `INSERT INTO workout_logs
         (workout_id, exercise_id, exercise_name, date, set_number, weight, reps_target, reps_done, feeling, marked_easy)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-        [workoutId, exerciseId, exerciseName, date, s.setNumber, s.weight, s.repsTarget, s.repsDone, s.feeling, s.markedEasy ? 1 : 0]
+        [workoutId, link.exerciseId, link.exerciseName, date, s.setNumber, s.weight, s.repsTarget, s.repsDone, s.feeling, s.markedEasy ? 1 : 0]
       );
     }
   } catch (error) {
@@ -1384,8 +1455,11 @@ export function deleteExerciseFromSession(
  * Petit stockage clé/valeur pour des drapeaux simples (ex : "tel conseil déjà affiché ?"),
  * sans créer une table dédiée pour chaque cas.
  */
+// Repli mémoire (web) : les réglages vivent le temps de la session.
+const memoryMetadata = new Map<string, string>();
+
 export function getAppMetadata(key: string): string | null {
-  if (!db || Platform.OS === 'web') return null;
+  if (!db || Platform.OS === 'web') return memoryMetadata.get(key) ?? null;
   try {
     const row = db.getFirstSync<{ value: string }>('SELECT value FROM app_metadata WHERE key = ?;', [key]);
     return row?.value ?? null;
@@ -1395,7 +1469,10 @@ export function getAppMetadata(key: string): string | null {
 }
 
 export function setAppMetadata(key: string, value: string): void {
-  if (!db || Platform.OS === 'web') return;
+  if (!db || Platform.OS === 'web') {
+    memoryMetadata.set(key, value);
+    return;
+  }
   try {
     db.runSync('INSERT OR REPLACE INTO app_metadata (key, value) VALUES (?, ?);', [key, value]);
   } catch {
@@ -1407,16 +1484,34 @@ export function setAppMetadata(key: string, value: string): void {
 // Dashboard motivation : stats agrégées, records personnels, mini analyse.
 // ---------------------------------------------------------------------------
 
+export const DEFAULT_WEEKLY_GOAL = 4;
+export const WEEKLY_GOAL_MIN = 1;
+export const WEEKLY_GOAL_MAX = 7;
+
+/** Objectif de séances par semaine (réglable depuis le tiroir « Ton progrès »). */
+export function getWeeklyGoal(): number {
+  const n = Number(getAppMetadata('weekly_goal'));
+  return Number.isInteger(n) && n >= WEEKLY_GOAL_MIN && n <= WEEKLY_GOAL_MAX ? n : DEFAULT_WEEKLY_GOAL;
+}
+
+export function setWeeklyGoal(goal: number): void {
+  setAppMetadata('weekly_goal', String(Math.min(WEEKLY_GOAL_MAX, Math.max(WEEKLY_GOAL_MIN, Math.round(goal)))));
+}
+
+/** Bandeau "Repos conseillé" masqué par la croix : pour la journée seulement. */
+export function isRestBannerDismissedToday(): boolean {
+  return getAppMetadata('rest_banner_dismissed_on') === formatLocalDate(new Date());
+}
+
+export function dismissRestBannerForToday(): void {
+  setAppMetadata('rest_banner_dismissed_on', formatLocalDate(new Date()));
+}
+
 export interface WeeklyStat {
   /** Lundi de la semaine, au format ISO 'YYYY-MM-DD'. */
   weekStart: string;
   totalVolume: number;
   sessionCount: number;
-}
-
-export interface PersonalRecord {
-  exerciseName: string;
-  maxWeight: number;
 }
 
 export interface MuscleGroupVolume {
@@ -1425,30 +1520,38 @@ export interface MuscleGroupVolume {
   volume: number;
 }
 
-export interface StrengthCurvePoint {
-  date: string;
-  estimated1RM: number;
-}
-
-export interface StrengthCurve {
-  exerciseId: number;
-  exerciseName: string;
-  points: StrengthCurvePoint[];
+export interface SplitRecovery {
+  workoutId: number;
+  name: string;
+  /** Jours depuis la dernière séance de ce split (null : jamais fait). */
+  daysSince: number | null;
 }
 
 export interface DashboardSummary {
-  totalVolumeAllTime: number;
-  totalSessions: number;
-  /** Nombre de semaines consécutives (en comptant la semaine en cours) avec au moins 1 séance. */
-  streakWeeks: number;
+  /** Volume et nombre de séances des 8 dernières semaines (la semaine en cours en dernier). */
   weeklyStats: WeeklyStat[];
-  personalRecords: PersonalRecord[];
-  /** Phrase courte calculée (pas d'IA, juste une comparaison de volume) pour motiver. */
-  insightText: string;
+  // Régularité
+  weeklyGoal: number;
+  calendar: CalendarWeek[];
+  thisWeekCount: number;
+  goalStreakWeeks: number;
+  avgSessionsPerWeek: number | null;
+  // Repos
+  consecutiveDays: number;
+  lastRestDate: string | null;
+  recovery: SplitRecovery[];
+  /** Énergie physique notée au bilan (1-5), 10 dernières séances notées. */
+  energy: number[];
+  energyTrend: Trend | null;
+  /** Signal du bandeau de repos de l'accueil (null : rien à signaler). */
+  restAdvice: RestAdvice | null;
+  // Perf globale
+  volumeTrendPercent: number | null;
+  progression: ProgressionSummary;
+  records: RecordRow[];
+  recordsBeaten: number;
   /** Répartition du volume des 4 dernières semaines par groupe musculaire. */
   volumeByMuscleGroup: MuscleGroupVolume[];
-  /** Force estimée (formule Epley) dans le temps, pour chaque exercice barre libre du catalogue. */
-  strengthCurves: StrengthCurve[];
 }
 
 const MUSCLE_GROUP_LABEL: Record<string, string> = {
@@ -1518,43 +1621,6 @@ function buildWeeklyStats(
   return weeks;
 }
 
-function computeStreakWeeks(weeklyStats: WeeklyStat[]): number {
-  if (weeklyStats.length === 0) return 0;
-  const weeks = [...weeklyStats];
-  // La semaine en cours n'est peut-être pas terminée : si elle est vide, elle ne casse pas
-  // une série déjà entamée, elle est juste ignorée du décompte.
-  if (weeks[weeks.length - 1].sessionCount === 0) weeks.pop();
-
-  let streak = 0;
-  for (let i = weeks.length - 1; i >= 0; i--) {
-    if (weeks[i].sessionCount > 0) streak++;
-    else break;
-  }
-  return streak;
-}
-
-function buildInsightText(weeklyStats: WeeklyStat[]): string {
-  if (weeklyStats.length < 4) {
-    return 'Continue à enregistrer tes séances pour voir ta progression apparaître ici !';
-  }
-
-  const last2 = weeklyStats.slice(-2);
-  const prev2 = weeklyStats.slice(-4, -2);
-  const lastVolume = last2.reduce((sum, w) => sum + w.totalVolume, 0);
-  const prevVolume = prev2.reduce((sum, w) => sum + w.totalVolume, 0);
-
-  if (prevVolume === 0) {
-    return lastVolume > 0
-      ? 'Belle reprise ! Continue sur cette lancée.'
-      : 'Continue à enregistrer tes séances pour voir ta progression apparaître ici !';
-  }
-
-  const changePercent = Math.round(((lastVolume - prevVolume) / prevVolume) * 100);
-  if (changePercent >= 10) return `Volume en hausse de ${changePercent}% sur les 2 dernières semaines !`;
-  if (changePercent <= -15) return `Volume en baisse de ${Math.abs(changePercent)}% sur 2 semaines — une séance de plus cette semaine ?`;
-  return 'Volume stable sur les 2 dernières semaines — régularité au rendez-vous.';
-}
-
 /** Volume total (kg) par groupe musculaire, sur les lignes dont la date >= sinceDate. */
 function buildVolumeByMuscleGroup(
   rows: { date: string; muscleGroup: string | null; weight: number; repsDone: number }[],
@@ -1575,128 +1641,102 @@ function buildVolumeByMuscleGroup(
     .sort((a, b) => b.volume - a.volume);
 }
 
-/**
- * Force estimée (formule Epley : poids × (1 + reps/30)) par exercice barre libre, un point par
- * date (la meilleure série de la séance), limité aux `pointsPerExercise` séances les plus
- * récentes pour rester lisible sur le graphique.
- */
-function buildStrengthCurves(
-  rows: { date: string; exerciseId: number; exerciseName: string; category: string | null; weight: number; repsDone: number }[],
-  pointsPerExercise: number = 8
-): StrengthCurve[] {
-  const byExercise = new Map<number, { exerciseName: string; byDate: Map<string, number> }>();
-  for (const r of rows) {
-    if (r.category !== 'FREE_WEIGHT') continue;
-    if (!byExercise.has(r.exerciseId)) {
-      byExercise.set(r.exerciseId, { exerciseName: r.exerciseName, byDate: new Map() });
-    }
-    const bucket = byExercise.get(r.exerciseId)!;
-    const estimated1RM = r.weight * (1 + r.repsDone / 30);
-    bucket.byDate.set(r.date, Math.max(bucket.byDate.get(r.date) || 0, estimated1RM));
-  }
+export function getDashboardSummary(weeksCount: number = 8): DashboardSummary {
+  let fullRows: { date: string; workoutId: number; exerciseId: number; exerciseName: string; muscleGroup: string | null; weight: number; repsDone: number }[];
 
-  return Array.from(byExercise.entries()).map(([exerciseId, { exerciseName, byDate }]) => ({
-    exerciseId,
-    exerciseName,
-    points: Array.from(byDate.entries())
-      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-      .slice(-pointsPerExercise)
-      .map(([date, estimated1RM]) => ({ date, estimated1RM: Math.round(estimated1RM * 10) / 10 })),
-  }));
-}
-
-export function getDashboardSummary(weeksCount: number = 10): DashboardSummary {
-  let rawLogs: { date: string; workoutId: number; weight: number; repsDone: number }[];
-  let prRows: { exercise_name: string; max_weight: number }[];
-  let fullRows: { date: string; workoutId: number; exerciseId: number; exerciseName: string; muscleGroup: string | null; category: string | null; weight: number; repsDone: number }[];
-
+  // Groupe musculaire retrouvé par le NOM de l'exercice et pas par son id : d'anciens catalogues
+  // ont réattribué des ids (un leg curl d'avant porte l'id de l'extension triceps d'aujourd'hui),
+  // et les séances corrigées dans l'historique ont parfois un id 0. Nom inconnu : groupe "Autre".
   if (!db || Platform.OS === 'web') {
-    rawLogs = memoryLogs.map((l) => ({ date: l.date, workoutId: l.workoutId, weight: l.weight, repsDone: l.repsDone }));
-    const maxByExercise = new Map<string, number>();
-    for (const l of memoryLogs) {
-      maxByExercise.set(l.exerciseName, Math.max(maxByExercise.get(l.exerciseName) || 0, l.weight));
-    }
-    prRows = Array.from(maxByExercise.entries()).map(([exercise_name, max_weight]) => ({ exercise_name, max_weight }));
-
-    const seedMetaById = new Map(SEED_EXERCISES.map((ex) => [ex.id, ex]));
-    fullRows = memoryLogs.map((l) => {
-      const meta = seedMetaById.get(l.exerciseId);
-      const category = meta?.category ?? memoryExercises.find((e) => e.id === l.exerciseId)?.category ?? null;
-      return {
-        date: l.date,
-        workoutId: l.workoutId,
-        exerciseId: l.exerciseId,
-        exerciseName: l.exerciseName,
-        muscleGroup: meta?.muscleGroup ?? null,
-        category,
-        weight: l.weight,
-        repsDone: l.repsDone,
-      };
-    });
+    const groupByName = new Map(SEED_EXERCISES.map((ex) => [exerciseKey(ex.name), ex.muscleGroup ?? null]));
+    fullRows = memoryLogs.map((l) => ({
+      date: l.date,
+      workoutId: l.workoutId,
+      exerciseId: l.exerciseId,
+      exerciseName: l.exerciseName,
+      muscleGroup: groupByName.get(exerciseKey(l.exerciseName)) ?? null,
+      weight: l.weight,
+      repsDone: l.repsDone,
+    }));
   } else {
     try {
-      // Une seule requête (fullRows, via LEFT JOIN) : rawLogs n'en est qu'un sous-ensemble de
-      // colonnes, pas besoin d'un second scan de workout_logs pour l'obtenir.
+      const groupByName = new Map<string, string | null>();
+      for (const e of db.getAllSync<{ name: string; muscle_group: string | null }>('SELECT name, muscle_group FROM exercises ORDER BY id;')) {
+        const key = exerciseKey(e.name);
+        if (!groupByName.has(key)) groupByName.set(key, e.muscle_group);
+      }
       fullRows = db
         .getAllSync<{
           date: string;
           workout_id: number;
           exercise_id: number;
           exercise_name: string;
-          muscle_group: string | null;
-          category: string | null;
           weight: number;
           reps_done: number;
-        }>(
-          `SELECT l.date, l.workout_id, l.exercise_id, l.exercise_name, e.muscle_group, e.category, l.weight, l.reps_done
-           FROM workout_logs l
-           LEFT JOIN exercises e ON e.id = l.exercise_id;`
-        )
+        }>('SELECT date, workout_id, exercise_id, exercise_name, weight, reps_done FROM workout_logs;')
         .map((r) => ({
           date: r.date,
           workoutId: r.workout_id,
           exerciseId: r.exercise_id,
           exerciseName: r.exercise_name,
-          muscleGroup: r.muscle_group,
-          category: r.category,
+          muscleGroup: groupByName.get(exerciseKey(r.exercise_name)) ?? null,
           weight: r.weight,
           repsDone: r.reps_done,
         }));
-
-      rawLogs = fullRows.map((r) => ({ date: r.date, workoutId: r.workoutId, weight: r.weight, repsDone: r.repsDone }));
-
-      prRows = db.getAllSync<{ exercise_name: string; max_weight: number }>(
-        'SELECT exercise_name, MAX(weight) as max_weight FROM workout_logs GROUP BY exercise_name ORDER BY max_weight DESC LIMIT 5;'
-      );
     } catch (error) {
       console.error('Erreur getDashboardSummary:', error);
-      rawLogs = [];
-      prRows = [];
       fullRows = [];
     }
   }
 
-  const weeklyStats = buildWeeklyStats(rawLogs, weeksCount);
-  const sessionKeys = new Set(rawLogs.map((l) => `${l.date}_${l.workoutId}`));
-  const totalVolumeAllTime = Math.round(rawLogs.reduce((sum, l) => sum + l.weight * l.repsDone, 0));
+  const today = formatLocalDate(new Date());
+  const goal = getWeeklyGoal();
+  const byDate = sessionsByDate(fullRows);
+  const calendar = buildCalendar(byDate, today, weeksCount);
+  const thisWeekCount = calendar[calendar.length - 1]?.sessionCount ?? 0;
+  const consecutiveDays = consecutiveTrainingDays(byDate, today);
 
-  prRows.sort((a, b) => b.max_weight - a.max_weight);
+  const workouts = getWorkouts();
+  const daysSince = daysSinceBySplit(byDate, today, workouts.map((w) => w.id));
+  const recovery = workouts.map((w) => ({ workoutId: w.id, name: w.name, daysSince: daysSince.get(w.id) ?? null }));
+
+  const energy = getAllSessionFeedback()
+    .filter((f) => f.physicalFeeling != null)
+    .sort((a, b) => (a.date === b.date ? a.workoutId - b.workoutId : a.date < b.date ? -1 : 1))
+    .map((f) => f.physicalFeeling as number)
+    .slice(-10);
+  const trend = energyTrend(energy);
+
+  const { records, beaten } = recordsWithRecent(fullRows, today);
 
   // Fenêtre des 4 dernières semaines (28 jours glissants) pour la répartition par groupe
   // musculaire — une photo de l'équilibre d'entraînement récent, pas un cumul depuis le début.
-  const fourWeeksAgo = new Date();
-  fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
-  const sinceDate = formatLocalDate(fourWeeksAgo);
+  const sinceDate = addDays(today, -27);
 
   return {
-    totalVolumeAllTime,
-    totalSessions: sessionKeys.size,
-    streakWeeks: computeStreakWeeks(weeklyStats),
-    weeklyStats,
-    personalRecords: prRows.slice(0, 5).map((r) => ({ exerciseName: r.exercise_name, maxWeight: r.max_weight })),
-    insightText: buildInsightText(weeklyStats),
+    weeklyStats: buildWeeklyStats(fullRows, weeksCount),
+    weeklyGoal: goal,
+    calendar,
+    thisWeekCount,
+    goalStreakWeeks: goalStreakWeeks(byDate, today, goal),
+    avgSessionsPerWeek: averageSessionsPerWeek(byDate, today, weeksCount),
+    consecutiveDays,
+    lastRestDate: lastRestDay(byDate, today),
+    recovery,
+    energy,
+    energyTrend: trend,
+    restAdvice: buildRestAdvice({
+      weekCount: thisWeekCount,
+      goal,
+      consecutiveDays,
+      energy: trend,
+      trainedToday: byDate.has(today),
+    }),
+    volumeTrendPercent: volumeTrendPercent(fullRows, today),
+    progression: exerciseProgression(fullRows, today),
+    records,
+    recordsBeaten: beaten,
     volumeByMuscleGroup: buildVolumeByMuscleGroup(fullRows, sinceDate),
-    strengthCurves: buildStrengthCurves(fullRows),
   };
 }
 
@@ -1860,9 +1900,20 @@ export function restoreFullBackup(backup: FullBackup): { ok: boolean; error?: st
         }
       }
     });
-    return { ok: true };
   } catch (error) {
     console.error('Erreur restoreFullBackup:', error);
     return { ok: false, error: "La restauration a échoué — la base n'a pas été modifiée." };
   }
+
+  // Une sauvegarde plus ancienne que le catalogue actuel peut contenir des lignes reliées par un
+  // id qui a changé de sens depuis : on les relie par leur nom, puis on recalcule la progression.
+  // Un échec ici n'annule pas la restauration (les données sont là) : il est seulement journalisé.
+  try {
+    relinkWorkoutLogs(db);
+    recomputeProgression(db, null, false);
+  } catch (error) {
+    console.error('Erreur reliage après restauration:', error);
+  }
+  return { ok: true };
 }
+

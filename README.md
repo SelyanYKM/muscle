@@ -45,6 +45,8 @@ Moteur pur dans `src/engine/progressionV2.ts` (aucune dépendance à la base ni 
 
 **Changement de règles** — quand le moteur change, la charge mémorisée par l'ancienne version peut avoir dérivé. Une migration unique (`replay_progression_v3` dans `db.ts`) rejoue alors tout l'historique réel de chaque exercice dans le nouveau moteur (`replayHistory`) : la première suggestion après la mise à jour part de la dernière séance réellement faite.
 
+**Historique ↔ catalogue** — une séance est reliée à son exercice par le **nom** (sans tenir compte des majuscules ni des espaces, anciens noms compris : `EXERCISE_ALIASES` dans `src/database/exerciseLinks.ts`), l'id n'en est qu'un raccourci : la synchronisation du catalogue renomme les exercices par leur id. Un nom absent du catalogue garde l'id 0. Toutes les lectures de l'historique filtrent sur l'id ET le nom, la dernière séance se prend par sa date. Après une correction ou une suppression dans l'historique, et après une restauration de sauvegarde, la progression des exercices concernés est recalculée en rejouant leur historique.
+
 **Séries prises en compte** (`selectWorkingSets`) — le moteur est pensé pour des séries droites (ex. 3×8 à la même charge) :
 - Séries droites : au moins le nombre de séries prévu à une même charge. Une série test, une série bonus ou une série de retour au calme à une autre charge est ignorée.
 - Séance irrégulière (montée en charge, charge baissée en cours de route) : une série plus lourde que prévu et ratée est une tentative, ignorée ; on garde ensuite les premières séries, et la charge retenue est la plus légère. Une montée en charge 60 / 70 / 75 ne fait donc pas progresser.
@@ -86,7 +88,7 @@ Exemple sur 3×8 : 8/8/7 ou 8/7/6 = presque ; 8/6/6 = ratée.
 
 **Réglages** — toutes les valeurs (85 %, 3 échecs, 4 séances, 10 %, ±20 %…) sont des constantes exportées en tête de `progressionV2.ts`.
 
-**Tests** — `npm run test:engine` (Node 22.18 ou plus récent, aucune dépendance) : scénarios dans `src/engine/__tests__/progressionV2.test.mjs`.
+**Tests** — `npm run test:engine` (Node 22.18 ou plus récent, aucune dépendance) : scénarios dans `src/engine/__tests__/progressionV2.test.mjs` et reliage historique ↔ catalogue dans `src/database/__tests__/exerciseLinks.test.mjs`.
 
 ---
 
