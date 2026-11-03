@@ -214,6 +214,12 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
     })
   ).current;
 
+  const contentOpacity = translateY.interpolate({
+    inputRange: [COLLAPSED_TRANSLATE - 80, COLLAPSED_TRANSLATE],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
   const backdropOpacity = translateY.interpolate({
     inputRange: [0, COLLAPSED_TRANSLATE],
     outputRange: [0.4, 0],
@@ -306,6 +312,9 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
           )}
         </View>
 
+        {/* Le contenu s'efface quand le tiroir se replie : sinon son premier titre dépassait
+            sous la semaine en cours. */}
+        <Animated.View style={[styles.body, { opacity: contentOpacity }]}>
         <ScrollView
           style={styles.body}
           contentContainerStyle={styles.bodyContent}
@@ -513,6 +522,7 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
           </View>
 
         </ScrollView>
+        </Animated.View>
       </Animated.View>
 
       {/* FEUILLE : OBJECTIF DE LA SEMAINE */}

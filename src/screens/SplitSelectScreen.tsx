@@ -165,7 +165,7 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
 
         {/* Titre de sélection ; le bandeau de repos remplace la phrase d'accroche quand un signal
             est là (objectif atteint, jours d'affilée, énergie en baisse). Il ne bloque rien. */}
-        <View style={styles.stepTitleBox}>
+        <View style={[styles.stepTitleBox, restAdvice && styles.stepTitleBoxWithBanner]}>
           <Text style={styles.stepHeading} accessibilityRole="header">Choisis ton split</Text>
           {restAdvice ? (
             <View style={styles.restBanner}>
@@ -188,6 +188,7 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
               </View>
               <TouchableOpacity
                 style={styles.restBannerClose}
+                hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                 onPress={() => {
                   triggerLightHaptic();
                   dismissRestBannerForToday();
@@ -341,6 +342,10 @@ const styles = StyleSheet.create({
   stepTitleBox: {
     marginBottom: 22,
   },
+  // Avec le bandeau, l'en-tête gagne en hauteur : on resserre pour laisser la place aux cartes.
+  stepTitleBoxWithBanner: {
+    marginBottom: 14,
+  },
   stepHeading: {
     fontFamily: THEME.fonts.serif,
     fontSize: 32,
@@ -350,9 +355,9 @@ const styles = StyleSheet.create({
   restBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: 8,
     paddingLeft: 12,
-    paddingVertical: 10,
+    paddingVertical: 6,
     borderRadius: 18,
     backgroundColor: THEME.colors.cardBg,
     borderWidth: 1,
@@ -392,8 +397,8 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   restBannerClose: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -416,7 +421,9 @@ const styles = StyleSheet.create({
   splitCard: {
     flex: 1,
     borderRadius: THEME.radius.sheet,
-    padding: 22,
+    paddingHorizontal: 22,
+    // 18 en vertical (et pas 22) : les trois cartes tiennent aussi quand le bandeau de repos est affiché.
+    paddingVertical: 18,
     overflow: 'hidden',
     justifyContent: 'space-between',
     shadowColor: THEME.colors.shadow,
