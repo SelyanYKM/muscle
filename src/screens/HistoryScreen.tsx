@@ -24,6 +24,7 @@ import {
   getAllSessionFeedback,
   getLogsForRecentSessions,
   insertExerciseLogsForSession,
+  recomputeProgressionForExerciseNames,
   SessionFeedbackRow,
   updateWorkoutSessionType,
 } from '../database/db';
@@ -516,6 +517,12 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
     for (const ex of exercises) {
       insertExerciseLogsForSession(date, workoutId, ex.name.trim(), ex.sets);
     }
+    // La progression ne dépend que de l'historique : on la recalcule pour chaque exercice
+    // touché, sous son nom d'avant comme d'après la correction.
+    recomputeProgressionForExerciseNames([
+      ...exercises.flatMap((ex) => [ex.originalName, ex.name.trim()]),
+      ...removedExerciseNames,
+    ]);
 
     setEditingSession(null);
     loadHierarchicalLogs();
@@ -535,6 +542,10 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
           style: 'destructive',
           onPress: () => {
             deleteWorkoutSession(editingSession.date, editingSession.originalWorkoutId);
+            recomputeProgressionForExerciseNames([
+              ...editingSession.exercises.map((ex) => ex.originalName),
+              ...editingSession.removedExerciseNames,
+            ]);
             setEditingSession(null);
             loadHierarchicalLogs();
           },

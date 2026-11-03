@@ -307,3 +307,44 @@ test('rejeu sans historique : l’exercice reste en calibration', () => {
   const st = replayHistory(settings(), state({ isCalibrating: true }), []);
   assert.equal(st.isCalibrating, true);
 });
+
+// --- Recalcul après correction de l'historique ---
+
+test('séance supprimée de l’historique : le rejeu oublie sa date, la charge ne bouge pas', () => {
+  const before = [
+    { date: '2026-10-25', sets: sets([105, 8], [105, 8], [105, 7]) },
+    { date: '2026-10-29', sets: x(3, 105, 8) },
+    { date: '2026-11-01', sets: sets([107.5, 8]) }, // une seule série : séance incomplète
+  ];
+  const withIt = replayHistory(settings(), state(), before);
+  const without = replayHistory(settings(), state(), before.slice(0, 2));
+  assert.equal(withIt.lastSessionDate, '2026-11-01');
+  assert.equal(without.lastSessionDate, '2026-10-29');
+  assert.equal(without.currentWeight, withIt.currentWeight);
+});
+
+test('mauvaise séance corrigée après coup : la charge reprend sa progression', () => {
+  const bad = [
+    { date: '2026-10-22', sets: x(3, 70, 8) }, // calibration
+    { date: '2026-10-26', sets: x(3, 70, 8) },
+    { date: '2026-10-30', sets: x(3, 72.5, 5) }, // saisie erronée
+  ];
+  const fixed = [...bad.slice(0, 2), { date: '2026-10-30', sets: x(3, 72.5, 8) }];
+  const wrong = replayHistory(settings(), state(), bad);
+  assert.equal(wrong.currentWeight, 72.5); // la mauvaise séance fait stagner, sans baisse
+  assert.equal(wrong.consecutiveFailures, 1);
+  const right = replayHistory(settings(), state(), fixed);
+  assert.equal(right.currentWeight, 75);
+  assert.equal(right.consecutiveFailures, 0);
+});
+
+test('dernière séance d’un exercice supprimée : il repasse en calibration', () => {
+  const st = replayHistory(settings(), state({ currentWeight: 80 }), []);
+  assert.equal(st.isCalibrating, true);
+  assert.equal(st.lastSessionDate, null);
+});
+
+test('calibration sans charge dominante (70 / 60 / 80) : la plus lourde', () => {
+  const d = run(settings(), state({ isCalibrating: true }), sets([70, 8], [60, 8], [80, 8]));
+  assert.equal(d.nextWeight, 80);
+});

@@ -6,6 +6,15 @@ import {
   replayHistory,
   resolveSessionWeight,
 } from '../engine/progressionV2';
+import {
+  CatalogEntry,
+  groupSessionsByDate,
+  HistoryLogRow,
+  LINK_SQL,
+  LinkedLogRow,
+  planRelink,
+  resolveExerciseLink,
+} from './exerciseLinks';
 import { BodyWeightEntry, ConfiguredExercise, EquipmentCategory, Exercise, ExerciseProgressionState, ProgressionMode, Workout, WorkoutLogEntry } from '../types';
 import { SEED_EXERCISES, SEED_WORKOUTS } from './seed';
 import {
@@ -591,36 +600,83 @@ export async function initDatabase(): Promise<void> {
     // historique réel dans le moteur v3 : la première suggestion après la mise à jour part de la
     // dernière séance réellement faite. Exercices jamais pratiqués : inchangés.
     runOnceMigration(db, 'replay_progression_v3', 'rejeu de l\'historique (moteur v3)', (database) => {
-      const trainingDates = database
-        .getAllSync<{ date: string }>('SELECT DISTINCT date FROM workout_logs ORDER BY date ASC;')
-        .map((r: { date: string }) => r.date);
-      const exercises = database.getAllSync<ExerciseRow>(`${EXERCISE_JOIN_SELECT};`).map(rowToConfiguredExercise);
+      recomputeProgression(database, null, false);
+    });
 
-      for (const ex of exercises) {
-        const rows = database.getAllSync<{ date: string; weight: number; reps_done: number; marked_easy: number | null }>(
-          `SELECT date, weight, reps_done, marked_easy FROM workout_logs
-           WHERE exercise_id = ? AND exercise_name = ?
-           ORDER BY date ASC, set_number ASC, id ASC;`,
-          [ex.id, ex.name]
-        );
-        if (rows.length === 0) continue;
-
-        type ReplayedSession = { date: string; sets: { weight: number; reps: number }[]; easy: boolean };
-        const byDate = new Map<string, ReplayedSession>();
-        for (const r of rows) {
-          const session: ReplayedSession = byDate.get(r.date) ?? { date: r.date, sets: [], easy: false };
-          session.sets.push({ weight: r.weight, reps: r.reps_done });
-          session.easy = session.easy || !!r.marked_easy;
-          byDate.set(r.date, session);
-        }
-
-        const state = replayHistory(progressionSettingsOf(ex), progressionStateOf(ex), [...byDate.values()], trainingDates);
-        saveExerciseProgressionState(ex.id, state);
-      }
+    // Des lignes de workout_logs ne désignaient pas le bon exercice : id 0 laissé par une
+    // ancienne version de l'éditeur d'historique alors que le nom existe au catalogue, ou id
+    // réattribué par la synchronisation du catalogue (« Leg curl » resté sous l'id 15, devenu
+    // « Extension triceps à la poulie »). Le moteur, qui lit l'historique par id ET nom, ne voyait
+    // pas ces séances (ex. Decline Press jamais calibré). On relie chaque ligne par son nom (anciens
+    // noms rattachés à leur exercice actuel, voir EXERCISE_ALIASES ; nom inconnu → id 0), puis on
+    // rejoue l'historique de chaque exercice pratiqué. Le rejeu applique les règles du moteur,
+    // dont « une mauvaise séance fait stagner la charge, sans la faire baisser ».
+    runOnceMigration(db, 'relink_logs_by_name_v1', 'reliage de l\'historique par nom', (database) => {
+      relinkWorkoutLogs(database);
+      recomputeProgression(database, null, false);
     });
   } catch (error) {
     console.warn('Erreur initialisation SQLite, utilisation du mode mémoire de secours:', error);
     initMemoryFallback();
+  }
+}
+
+/**
+ * Relie chaque ligne de workout_logs à l'exercice du catalogue qui porte son nom (voir
+ * exerciseLinks.ts). Ne touche jamais aux dates, charges ni répétitions. Renvoie le nombre de
+ * lignes corrigées.
+ */
+function relinkWorkoutLogs(database: SQLite.SQLiteDatabase): number {
+  const catalog = database.getAllSync<CatalogEntry>(LINK_SQL.catalog);
+  const changes = planRelink(database.getAllSync<LinkedLogRow>(LINK_SQL.allLogLinks), catalog);
+  if (changes.length === 0) return 0;
+  database.withTransactionSync(() => {
+    for (const c of changes) database.runSync(LINK_SQL.relinkLog, [c.exerciseId, c.exerciseName, c.id]);
+  });
+  return changes.length;
+}
+
+/**
+ * Recalcule l'état de progression en rejouant l'historique réel dans le moteur (replayHistory).
+ * L'état ne dépend que de l'historique : le rejouer après une correction ou une restauration
+ * redonne exactement ce qu'une séance en direct aurait produit.
+ * `onlyIds` : exercices à recalculer (null = tous). `resetWhenEmpty` : un exercice sans plus
+ * aucune séance repasse en calibration (sinon il est laissé tel quel).
+ */
+function recomputeProgression(
+  database: SQLite.SQLiteDatabase,
+  onlyIds: ReadonlySet<number> | null,
+  resetWhenEmpty: boolean
+): void {
+  const trainingDates = database
+    .getAllSync<{ date: string }>(LINK_SQL.trainingDates)
+    .map((r: { date: string }) => r.date);
+  const exercises = database.getAllSync<ExerciseRow>(`${EXERCISE_JOIN_SELECT};`).map(rowToConfiguredExercise);
+
+  for (const ex of exercises) {
+    if (onlyIds && !onlyIds.has(ex.id)) continue;
+    const rows = database.getAllSync<HistoryLogRow>(LINK_SQL.exerciseHistory, [ex.id, ex.name]);
+    if (rows.length === 0 && !resetWhenEmpty) continue;
+    const state = replayHistory(progressionSettingsOf(ex), progressionStateOf(ex), groupSessionsByDate(rows), trainingDates);
+    saveExerciseProgressionState(ex.id, state);
+  }
+}
+
+/**
+ * À appeler après une correction de l'historique (éditeur, suppression de séance) : recalcule la
+ * progression des exercices dont les noms sont donnés (avant ET après la correction).
+ */
+export function recomputeProgressionForExerciseNames(names: string[]): void {
+  if (!db || Platform.OS === 'web') return; // repli mémoire : pas d'état persistant à recalculer
+
+  try {
+    const catalog = db.getAllSync<CatalogEntry>(LINK_SQL.catalog);
+    const ids = new Set(
+      names.map((n) => resolveExerciseLink(n, catalog).exerciseId).filter((id) => id !== 0)
+    );
+    if (ids.size > 0) recomputeProgression(db, ids, true);
+  } catch (error) {
+    console.error('Erreur recomputeProgressionForExerciseNames:', error);
   }
 }
 
@@ -721,13 +777,16 @@ export interface LastExercisePerformance {
 
 /**
  * Dernière performance connue sur un exercice donné (toutes séances confondues), pour
- * l'afficher comme repère pendant la séance en cours ("la dernière fois tu avais fait...").
+ * l'afficher comme repère pendant la séance en cours ("la dernière fois tu avais fait...") et la
+ * transmettre au moteur comme séance précédente. Filtre sur l'id ET le nom (un id a pu désigner
+ * un autre exercice), et prend la séance la plus récente par sa DATE : une séance passée corrigée
+ * dans l'historique est réenregistrée avec des id plus récents, sans être la dernière.
  */
-export function getLastExercisePerformance(exerciseId: number): LastExercisePerformance | null {
+export function getLastExercisePerformance(exerciseId: number, exerciseName: string): LastExercisePerformance | null {
   if (!db || Platform.OS === 'web') {
-    const logs = memoryLogs.filter((l) => l.exerciseId === exerciseId).sort((a, b) => (a.date < b.date ? 1 : -1));
+    const logs = memoryLogs.filter((l) => l.exerciseId === exerciseId && l.exerciseName === exerciseName);
     if (logs.length === 0) return null;
-    const lastDate = logs[0].date;
+    const lastDate = logs.reduce((max, l) => (l.date > max ? l.date : max), logs[0].date);
     const sets = logs
       .filter((l) => l.date === lastDate)
       .sort((a, b) => a.setNumber - b.setNumber)
@@ -736,10 +795,7 @@ export function getLastExercisePerformance(exerciseId: number): LastExercisePerf
   }
 
   try {
-    const lastDateRow = db.getFirstSync<{ date: string }>(
-      `SELECT date FROM workout_logs WHERE exercise_id = ? ORDER BY id DESC LIMIT 1;`,
-      [exerciseId]
-    );
+    const lastDateRow = db.getFirstSync<{ date: string }>(LINK_SQL.lastSessionDate, [exerciseId, exerciseName]);
     if (!lastDateRow) return null;
 
     const rows = db.getAllSync<{
@@ -747,11 +803,7 @@ export function getLastExercisePerformance(exerciseId: number): LastExercisePerf
       weight: number;
       reps_done: number;
       feeling: 'EASY' | 'MEDIUM' | 'HARD';
-    }>(
-      `SELECT set_number, weight, reps_done, feeling FROM workout_logs
-       WHERE exercise_id = ? AND date = ? ORDER BY set_number ASC;`,
-      [exerciseId, lastDateRow.date]
-    );
+    }>(LINK_SQL.sessionSets, [exerciseId, exerciseName, lastDateRow.date]);
 
     return {
       date: lastDateRow.date,
@@ -1321,11 +1373,11 @@ export function deleteWorkoutSession(date: string, workoutId: number): void {
  * renommé vers le nom d'origine de l'autre) : le DELETE du second effaçait les lignes tout
  * juste insérées par le premier.
  *
- * Résout exercise_id en retrouvant l'exercice du catalogue par son nom (sinon 0, comme pour un
- * exercice purement personnalisé) : sans ça, toute séance passée par cet éditeur perdait son
- * lien vers le catalogue, et disparaissait silencieusement de getLastExercisePerformance(),
- * buildStrengthCurves() et de la répartition par groupe musculaire (tous filtrent/joignent sur
- * exercise_id).
+ * Relie l'exercice au catalogue par son nom, sans tenir compte des majuscules ni des espaces,
+ * anciens noms compris (resolveExerciseLink) : id ET nom exact du catalogue, sinon id 0 et le nom
+ * saisi. Sans ça, une séance passée par cet éditeur perdait son lien vers le catalogue et
+ * disparaissait du moteur de progression. Penser à appeler recomputeProgressionForExerciseNames()
+ * une fois toutes les corrections enregistrées.
  */
 export function insertExerciseLogsForSession(
   date: string,
@@ -1341,13 +1393,12 @@ export function insertExerciseLogsForSession(
   }[]
 ): void {
   if (!db || Platform.OS === 'web') {
-    const matched = memoryExercises.find((e) => e.name === exerciseName);
-    const exerciseId = matched ? matched.id : 0;
+    const { exerciseId, exerciseName: linkedName } = resolveExerciseLink(exerciseName, memoryExercises);
     for (const s of sets) {
       memoryLogs.push({
         workoutId,
         exerciseId,
-        exerciseName,
+        exerciseName: linkedName,
         date,
         setNumber: s.setNumber,
         weight: s.weight,
@@ -1361,14 +1412,13 @@ export function insertExerciseLogsForSession(
   }
 
   try {
-    const matched = db.getFirstSync<{ id: number }>('SELECT id FROM exercises WHERE name = ?;', [exerciseName]);
-    const exerciseId = matched?.id ?? 0;
+    const link = resolveExerciseLink(exerciseName, db.getAllSync<CatalogEntry>(LINK_SQL.catalog));
     for (const s of sets) {
       db.runSync(
         `INSERT INTO workout_logs
         (workout_id, exercise_id, exercise_name, date, set_number, weight, reps_target, reps_done, feeling, marked_easy)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-        [workoutId, exerciseId, exerciseName, date, s.setNumber, s.weight, s.repsTarget, s.repsDone, s.feeling, s.markedEasy ? 1 : 0]
+        [workoutId, link.exerciseId, link.exerciseName, date, s.setNumber, s.weight, s.repsTarget, s.repsDone, s.feeling, s.markedEasy ? 1 : 0]
       );
     }
   } catch (error) {
@@ -1850,9 +1900,20 @@ export function restoreFullBackup(backup: FullBackup): { ok: boolean; error?: st
         }
       }
     });
-    return { ok: true };
   } catch (error) {
     console.error('Erreur restoreFullBackup:', error);
     return { ok: false, error: "La restauration a échoué — la base n'a pas été modifiée." };
   }
+
+  // Une sauvegarde plus ancienne que le catalogue actuel peut contenir des lignes reliées par un
+  // id qui a changé de sens depuis : on les relie par leur nom, puis on recalcule la progression.
+  // Un échec ici n'annule pas la restauration (les données sont là) : il est seulement journalisé.
+  try {
+    relinkWorkoutLogs(db);
+    recomputeProgression(db, null, false);
+  } catch (error) {
+    console.error('Erreur reliage après restauration:', error);
+  }
+  return { ok: true };
 }
+

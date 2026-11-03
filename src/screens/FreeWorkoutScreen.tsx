@@ -270,7 +270,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
     const perfMap: Record<number, LastExercisePerformance | null> = {};
     for (const ex of list) {
-      perfMap[ex.id] = getLastExercisePerformance(ex.id);
+      perfMap[ex.id] = getLastExercisePerformance(ex.id, ex.name);
     }
     setLastPerfByExerciseId(perfMap);
   }, [workoutId]);
