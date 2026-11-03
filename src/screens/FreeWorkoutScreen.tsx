@@ -650,6 +650,93 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
   const currentSetNum = getCurrentSetNumber();
 
+  const closePicker = () => {
+    setIsPickerSheetOpen(false);
+    setIsPickerForRest(false);
+  };
+
+  const renderPickerSheet = (visible: boolean) => (
+    <BottomSheet visible={visible} onClose={closePicker}>
+      <Text style={styles.sheetTitle} accessibilityRole="header">Choisir un exercice</Text>
+      <Text style={styles.sheetSubtitle}>{workoutName} · {catalogExercises.length} exercices</Text>
+
+      <ScrollView style={styles.catalogScroll} showsVerticalScrollIndicator={false}>
+        {catalogExercises.map((catEx, idx) => {
+          const isSelected = currentExercise?.id === catEx.id;
+          const doneSets = completedExercises.find((c) => c.exerciseId === catEx.id)?.sets || [];
+          return (
+            // Ligne et corbeille côte à côte (et plus l'une dans l'autre) : un tap à côté de la
+            // corbeille ne choisit plus l'exercice, et inversement.
+            <View key={catEx.id} style={styles.catalogRow}>
+            <TouchableOpacity
+              style={[styles.catalogItem, isSelected && { backgroundColor: split.tint }]}
+              onPress={() => handleSelectExercise(catEx)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`${idx + 1}. ${catEx.name}, ${CATEGORY_SUB_LABEL[catEx.category]}, conseillé ${kgA11y(
+                prescribedFor(catEx).weight
+              )}${doneSets.length > 0 ? `, ${doneSets.length} série${doneSets.length > 1 ? 's' : ''} faite${doneSets.length > 1 ? 's' : ''}` : ''}`}
+              accessibilityState={{ selected: isSelected }}
+            >
+              <View style={[styles.catalogIndexBadge, isSelected && styles.catalogIndexBadgeActive]}>
+                <Text style={[styles.catalogIndexText, isSelected && styles.catalogIndexTextActive]}>{idx + 1}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.catalogItemName}>{catEx.name}</Text>
+                <Text style={styles.catalogItemSub}>
+                  {CATEGORY_SUB_LABEL[catEx.category]} · conseillé {fmtKg(prescribedFor(catEx).weight)} kg
+                </Text>
+              </View>
+              {doneSets.length > 0 && (
+                <View style={styles.catalogDoneDots}>
+                  {doneSets.map((s, sIdx) => (
+                    <FeelingMark key={sIdx} feeling={s.feeling} />
+                  ))}
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.catalogDeleteBtn}
+              onPress={() => handleDeleteCatalogExercise(catEx)}
+              activeOpacity={0.6}
+              accessibilityRole="button"
+              accessibilityLabel={`Supprimer ${catEx.name} du catalogue`}
+            >
+              <Icon name="trash" size={17} color={THEME.colors.textMuted} strokeWidth={2} />
+            </TouchableOpacity>
+            </View>
+          );
+        })}
+      </ScrollView>
+
+      <TouchableOpacity
+        style={styles.secondaryBtn}
+        onPress={() => {
+          triggerLightHaptic();
+          setIsCreateSheetOpen(true);
+        }}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel="Nouvel exercice"
+      >
+        <Icon name="plus" size={16} color={THEME.colors.textPrimary} strokeWidth={2.4} />
+        <Text style={styles.secondaryBtnText}>Nouvel exercice</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.outlineBtn}
+        onPress={() => {
+          setIsPickerSheetOpen(false);
+          setIsPickerForRest(false);
+        }}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+      >
+        <Text style={styles.outlineBtnText}>Fermer</Text>
+      </TouchableOpacity>
+    </BottomSheet>
+  );
+
   // Carte « et ensuite ? » de l'écran de repos.
   const restNext: RestNext = (() => {
     if (!currentExercise) return { label: 'PROCHAINE SÉRIE', title: 'Série suivante' };
@@ -1190,92 +1277,11 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         </TouchableOpacity>
       </BottomSheet>
 
-      {/* FEUILLE : SÉLECTEUR D'EXERCICE DU CATALOGUE */}
-      <BottomSheet
-        visible={isPickerSheetOpen}
-        onClose={() => {
-          setIsPickerSheetOpen(false);
-          setIsPickerForRest(false);
-        }}
-      >
-        <Text style={styles.sheetTitle} accessibilityRole="header">Choisir un exercice</Text>
-        <Text style={styles.sheetSubtitle}>{workoutName} · {catalogExercises.length} exercices</Text>
-
-        <ScrollView style={styles.catalogScroll} showsVerticalScrollIndicator={false}>
-          {catalogExercises.map((catEx, idx) => {
-            const isSelected = currentExercise?.id === catEx.id;
-            const doneSets = completedExercises.find((c) => c.exerciseId === catEx.id)?.sets || [];
-            return (
-              // Ligne et corbeille côte à côte (et plus l'une dans l'autre) : un tap à côté de la
-              // corbeille ne choisit plus l'exercice, et inversement.
-              <View key={catEx.id} style={styles.catalogRow}>
-              <TouchableOpacity
-                style={[styles.catalogItem, isSelected && { backgroundColor: split.tint }]}
-                onPress={() => handleSelectExercise(catEx)}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel={`${idx + 1}. ${catEx.name}, ${CATEGORY_SUB_LABEL[catEx.category]}, conseillé ${kgA11y(
-                  prescribedFor(catEx).weight
-                )}${doneSets.length > 0 ? `, ${doneSets.length} série${doneSets.length > 1 ? 's' : ''} faite${doneSets.length > 1 ? 's' : ''}` : ''}`}
-                accessibilityState={{ selected: isSelected }}
-              >
-                <View style={[styles.catalogIndexBadge, isSelected && styles.catalogIndexBadgeActive]}>
-                  <Text style={[styles.catalogIndexText, isSelected && styles.catalogIndexTextActive]}>{idx + 1}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.catalogItemName}>{catEx.name}</Text>
-                  <Text style={styles.catalogItemSub}>
-                    {CATEGORY_SUB_LABEL[catEx.category]} · conseillé {fmtKg(prescribedFor(catEx).weight)} kg
-                  </Text>
-                </View>
-                {doneSets.length > 0 && (
-                  <View style={styles.catalogDoneDots}>
-                    {doneSets.map((s, sIdx) => (
-                      <FeelingMark key={sIdx} feeling={s.feeling} />
-                    ))}
-                  </View>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.catalogDeleteBtn}
-                onPress={() => handleDeleteCatalogExercise(catEx)}
-                activeOpacity={0.6}
-                accessibilityRole="button"
-                accessibilityLabel={`Supprimer ${catEx.name} du catalogue`}
-              >
-                <Icon name="trash" size={17} color={THEME.colors.textMuted} strokeWidth={2} />
-              </TouchableOpacity>
-              </View>
-            );
-          })}
-        </ScrollView>
-
-        <TouchableOpacity
-          style={styles.secondaryBtn}
-          onPress={() => {
-            triggerLightHaptic();
-            setIsCreateSheetOpen(true);
-          }}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Nouvel exercice"
-        >
-          <Icon name="plus" size={16} color={THEME.colors.textPrimary} strokeWidth={2.4} />
-          <Text style={styles.secondaryBtnText}>Nouvel exercice</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.outlineBtn}
-          onPress={() => {
-            setIsPickerSheetOpen(false);
-            setIsPickerForRest(false);
-          }}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-        >
-          <Text style={styles.outlineBtnText}>Fermer</Text>
-        </TouchableOpacity>
-      </BottomSheet>
+      {/* FEUILLE : SÉLECTEUR D'EXERCICE DU CATALOGUE. Ouverte depuis le repos, une seconde
+          instance est montée à ce moment-là, après l'écran de repos : elle s'affiche ainsi
+          par-dessus lui (sinon, sur certaines plateformes, elle restait cachée derrière). */}
+      {renderPickerSheet(isPickerSheetOpen && !isPickerForRest)}
+      {isPickerForRest && renderPickerSheet(isPickerSheetOpen)}
 
       {/* FEUILLE : CRÉER UN EXERCICE PERSONNALISÉ */}
       <BottomSheet visible={isCreateSheetOpen} onClose={() => setIsCreateSheetOpen(false)} maxHeightPercent={70} avoidKeyboard>
