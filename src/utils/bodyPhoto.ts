@@ -1,6 +1,6 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
-import { Alert } from 'react-native';
+import { showDialog } from './dialog';
 
 // Sous-dossier du répertoire document (persistant, jamais nettoyé par l'OS contrairement au
 // cache) où vivent les photos de suivi de poids, copiées depuis la galerie/l'appareil photo —
@@ -23,7 +23,7 @@ export async function pickBodyWeightPhoto(source: 'camera' | 'library', date: st
     if (source === 'camera') {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert(
+        showDialog(
           'Permission refusée',
           "Autorise l'accès à l'appareil photo dans les réglages Android pour prendre une photo."
         );
@@ -49,7 +49,7 @@ export async function pickBodyWeightPhoto(source: 'camera' | 'library', date: st
     return destFile.uri;
   } catch (error) {
     console.error('Erreur pickBodyWeightPhoto:', error);
-    Alert.alert('Erreur', "Impossible d'ajouter cette photo. Réessaie dans un instant.");
+    showDialog('Erreur', "Impossible d'ajouter cette photo. Réessaie dans un instant.");
     return null;
   }
 }

@@ -1,8 +1,8 @@
 import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { Alert } from 'react-native';
 import { buildFullBackup, FullBackup, restoreFullBackup } from '../database/db';
+import { showDialog } from './dialog';
 
 /**
  * Génère une sauvegarde JSON complète (catalogue, historique, progression, ressentis, poids de
@@ -19,7 +19,7 @@ export async function exportBackupFile(): Promise<void> {
 
     const canShare = await Sharing.isAvailableAsync();
     if (!canShare) {
-      Alert.alert('Partage indisponible', "Le partage de fichiers n'est pas disponible sur cet appareil.");
+      showDialog('Partage indisponible', "Le partage de fichiers n'est pas disponible sur cet appareil.");
       return;
     }
 
@@ -29,7 +29,7 @@ export async function exportBackupFile(): Promise<void> {
     });
   } catch (error) {
     console.error('Erreur exportBackupFile:', error);
-    Alert.alert('Erreur', "La sauvegarde a échoué. Réessaie dans un instant.");
+    showDialog('Erreur', "La sauvegarde a échoué. Réessaie dans un instant.");
   }
 }
 
@@ -50,20 +50,20 @@ export async function importBackupFile(): Promise<ImportBackupOutcome> {
     const backup = JSON.parse(text) as FullBackup;
 
     if (!backup || typeof backup !== 'object' || !backup.tables) {
-      Alert.alert('Fichier invalide', "Ce fichier ne ressemble pas à une sauvegarde mooscles.");
+      showDialog('Fichier invalide', "Ce fichier ne ressemble pas à une sauvegarde mooscles.");
       return 'invalid';
     }
 
     const outcome = restoreFullBackup(backup);
     if (!outcome.ok) {
-      Alert.alert('Échec de la restauration', outcome.error || "Une erreur inconnue s'est produite.");
+      showDialog('Échec de la restauration', outcome.error || "Une erreur inconnue s'est produite.");
       return 'error';
     }
 
     return 'restored';
   } catch (error) {
     console.error('Erreur importBackupFile:', error);
-    Alert.alert('Erreur', "La lecture du fichier a échoué. Vérifie qu'il s'agit bien d'une sauvegarde mooscles.");
+    showDialog('Erreur', "La lecture du fichier a échoué. Vérifie qu'il s'agit bien d'une sauvegarde mooscles.");
     return 'error';
   }
 }

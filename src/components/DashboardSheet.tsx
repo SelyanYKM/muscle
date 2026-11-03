@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   Animated,
   Dimensions,
   Image,
@@ -43,6 +42,7 @@ import {
 } from './ProgressWidgets';
 import { BottomSheet } from './BottomSheet';
 import { Icon } from './Icon';
+import { showDialog } from '../utils/dialog';
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const PEEK_HEIGHT = 108;
@@ -168,7 +168,7 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
   const handleSaveWeight = () => {
     const weight = parseFloat(newWeightText.replace(',', '.'));
     if (!weight || weight <= 0) {
-      Alert.alert('Poids invalide', 'Renseigne un poids valide.');
+      showDialog('Poids invalide', 'Renseigne un poids valide.');
       return;
     }
     triggerMediumHaptic();
@@ -179,7 +179,7 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
   };
 
   const confirmDeleteWeightEntry = (entry: BodyWeightEntry) => {
-    Alert.alert(
+    showDialog(
       'Supprimer cette pesée ?',
       `La pesée du ${formatWeekLabel(entry.date)} (${fmtKg(entry.weight)} kg) sera supprimée${entry.photoUri ? ', photo comprise' : ''}.`,
       [

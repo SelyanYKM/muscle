@@ -1,7 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   Animated,
   Easing,
   ScrollView,
@@ -36,6 +35,7 @@ import { exportHistoryAsText } from '../utils/exportHistory';
 import { fmtKg, parseLocalDate } from '../utils/format';
 import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
 import { useRepeatPress } from '../utils/useRepeatPress';
+import { showDialog } from '../utils/dialog';
 
 interface HistoryScreenProps {
   onBack: () => void;
@@ -266,7 +266,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
   // sauvegarder d'abord, puisque rien ne permet de revenir en arrière ensuite.
   const promptClearHistory = () => {
     triggerWarningHaptic();
-    Alert.alert(
+    showDialog(
       "Effacer tout l'historique ?",
       'Toutes les séances et performances enregistrées seront définitivement supprimées. Pense à faire une sauvegarde avant.',
       [
@@ -310,7 +310,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
 
   const confirmRestore = () => {
     triggerWarningHaptic();
-    Alert.alert(
+    showDialog(
       'Restaurer une sauvegarde ?',
       'Toutes tes données actuelles (catalogue, historique, progression) seront remplacées par celles du fichier choisi. Cette action est irréversible.',
       [
@@ -328,7 +328,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
       if (outcome === 'restored') {
         triggerMediumHaptic();
         loadHierarchicalLogs();
-        Alert.alert('Restauration terminée', 'Tes données ont été remplacées par celles de la sauvegarde.');
+        showDialog('Restauration terminée', 'Tes données ont été remplacées par celles de la sauvegarde.');
       }
     } finally {
       setIsRestoring(false);
@@ -366,7 +366,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
   const requestCloseEditor = () => {
     if (editingSession && JSON.stringify(editingSession) !== editingSnapshotRef.current) {
       triggerWarningHaptic();
-      Alert.alert('Abandonner les modifications ?', 'Tes changements sur cette séance ne seront pas enregistrés.', [
+      showDialog('Abandonner les modifications ?', 'Tes changements sur cette séance ne seront pas enregistrés.', [
         { text: "Continuer l'édition", style: 'cancel' },
         { text: 'Abandonner', style: 'destructive', onPress: () => setEditingSession(null) },
       ]);
@@ -451,7 +451,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
     setEditingSession((prev) => {
       if (!prev) return prev;
       if (prev.exercises[exIdx].sets.length <= 1) {
-        Alert.alert('Action impossible', 'Un exercice doit comporter au moins 1 série.');
+        showDialog('Action impossible', 'Un exercice doit comporter au moins 1 série.');
         return prev;
       }
       const exercises = [...prev.exercises];
@@ -466,7 +466,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
     if (!exerciseName) return;
     triggerWarningHaptic();
 
-    Alert.alert(
+    showDialog(
       'Retirer cet exercice ?',
       `« ${exerciseName} » sera retiré de cette séance quand tu enregistreras les modifications.`,
       [
@@ -500,7 +500,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
     const { date, originalWorkoutId, workoutId, exercises, removedExerciseNames } = editingSession;
 
     if (exercises.some((ex) => !ex.name.trim())) {
-      Alert.alert('Nom requis', 'Chaque exercice doit avoir un nom.');
+      showDialog('Nom requis', 'Chaque exercice doit avoir un nom.');
       return;
     }
     triggerMediumHaptic();
@@ -532,7 +532,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
     if (!editingSession) return;
     triggerWarningHaptic();
 
-    Alert.alert(
+    showDialog(
       'Supprimer cette séance ?',
       `La séance du ${formatDate(editingSession.date)} sera supprimée de l'historique.`,
       [
