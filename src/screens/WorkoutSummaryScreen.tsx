@@ -11,6 +11,7 @@ import {
 import { FeelingMark } from '../components/FeelingMark';
 import { Icon } from '../components/Icon';
 import { saveSessionFeedback } from '../database/db';
+import { resolveSessionWeight } from '../engine/progressionV2';
 import { THEME } from '../theme';
 import { ProgressionDecision, SessionStatus, SetResult } from '../types';
 import { kgA11y, setA11yLabel } from '../utils/a11y';
@@ -37,6 +38,41 @@ interface WorkoutSummaryProps {
 }
 
 const FEELING_SCALE = [1, 2, 3, 4, 5];
+
+interface NextDelta {
+  text: string;
+  a11y: string;
+  up: boolean;
+}
+
+/**
+ * Écart entre la prochaine séance et celle qu'on vient de faire : la charge d'abord (charge de
+ * travail de la séance, comme le moteur la lit), sinon l'objectif de reps. Rien en calibration,
+ * où la séance faite n'était qu'un repère.
+ */
+function nextSessionDelta(decision: ProgressionDecision, results: SetResult[]): NextDelta | null {
+  if (results.length === 0 || decision.status === 'CALIBRATION' || decision.status === 'SKIPPED') return null;
+  const doneWeight = resolveSessionWeight(results.map((r) => r.weight));
+  const weightDelta = Math.round((decision.nextWeight - doneWeight) * 100) / 100;
+  if (weightDelta !== 0) {
+    const sign = weightDelta > 0 ? '+' : '−';
+    return {
+      text: `${sign}${fmtKg(Math.abs(weightDelta))} kg`,
+      a11y: `${weightDelta > 0 ? 'plus' : 'moins'} ${kgA11y(Math.abs(weightDelta))}`,
+      up: weightDelta > 0,
+    };
+  }
+  const repsDelta = decision.nextTargetReps - (results[0]?.targetReps ?? decision.nextTargetReps);
+  if (repsDelta !== 0) {
+    const n = Math.abs(repsDelta);
+    return {
+      text: `${repsDelta > 0 ? '+' : '−'}${n} rep${n > 1 ? 's' : ''}`,
+      a11y: `${repsDelta > 0 ? 'plus' : 'moins'} ${n} répétition${n > 1 ? 's' : ''}`,
+      up: repsDelta > 0,
+    };
+  }
+  return { text: '= même charge', a11y: 'même charge', up: false };
+}
 
 // Une échelle 1-5 à taper (énergie physique / motivation mentale, mêmes pastilles pour les
 // deux), extraite en composant plutôt que dupliquée deux fois avec seulement le libellé et
@@ -223,6 +259,7 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
           <View style={{ gap: 12 }}>
             {summary.exerciseSummaries.map((item, index) => {
               const { bg, ink } = statusColors(item.decision.status);
+              const delta = nextSessionDelta(item.decision, item.results);
 
               return (
                 <View key={index} style={styles.exerciseCard}>
@@ -257,15 +294,25 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
 
                   <View style={styles.cardHairline} />
 
-                  {/* Instruction et Prochaine charge */}
+                  {/* Instruction et Prochaine charge, avec l'écart par rapport à cette séance */}
                   <View
                     accessible
-                    accessibilityLabel={`Prochaine séance : ${kgA11y(item.decision.nextWeight)}, ${item.decision.nextTargetReps} reps. ${item.decision.reason}`}
+                    accessibilityLabel={`Prochaine séance : ${kgA11y(item.decision.nextWeight)}, ${item.decision.nextTargetReps} reps${
+                      delta ? `, ${delta.a11y}` : ''
+                    }. ${item.decision.reason}`}
                   >
                     <Text style={styles.nextSessionLabel}>PROCHAINE SÉANCE</Text>
-                    <Text style={[styles.nextWeightsText, { color: ink }]}>
-                      {fmtKg(item.decision.nextWeight)} kg × {item.decision.nextTargetReps}
-                    </Text>
+                    <View style={styles.nextWeightsRow}>
+                      <Text style={[styles.nextWeightsText, { color: ink }]}>
+                        {fmtKg(item.decision.nextWeight)} kg × {item.decision.nextTargetReps}
+                      </Text>
+                      {delta && (
+                        <View style={[styles.deltaPill, delta.up && styles.deltaPillUp]}>
+                          {delta.up && <Icon name="trending-up" size={12} color={THEME.colors.accentStrong} strokeWidth={2.6} />}
+                          <Text style={[styles.deltaPillText, delta.up && styles.deltaPillTextUp]}>{delta.text}</Text>
+                        </View>
+                      )}
+                    </View>
                     <Text style={styles.planMessageText}>{item.decision.reason}</Text>
                   </View>
                 </View>
@@ -458,10 +505,36 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     marginBottom: 3,
   },
+  nextWeightsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 3,
+  },
   nextWeightsText: {
     fontFamily: THEME.fonts.sansHeavy,
     fontSize: 20,
-    marginBottom: 3,
+  },
+  deltaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: THEME.radius.pill,
+    backgroundColor: THEME.colors.cardInner,
+  },
+  deltaPillUp: {
+    backgroundColor: '#DCE8F5',
+  },
+  deltaPillText: {
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+  },
+  deltaPillTextUp: {
+    color: THEME.colors.accentStrong,
   },
   planMessageText: {
     fontFamily: THEME.fonts.sansMedium,

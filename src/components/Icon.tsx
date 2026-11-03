@@ -14,7 +14,8 @@ export type IconName =
   | 'pause'
   | 'play'
   | 'timer'
-  | 'trash';
+  | 'trash'
+  | 'swap';
 
 // Tracés Lucide (viewBox 24x24), repris tels quels du handoff design v2.
 const ICON_PATHS: Record<IconName, string[]> = {
@@ -30,6 +31,7 @@ const ICON_PATHS: Record<IconName, string[]> = {
   pause: ['M8 5h2v14H8z', 'M14 5h2v14h-2z'],
   play: ['M7 4.5v15l12.5-7.5z'],
   timer: ['M10 2h4', 'm12 14 3-3', 'M20 14a8 8 0 1 1-16 0 8 8 0 0 1 16 0'],
+  swap: ['M8 3 4 7l4 4', 'M4 7h16', 'm16 21 4-4-4-4', 'M20 17H4'],
   trash: ['M3 6h18', 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6', 'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'],
 };
 

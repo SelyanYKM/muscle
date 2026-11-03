@@ -38,15 +38,19 @@ let isForegroundServiceRegistered = false;
 
 interface SetInfo {
   exerciseName: string;
-  nextSetNumber: number;
-  nextWeight: number;
-  nextReps: number;
+  /** Absents quand il n'y a plus de série prévue (tous les exercices du split sont faits). */
+  nextSetNumber?: number;
+  nextWeight?: number;
+  nextReps?: number;
 }
 
 // Reprend le même vocabulaire que l'écran de repos en appli (labels "RÉCUPÉRATION" et
 // "PROCHAINE SÉRIE"), pour que la notification se lise comme une extension de cet écran plutôt
 // que comme un texte générique.
 function buildBody({ exerciseName, nextSetNumber, nextWeight, nextReps }: SetInfo): { title: string; body: string } {
+  if (nextSetNumber == null || nextWeight == null || nextReps == null) {
+    return { title: 'Récupération', body: exerciseName };
+  }
   return {
     title: `Récupération · ${exerciseName}`,
     body: `Prochaine série : ${nextSetNumber} · ${fmtKg(nextWeight)} kg × ${nextReps} reps`,

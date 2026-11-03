@@ -21,7 +21,7 @@ import { FeelingMark } from '../components/FeelingMark';
 import { Icon } from '../components/Icon';
 import { BuffRequin, preloadBuffRequinAssets } from '../components/BuffRequin';
 import { PlateBreakdown, plateBreakdownA11yLabel } from '../components/PlateBreakdown';
-import { RestTimerOverlay } from '../components/RestTimerOverlay';
+import { RestNext, RestNextAction, RestTimerOverlay } from '../components/RestTimerOverlay';
 import { FEELING_BG, FEELING_INK } from '../constants/feeling';
 import {
   addCustomExercise,
@@ -110,6 +110,11 @@ function computeWarmupSets(
   ];
 }
 
+type RestPlan =
+  | { kind: 'next'; exercise: ConfiguredExercise; chosen: boolean }
+  | { kind: 'extra'; suggested: ConfiguredExercise | null }
+  | { kind: 'complete' };
+
 export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   workoutId,
   workoutName,
@@ -165,6 +170,14 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   // Toast "séance vide" (remplace Alert.alert)
   const [emptyToastVisible, setEmptyToastVisible] = useState<boolean>(false);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Suite proposée sur l'écran de repos qui suit la dernière série d'un exercice : l'exercice
+  // suggéré (ou choisi dans le sélecteur), une série de plus sur l'exercice en cours, ou la fin
+  // de séance quand tout est fait. Appliquée à la fermeture du repos ; rien n'est imposé.
+  const [restPlan, setRestPlan] = useState<RestPlan | null>(null);
+  // Sélecteur ouvert depuis l'écran de repos : choisir un exercice change la suite, pas
+  // l'exercice affiché derrière.
+  const [isPickerForRest, setIsPickerForRest] = useState<boolean>(false);
 
   // Repos déclenché en tapant la dernière pastille d'échauffement (60s fixes) plutôt qu'en
   // validant une vraie série : masque le lien "corriger la dernière série" côté écran de repos
@@ -308,13 +321,40 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     return { weight: p.weight, reps: p.targetReps };
   };
 
-  const handleSelectExercise = (ex: ConfiguredExercise) => {
-    triggerLightHaptic();
+  const applyExercise = (ex: ConfiguredExercise) => {
     setCurrentExercise(ex);
     const { weight, reps } = resolveStartingWeightReps(ex);
     setCurrentWeight(weight);
     setCurrentReps(reps);
+  };
+
+  const handleSelectExercise = (ex: ConfiguredExercise) => {
+    triggerLightHaptic();
+    if (isPickerForRest) {
+      // Depuis le repos : on note le choix, appliqué à la fin du repos.
+      setRestPlan((prev) =>
+        ex.id === currentExercise?.id
+          ? { kind: 'extra', suggested: prev?.kind === 'next' ? prev.exercise : prev?.kind === 'extra' ? prev.suggested : null }
+          : { kind: 'next', exercise: ex, chosen: true }
+      );
+    } else {
+      applyExercise(ex);
+    }
     setIsPickerSheetOpen(false);
+    setIsPickerForRest(false);
+  };
+
+  const setsDoneFor = (exerciseId: number) => completedExercises.find((c) => c.exerciseId === exerciseId)?.sets.length ?? 0;
+
+  // Exercice suggéré après la dernière série : le prochain, dans l'ordre du split, qui n'a pas
+  // encore toutes ses séries (en repartant du début si besoin) ; null si tout est fait.
+  const suggestNextExercise = (setsDone: (exerciseId: number) => number): ConfiguredExercise | null => {
+    const start = catalogExercises.findIndex((e) => e.id === currentExercise?.id);
+    for (let k = 1; k <= catalogExercises.length; k++) {
+      const ex = catalogExercises[(start + k + catalogExercises.length) % catalogExercises.length];
+      if (ex.id !== currentExercise?.id && setsDone(ex.id) < ex.numSets) return ex;
+    }
+    return null;
   };
 
   // Retire un exercice du catalogue de ce split (ex: doublon créé par erreur). L'historique
@@ -459,6 +499,15 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       }
     });
 
+    // Dernière série prévue (ou série en plus) : le repos propose la suite. Le state des séries
+    // n'est pas encore à jour ici, d'où le compte qui inclut la série qu'on vient de valider.
+    if (setNumber >= currentExercise.numSets) {
+      const suggestion = suggestNextExercise((id) => (id === currentExercise.id ? setNumber : setsDoneFor(id)));
+      setRestPlan(suggestion ? { kind: 'next', exercise: suggestion, chosen: false } : { kind: 'complete' });
+    } else {
+      setRestPlan(null);
+    }
+
     setLastValidatedSet(newSet);
     setRestDuration(currentExercise.restSeconds);
     setIsWarmupRest(false);
@@ -475,12 +524,16 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   // Seul déclencheur du repos post-échauffement (60s fixes).
   const handleWarmupRestButton = () => {
     triggerLightHaptic();
+    setRestPlan(null);
     setIsWarmupRest(true);
     setRestDuration(60);
     setIsResting(true);
   };
 
+  // Fin du repos (« Je suis prêt » ou minuteur écoulé) : la suite choisie s'applique.
   const closeRestOverlay = () => {
+    if (restPlan?.kind === 'next') applyExercise(restPlan.exercise);
+    setRestPlan(null);
     setIsResting(false);
     setIsWarmupRest(false);
   };
@@ -489,6 +542,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   const handleUndoFromRest = () => {
     if (!currentExercise) return;
     triggerLightHaptic();
+    setRestPlan(null);
     setIsResting(false);
     setCompletedExercises((prev) => {
       const existingIdx = prev.findIndex((c) => c.exerciseId === currentExercise.id);
@@ -595,6 +649,76 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   };
 
   const currentSetNum = getCurrentSetNumber();
+
+  // Carte « et ensuite ? » de l'écran de repos.
+  const restNext: RestNext = (() => {
+    if (!currentExercise) return { label: 'PROCHAINE SÉRIE', title: 'Série suivante' };
+    const extraSet = { number: currentSetNum, weight: currentWeight, reps: currentReps };
+    const otherAction: RestNextAction = {
+      label: 'Autre exercice',
+      icon: 'swap',
+      hint: 'Ouvre la liste des exercices',
+      onPress: () => {
+        setIsPickerForRest(true);
+        setIsPickerSheetOpen(true);
+      },
+    };
+    const extraAction: RestNextAction = {
+      label: 'Une série de plus',
+      icon: 'plus',
+      hint: `Reste sur ${currentExercise.name}`,
+      onPress: () =>
+        setRestPlan((prev) => ({ kind: 'extra', suggested: prev?.kind === 'next' ? prev.exercise : prev?.kind === 'extra' ? prev.suggested : null })),
+    };
+    const finishAction: RestNextAction = {
+      label: 'Terminer la séance',
+      icon: 'check',
+      hint: 'Ferme le repos et demande confirmation',
+      onPress: () => {
+        setRestPlan(null);
+        setIsResting(false);
+        setIsWarmupRest(false);
+        setIsFinishSheetOpen(true);
+      },
+    };
+
+    if (!restPlan) return { label: 'PROCHAINE SÉRIE', title: currentExercise.name, set: extraSet };
+    if (restPlan.kind === 'next') {
+      const { weight, reps } = resolveStartingWeightReps(restPlan.exercise);
+      return {
+        label: restPlan.chosen ? 'EXERCICE CHOISI' : 'EXERCICE SUIVANT',
+        tag: restPlan.chosen ? undefined : 'SUGGÉRÉ',
+        title: restPlan.exercise.name,
+        set: { number: setsDoneFor(restPlan.exercise.id) + 1, weight, reps },
+        actions: [otherAction, extraAction],
+      };
+    }
+    if (restPlan.kind === 'extra') {
+      const suggested = restPlan.suggested;
+      return {
+        label: 'PROCHAINE SÉRIE',
+        title: currentExercise.name,
+        set: extraSet,
+        actions: [
+          otherAction,
+          suggested
+            ? {
+                label: 'Exercice suivant',
+                icon: 'arrow-right',
+                hint: `Passe à ${suggested.name}`,
+                onPress: () => setRestPlan({ kind: 'next', exercise: suggested, chosen: false }),
+              }
+            : finishAction,
+        ],
+      };
+    }
+    return {
+      label: 'SÉANCE COMPLÈTE',
+      title: `Les ${catalogExercises.length} exercices sont faits`,
+      details: 'Tu peux terminer ou ajouter une série',
+      actions: [finishAction, extraAction],
+    };
+  })();
   const isLastSetOfExercise = !!currentExercise && currentSetNum === currentExercise.numSets;
   // Raison affichée sous la suggestion : la reprise après pause si elle s'applique, sinon la
   // dernière décision du moteur.
@@ -1017,10 +1141,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       {isResting && (
         <RestTimerOverlay
           initialSeconds={restDuration}
-          exerciseName={currentExercise?.name || 'Série suivante'}
-          nextSetNumber={currentSetNum}
-          nextWeight={currentWeight}
-          nextReps={currentReps}
+          next={restNext}
           onSkip={closeRestOverlay}
           onFinish={closeRestOverlay}
           onUndo={isWarmupRest ? undefined : handleUndoFromRest}
@@ -1070,7 +1191,13 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       </BottomSheet>
 
       {/* FEUILLE : SÉLECTEUR D'EXERCICE DU CATALOGUE */}
-      <BottomSheet visible={isPickerSheetOpen} onClose={() => setIsPickerSheetOpen(false)}>
+      <BottomSheet
+        visible={isPickerSheetOpen}
+        onClose={() => {
+          setIsPickerSheetOpen(false);
+          setIsPickerForRest(false);
+        }}
+      >
         <Text style={styles.sheetTitle} accessibilityRole="header">Choisir un exercice</Text>
         <Text style={styles.sheetSubtitle}>{workoutName} · {catalogExercises.length} exercices</Text>
 
@@ -1079,8 +1206,10 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
             const isSelected = currentExercise?.id === catEx.id;
             const doneSets = completedExercises.find((c) => c.exerciseId === catEx.id)?.sets || [];
             return (
+              // Ligne et corbeille côte à côte (et plus l'une dans l'autre) : un tap à côté de la
+              // corbeille ne choisit plus l'exercice, et inversement.
+              <View key={catEx.id} style={styles.catalogRow}>
               <TouchableOpacity
-                key={catEx.id}
                 style={[styles.catalogItem, isSelected && { backgroundColor: split.tint }]}
                 onPress={() => handleSelectExercise(catEx)}
                 activeOpacity={0.7}
@@ -1089,12 +1218,6 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                   prescribedFor(catEx).weight
                 )}${doneSets.length > 0 ? `, ${doneSets.length} série${doneSets.length > 1 ? 's' : ''} faite${doneSets.length > 1 ? 's' : ''}` : ''}`}
                 accessibilityState={{ selected: isSelected }}
-                // La croix de suppression est imbriquée dans la ligne : sur Android, TalkBack ne
-                // l'atteint pas séparément, d'où cette action "Supprimer" sur la ligne elle-même.
-                accessibilityActions={[{ name: 'delete', label: 'Supprimer du catalogue' }]}
-                onAccessibilityAction={(e) => {
-                  if (e.nativeEvent.actionName === 'delete') handleDeleteCatalogExercise(catEx);
-                }}
               >
                 <View style={[styles.catalogIndexBadge, isSelected && styles.catalogIndexBadgeActive]}>
                   <Text style={[styles.catalogIndexText, isSelected && styles.catalogIndexTextActive]}>{idx + 1}</Text>
@@ -1112,17 +1235,17 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                     ))}
                   </View>
                 )}
-                <TouchableOpacity
-                  style={styles.catalogDeleteBtn}
-                  onPress={() => handleDeleteCatalogExercise(catEx)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  activeOpacity={0.6}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Supprimer ${catEx.name} du catalogue`}
-                >
-                  <Icon name="x" size={14} color={THEME.colors.textSecondary} />
-                </TouchableOpacity>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.catalogDeleteBtn}
+                onPress={() => handleDeleteCatalogExercise(catEx)}
+                activeOpacity={0.6}
+                accessibilityRole="button"
+                accessibilityLabel={`Supprimer ${catEx.name} du catalogue`}
+              >
+                <Icon name="trash" size={17} color={THEME.colors.textMuted} strokeWidth={2} />
+              </TouchableOpacity>
+              </View>
             );
           })}
         </ScrollView>
@@ -1137,12 +1260,16 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           accessibilityRole="button"
           accessibilityLabel="Nouvel exercice"
         >
-          <Text style={styles.secondaryBtnText}>+ Nouvel exercice</Text>
+          <Icon name="plus" size={16} color={THEME.colors.textPrimary} strokeWidth={2.4} />
+          <Text style={styles.secondaryBtnText}>Nouvel exercice</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.outlineBtn}
-          onPress={() => setIsPickerSheetOpen(false)}
+          onPress={() => {
+            setIsPickerSheetOpen(false);
+            setIsPickerForRest(false);
+          }}
           activeOpacity={0.8}
           accessibilityRole="button"
         >
@@ -1770,6 +1897,8 @@ const styles = StyleSheet.create({
   },
   secondaryBtn: {
     height: 52,
+    flexDirection: 'row',
+    gap: 6,
     backgroundColor: THEME.colors.cardInner,
     borderRadius: THEME.radius.pill,
     alignItems: 'center',
@@ -1797,13 +1926,19 @@ const styles = StyleSheet.create({
     maxHeight: 340,
     marginBottom: 10,
   },
+  catalogRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 4,
+    marginBottom: 6,
+  },
   catalogItem: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     padding: 12,
     borderRadius: 18,
-    marginBottom: 6,
   },
   catalogIndexBadge: {
     width: 32,
@@ -1839,13 +1974,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 3,
   },
+  // Corbeille dans sa propre colonne (44 px de large), séparée de la ligne par un filet.
   catalogDeleteBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 6,
+    borderLeftWidth: 1,
+    borderLeftColor: THEME.colors.hairline,
   },
   inputMiniLabel: {
     fontFamily: THEME.fonts.sansHeavy,

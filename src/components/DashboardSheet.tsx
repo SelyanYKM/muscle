@@ -498,13 +498,15 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
             <View style={styles.bwHeaderRow}>
               <Text style={styles.sectionLabel} accessibilityRole="header">POIDS DE CORPS</Text>
               <TouchableOpacity
+                style={styles.bwAddBtn}
                 onPress={openAddWeightSheet}
                 activeOpacity={0.8}
                 hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
                 accessibilityRole="button"
                 accessibilityLabel="Ajouter une pesée"
               >
-                <Text style={styles.bwAddLink}>+ Ajouter</Text>
+                <Icon name="plus" size={13} color={THEME.colors.accentStrong} strokeWidth={2.4} />
+                <Text style={styles.bwAddLink}>Ajouter</Text>
               </TouchableOpacity>
             </View>
 
@@ -1051,6 +1053,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
+  },
+  bwAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   bwAddLink: {
     fontFamily: THEME.fonts.sans,
