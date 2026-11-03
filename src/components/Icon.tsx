@@ -14,11 +14,9 @@ export type IconName =
   | 'pause'
   | 'play'
   | 'timer'
-  | 'trash'
-  | 'fin';
+  | 'trash';
 
-// Tracés Lucide (viewBox 24x24), repris tels quels du handoff design v2. "fin" (aileron du
-// buff requin) est dessiné dans le même style : trait de 2,2, extrémités arrondies.
+// Tracés Lucide (viewBox 24x24), repris tels quels du handoff design v2.
 const ICON_PATHS: Record<IconName, string[]> = {
   'arrow-right': ['M5 12h14', 'm12 5 7 7-7 7'],
   'arrow-left': ['M19 12H5', 'm12 19-7-7 7-7'],
@@ -33,12 +31,10 @@ const ICON_PATHS: Record<IconName, string[]> = {
   play: ['M7 4.5v15l12.5-7.5z'],
   timer: ['M10 2h4', 'm12 14 3-3', 'M20 14a8 8 0 1 1-16 0 8 8 0 0 1 16 0'],
   trash: ['M3 6h18', 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6', 'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'],
-  fin: ['M5 16.5C9.5 14 13 8 17.5 3.5c-1 4.5-.8 9 1.3 13', 'M2 20.5c2.5 0 2.5-1.5 5-1.5s2.5 1.5 5 1.5 2.5-1.5 5-1.5 2.5 1.5 5 1.5'],
 };
 
-// Tracés remplis de la couleur du trait (par index), plus lisibles en petit : pause, lecture,
-// et l'aileron (sans les vagues).
-const FILLED_PATHS: Partial<Record<IconName, number[]>> = { pause: [0, 1], play: [0], fin: [0] };
+// Tracés remplis de la couleur du trait (par index), plus lisibles en petit : pause, lecture.
+const FILLED_PATHS: Partial<Record<IconName, number[]>> = { pause: [0, 1], play: [0] };
 
 interface IconProps {
   name: IconName;

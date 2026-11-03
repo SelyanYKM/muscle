@@ -651,8 +651,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 <Text style={styles.timerText}>{formatElapsedTime(elapsedSeconds)}</Text>
                 {isBuffRemanent && (
                   <View style={styles.buffBadge}>
-                    <Icon name="fin" size={14} color={THEME.colors.textPrimary} strokeWidth={2} />
-                    <Text style={styles.buffBadgeText}>BUFF · {formatElapsedTime(buffSecondsLeft)}</Text>
+                    <Text style={styles.buffBadgeText}>🦈 BUFF · {formatElapsedTime(buffSecondsLeft)}</Text>
                   </View>
                 )}
               </TouchableOpacity>
