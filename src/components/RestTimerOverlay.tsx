@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { FEELING_DOT } from '../constants/feeling';
-import { Icon } from './Icon';
+import { Icon, IconName } from './Icon';
 import { THEME } from '../theme';
 import { SetResult } from '../types';
 import { durationA11y, kgA11y } from '../utils/a11y';
@@ -37,12 +37,31 @@ import {
   stopRestTimerService,
 } from '../utils/restTimerService';
 
+export interface RestNextAction {
+  label: string;
+  icon: IconName;
+  onPress: () => void;
+  /** Ce que fait le bouton, pour le lecteur d'écran. */
+  hint?: string;
+}
+
+/** Carte « et ensuite ? » du bas de l'écran : la prochaine série, ou la suite suggérée. */
+export interface RestNext {
+  /** "PROCHAINE SÉRIE", "EXERCICE SUIVANT", "EXERCICE CHOISI", "SÉANCE COMPLÈTE". */
+  label: string;
+  /** Petite étiquette à côté du libellé, ex. "SUGGÉRÉ". */
+  tag?: string;
+  title: string;
+  /** Série à venir ; absente quand tout est fait (on affiche alors `details`). */
+  set?: { number: number; weight: number; reps: number };
+  details?: string;
+  /** Choix proposés sous la carte (autre exercice, une série de plus…). */
+  actions?: RestNextAction[];
+}
+
 interface RestTimerOverlayProps {
   initialSeconds: number;
-  exerciseName: string;
-  nextSetNumber: number;
-  nextWeight: number;
-  nextReps: number;
+  next: RestNext;
   onSkip: () => void;
   onFinish: () => void;
   /** Ferme le repos et annule la dernière série validée (accessible directement depuis cet écran). */
@@ -59,10 +78,7 @@ const RING_STROKE = 13;
 
 export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   initialSeconds,
-  exerciseName,
-  nextSetNumber,
-  nextWeight,
-  nextReps,
+  next,
   onSkip,
   onFinish,
   onUndo,
@@ -90,7 +106,20 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  const setInfo = { exerciseName, nextSetNumber, nextWeight, nextReps };
+  // Dernières versions des rappels du parent : l'intervalle et l'écouteur de la notification
+  // sont créés une seule fois, au montage ; sans ces refs ils appelleraient la version de ce
+  // moment-là (et appliqueraient par exemple une suite que l'utilisateur a changée depuis).
+  const onFinishRef = useRef(onFinish);
+  const onSkipRef = useRef(onSkip);
+  onFinishRef.current = onFinish;
+  onSkipRef.current = onSkip;
+
+  const setInfo = {
+    exerciseName: next.title,
+    nextSetNumber: next.set?.number,
+    nextWeight: next.set?.weight,
+    nextReps: next.set?.reps,
+  };
 
   // Retour sur la série validée : réussie si l'objectif de reps est atteint (même règle que
   // FreeWorkoutScreen.handleCompleteSet), sinon "sous l'objectif".
@@ -98,7 +127,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   const lastSetText = lastSet
     ? `Série ${lastSet.setNumber} ${lastSetMet ? 'réussie' : "sous l'objectif"} · ${lastSet.repsDone}/${lastSet.targetReps} reps`
     : null;
-  const notificationBody = `${exerciseName} • Série ${nextSetNumber} • ${nextWeight} kg`;
+  const notificationBody = next.set ? `${next.title} • Série ${next.set.number} • ${fmtKg(next.set.weight)} kg` : next.title;
 
   // Déclenche l'alerte de fin de repos une seule fois, quel que soit le chemin qui la détecte
   // (retour au premier plan ou minuteur classique).
@@ -111,7 +140,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     triggerTimerEndHaptic();
     playRestTimerAlarm();
     AccessibilityInfo.announceForAccessibility('Repos terminé');
-    onFinish();
+    onFinishRef.current();
   };
 
   // Un seul tick, réutilisé par l'intervalle initial et par la reprise après une pause.
@@ -186,7 +215,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     stopRestTimerService();
     hideRestTimerLiveNotification();
     triggerLightHaptic();
-    onSkip();
+    onSkipRef.current();
   };
 
   const handleUndo = () => {
@@ -297,7 +326,9 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   const formattedTotal = formatMinSec(totalSeconds);
 
   const progressFraction = totalSeconds > 0 ? secondsRemaining / totalSeconds : 0;
-  const ringSize = Math.round(Math.max(RING_MIN_SIZE, Math.min(RING_MAX_SIZE, windowHeight * 0.31)));
+  // Avec les choix sous la carte (après la dernière série), l'anneau rend la hauteur qu'ils prennent.
+  const actionsHeight = next.actions && next.actions.length > 0 ? 44 : 0;
+  const ringSize = Math.round(Math.max(RING_MIN_SIZE, Math.min(RING_MAX_SIZE, windowHeight * 0.31 - actionsHeight)));
   const ringRadius = (ringSize - RING_STROKE) / 2;
   const ringCircumference = 2 * Math.PI * ringRadius;
   const dashOffset = ringCircumference * (1 - progressFraction);
@@ -415,19 +446,57 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
             </TouchableOpacity>
           </View>
 
-          {/* Teaser Prochaine Série */}
-          <View
-            style={styles.nextSetInfoCard}
-            accessible
-            accessibilityLabel={`Prochaine série : ${exerciseName}, série ${nextSetNumber}, ${kgA11y(nextWeight)}, ${nextReps} reps`}
-          >
-            <Text style={styles.nextSetLabel}>PROCHAINE SÉRIE</Text>
-            <Text style={styles.nextSetTitle} numberOfLines={1}>
-              {exerciseName}
-            </Text>
-            <Text style={styles.nextSetDetails}>
-              Série {nextSetNumber} · <Text style={styles.nextSetHighlight}>{fmtKg(nextWeight)} kg</Text> × {nextReps}
-            </Text>
+          {/* Et ensuite ? La prochaine série, ou après la dernière série la suite suggérée, avec
+              d'autres choix juste en dessous : rien n'est imposé. */}
+          <View style={styles.nextSetInfoCard}>
+            <View
+              style={styles.nextSetBody}
+              accessible
+              accessibilityLabel={`${next.label.charAt(0) + next.label.slice(1).toLowerCase()}${next.tag ? `, ${next.tag.toLowerCase()}` : ''} : ${next.title}${
+                next.set ? `, série ${next.set.number}, ${kgA11y(next.set.weight)}, ${next.set.reps} reps` : next.details ? `. ${next.details}` : ''
+              }`}
+            >
+              <View style={styles.nextSetLabelRow}>
+                <Text style={styles.nextSetLabel}>{next.label}</Text>
+                {!!next.tag && (
+                  <View style={styles.nextSetTag}>
+                    <Text style={styles.nextSetTagText}>{next.tag}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.nextSetTitle} numberOfLines={1}>
+                {next.title}
+              </Text>
+              {next.set ? (
+                <Text style={styles.nextSetDetails}>
+                  Série {next.set.number} · <Text style={styles.nextSetHighlight}>{fmtKg(next.set.weight)} kg</Text> × {next.set.reps}
+                </Text>
+              ) : (
+                !!next.details && <Text style={styles.nextSetDetails}>{next.details}</Text>
+              )}
+            </View>
+            {!!next.actions && next.actions.length > 0 && (
+              <View style={styles.nextActionsRow}>
+                {next.actions.map((a, i) => (
+                  <TouchableOpacity
+                    key={a.label}
+                    style={[styles.nextActionBtn, i > 0 && styles.nextActionBtnDivider]}
+                    onPress={() => {
+                      triggerLightHaptic();
+                      a.onPress();
+                    }}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityHint={a.hint}
+                  >
+                    <Icon name={a.icon} size={14} color="#FFFFFF" />
+                    <Text style={styles.nextActionText} numberOfLines={1}>
+                      {a.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
 
           {/* Bouton Prêt + correction, groupés et serrés */}
@@ -535,18 +604,65 @@ const styles = StyleSheet.create({
   nextSetInfoCard: {
     width: '100%',
     borderRadius: THEME.radius.card,
-    padding: 18,
-    alignItems: 'center',
+    overflow: 'hidden',
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.16)',
+  },
+  nextSetBody: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 14,
+    alignItems: 'center',
+  },
+  nextSetLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
   },
   nextSetLabel: {
     fontFamily: THEME.fonts.sansHeavy,
     fontSize: 11,
     color: 'rgba(255, 255, 255, 0.72)',
     letterSpacing: 1,
-    marginBottom: 6,
+  },
+  // Étiquette « SUGGÉRÉ » : une suggestion est une petite récompense du parcours, l'or y a sa place.
+  nextSetTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: THEME.radius.pill,
+    backgroundColor: 'rgba(253, 197, 0, 0.18)',
+  },
+  nextSetTagText: {
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 10,
+    letterSpacing: 0.6,
+    color: THEME.colors.accent,
+  },
+  nextActionsRow: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.16)',
+  },
+  nextActionBtn: {
+    flex: 1,
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 6,
+  },
+  nextActionBtnDivider: {
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(255, 255, 255, 0.16)',
+  },
+  nextActionText: {
+    flexShrink: 1,
+    fontFamily: THEME.fonts.sans,
+    fontSize: 13,
+    color: '#FFFFFF',
   },
   nextSetTitle: {
     fontFamily: THEME.fonts.serif,

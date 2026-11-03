@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomSheet } from '../components/BottomSheet';
 import { FeelingMark } from '../components/FeelingMark';
 import { Icon } from '../components/Icon';
-import { FEELING_BG, FEELING_INK, FEELING_LABEL, resolveFeelingLabel } from '../constants/feeling';
+import { FEELING_INK, FEELING_LABEL, resolveFeelingLabel } from '../constants/feeling';
 import {
   clearAllWorkoutLogs,
   countWorkoutSessions,
@@ -66,6 +66,11 @@ interface MonthGroup {
 
 // État d'édition "brouillon" d'une séance entière, construit à l'ouverture de la feuille unique
 // de modification et persisté d'un bloc au clic sur "Enregistrer".
+/** Ressenti d'une série, déduit des reps comme en séance : objectif atteint = réussi, sinon échec. */
+function feelingFromReps(repsDone: number, repsTarget: number): Feeling {
+  return repsDone >= repsTarget ? 'EASY' : 'HARD';
+}
+
 interface EditableSet {
   setNumber: number;
   weight: number;
@@ -403,9 +408,15 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
     patchEditingSet(exIdx, setIdx, (s) => ({ weight: Math.max(0, Math.round((s.weight + delta) * 100) / 100) }));
   };
 
+  // Le ressenti suit les reps (plus de choix à la main) ; "facile" ne survit que si l'objectif
+  // reste atteint.
   const adjustEditingSetReps = (exIdx: number, setIdx: number, delta: number, withHaptic: boolean = true) => {
     if (withHaptic) triggerLightHaptic();
-    patchEditingSet(exIdx, setIdx, (s) => ({ repsDone: Math.max(0, s.repsDone + delta) }));
+    patchEditingSet(exIdx, setIdx, (s) => {
+      const repsDone = Math.max(0, s.repsDone + delta);
+      const feeling = feelingFromReps(repsDone, s.repsTarget);
+      return { repsDone, feeling, markedEasy: !!s.markedEasy && feeling === 'EASY' };
+    });
   };
 
   // Boutons − / + de l'éditeur : tap = un pas, maintenir = répétition accélérée (comme en séance).
@@ -419,14 +430,6 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
     onPressOut: repeatPress.stop,
     delayLongPress: 350,
   });
-
-  const setEditingSetFeeling = (exIdx: number, setIdx: number, feeling: Feeling) => {
-    triggerLightHaptic();
-    // Un choix explicite dans le sélecteur écrase toujours markedEasy : l'éditeur n'a pas de
-    // coche dédiée pour reconfirmer "facile", donc retoucher le ressenti d'une série ramène au
-    // libellé générique ("Réussi"), même si elle était "Facile" au moment de la séance.
-    patchEditingSet(exIdx, setIdx, () => ({ feeling, markedEasy: false }));
-  };
 
   const addEditingSet = (exIdx: number) => {
     triggerLightHaptic();
@@ -515,7 +518,12 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
       deleteExerciseFromSession(date, workoutId, name);
     }
     for (const ex of exercises) {
-      insertExerciseLogsForSession(date, workoutId, ex.name.trim(), ex.sets);
+      // Ressentis recalculés depuis les reps, comme en séance (les anciens "Juste" compris).
+      const sets = ex.sets.map((s) => {
+        const feeling = feelingFromReps(s.repsDone, s.repsTarget);
+        return { ...s, feeling, markedEasy: !!s.markedEasy && feeling === 'EASY' };
+      });
+      insertExerciseLogsForSession(date, workoutId, ex.name.trim(), sets);
     }
     // La progression ne dépend que de l'historique : on la recalcule pour chaque exercice
     // touché, sous son nom d'avant comme d'après la correction.
@@ -857,12 +865,14 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                   accessibilityLabel={`Nom de l'exercice ${exIdx + 1}`}
                 />
                 <TouchableOpacity
+                  style={styles.removeExBtn}
                   onPress={() => removeEditingExercise(exIdx)}
-                  hitSlop={{ top: 14, bottom: 14, left: 6, right: 10 }}
+                  activeOpacity={0.75}
                   accessibilityRole="button"
                   accessibilityLabel={`Retirer l'exercice ${ex.name} de la séance`}
                 >
-                  <Text style={styles.deleteSetLink}>Retirer</Text>
+                  <Icon name="trash" size={15} color={THEME.colors.feelingHardText} strokeWidth={2} />
+                  <Text style={styles.removeExBtnText}>Retirer</Text>
                 </TouchableOpacity>
               </View>
 
@@ -872,17 +882,19 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                     <Text style={styles.setNumberBadge}>Série {s.setNumber}</Text>
                     {ex.sets.length > 1 && (
                       <TouchableOpacity
+                        style={styles.removeSetBtn}
                         onPress={() => removeEditingSet(exIdx, setIdx)}
-                        hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
+                        hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                        activeOpacity={0.6}
                         accessibilityRole="button"
                         accessibilityLabel={`Retirer la série ${s.setNumber}`}
                       >
-                        <Text style={styles.deleteSetLink}>Retirer</Text>
+                        <Icon name="trash" size={16} color={THEME.colors.textSecondary} strokeWidth={2} />
                       </TouchableOpacity>
                     )}
                   </View>
 
-                  <View style={styles.steppersRow}>
+                  <View style={styles.steppersCol}>
                     <View style={styles.stepperBlock}>
                       <Text style={styles.stepperLabel}>POIDS</Text>
                       <View style={styles.stepperWrap}>
@@ -905,7 +917,8 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                             adjustEditingSetWeight(exIdx, setIdx, e.nativeEvent.actionName === 'increment' ? 2.5 : -2.5)
                           }
                         >
-                          {fmtKg(s.weight)}kg
+                          {fmtKg(s.weight)}
+                          <Text style={styles.stepValUnit}> kg</Text>
                         </Text>
                         <TouchableOpacity
                           style={styles.stepBtn}
@@ -935,13 +948,14 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                           style={styles.stepValText}
                           accessibilityRole="adjustable"
                           accessibilityLabel={`Reps de la série ${s.setNumber}`}
-                          accessibilityValue={{ text: `${s.repsDone} reps` }}
+                          accessibilityValue={{ text: `${s.repsDone} reps sur ${s.repsTarget}` }}
                           accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
                           onAccessibilityAction={(e) =>
                             adjustEditingSetReps(exIdx, setIdx, e.nativeEvent.actionName === 'increment' ? 1 : -1)
                           }
                         >
                           {s.repsDone}
+                          <Text style={styles.stepValUnit}> / {s.repsTarget}</Text>
                         </Text>
                         <TouchableOpacity
                           style={styles.stepBtn}
@@ -956,23 +970,17 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                     </View>
                   </View>
 
-                  <View style={styles.feelingRow} accessibilityRole="radiogroup" accessibilityLabel={`Ressenti de la série ${s.setNumber}`}>
-                    {(['EASY', 'MEDIUM', 'HARD'] as Feeling[]).map((f) => (
-                      <TouchableOpacity
-                        key={f}
-                        style={[styles.feelBtn, s.feeling === f && { backgroundColor: FEELING_BG[f] }]}
-                        onPress={() => setEditingSetFeeling(exIdx, setIdx, f)}
-                        hitSlop={{ top: 7, bottom: 7 }}
-                        accessibilityRole="radio"
-                        accessibilityLabel={FEELING_LABEL[f]}
-                        accessibilityState={{ checked: s.feeling === f }}
-                      >
-                        <FeelingMark feeling={f} />
-                        <Text style={[styles.feelBtnText, s.feeling === f && { color: FEELING_INK[f] }]}>
-                          {FEELING_LABEL[f]}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+                  {/* Ressenti déduit des reps, comme en séance */}
+                  <View style={styles.setStatusRow}>
+                    <FeelingMark feeling={feelingFromReps(s.repsDone, s.repsTarget)} size={8} />
+                    <Text
+                      style={[
+                        styles.setStatusText,
+                        { color: FEELING_INK[feelingFromReps(s.repsDone, s.repsTarget)] },
+                      ]}
+                    >
+                      {s.repsDone >= s.repsTarget ? 'Réussi' : 'Échec'} · {s.repsDone}/{s.repsTarget} reps
+                    </Text>
                   </View>
                 </View>
               ))}
@@ -985,7 +993,8 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                 accessibilityRole="button"
                 accessibilityLabel={`Ajouter une série à ${ex.name}`}
               >
-                <Text style={styles.addSetBtnText}>+ Ajouter une série</Text>
+                <Icon name="plus" size={15} color={THEME.colors.accentStrong} strokeWidth={2.4} />
+                <Text style={styles.addSetBtnText}>Ajouter une série</Text>
               </TouchableOpacity>
             </View>
           ))}
@@ -1391,80 +1400,100 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: THEME.colors.textPrimary,
   },
-  deleteSetLink: {
-    fontFamily: THEME.fonts.sans,
-    color: THEME.colors.feelingHardText,
-    fontSize: 11,
-  },
-  steppersRow: {
-    flexDirection: 'row',
+  steppersCol: {
     gap: 8,
     marginBottom: 8,
   },
   stepperBlock: {
-    flex: 1,
-  },
-  stepperLabel: {
-    fontFamily: THEME.fonts.sansHeavy,
-    fontSize: 11,
-    color: THEME.colors.textSecondary,
-    marginBottom: 3,
-  },
-  stepperWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: THEME.colors.cardBg,
-    borderRadius: THEME.radius.inner,
-    padding: 2,
+    gap: 8,
+  },
+  stepperLabel: {
+    width: 46,
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 11,
+    letterSpacing: 0.6,
+    color: THEME.colors.textSecondary,
+  },
+  stepperWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   stepBtn: {
-    width: 36,
-    height: 30,
+    width: 56,
+    height: 44,
+    borderRadius: THEME.radius.inner,
+    backgroundColor: THEME.colors.cardBg,
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepBtnText: {
     fontFamily: THEME.fonts.sansHeavy,
     color: THEME.colors.textPrimary,
-    fontSize: 11,
+    fontSize: 15,
   },
   stepValText: {
     flex: 1,
     textAlign: 'center',
     fontFamily: THEME.fonts.sansHeavy,
-    color: THEME.colors.accentStrong,
-    fontSize: 12,
+    color: THEME.colors.textPrimary,
+    fontSize: 20,
   },
-  feelingRow: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  feelBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: THEME.colors.cardBg,
-    paddingVertical: 7,
-    borderRadius: THEME.radius.inner,
-  },
-  feelBtnText: {
+  stepValUnit: {
     fontFamily: THEME.fonts.sans,
-    fontSize: 11,
+    fontSize: 13,
     color: THEME.colors.textSecondary,
   },
-  addSetBtn: {
-    backgroundColor: THEME.colors.cardInner,
-    paddingVertical: 10,
-    borderRadius: THEME.radius.pill,
+  setStatusRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+  },
+  setStatusText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
+  },
+  removeSetBtn: {
+    width: 36,
+    height: 36,
+    marginVertical: -8,
+    marginRight: -6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeExBtn: {
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    borderRadius: THEME.radius.inner,
+    backgroundColor: THEME.colors.feelingHardBg,
+  },
+  removeExBtnText: {
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 13,
+    color: THEME.colors.feelingHardText,
+  },
+  addSetBtn: {
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#C9D3E3',
+    borderRadius: THEME.radius.inner,
     marginBottom: 8,
   },
   addSetBtnText: {
-    fontFamily: THEME.fonts.sans,
-    color: THEME.colors.textPrimary,
-    fontSize: 12,
+    fontFamily: THEME.fonts.sansHeavy,
+    color: THEME.colors.accentStrong,
+    fontSize: 13,
   },
   primaryBtn: {
     backgroundColor: THEME.colors.textPrimary,

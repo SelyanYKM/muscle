@@ -3,12 +3,12 @@ import React, { useState } from 'react';
 import {
   Image,
   Pressable,
-  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DashboardSheet } from '../components/DashboardSheet';
 import { Icon } from '../components/Icon';
 import { SPLIT_LETTERS, SPLIT_SUBTITLES } from '../constants/splits';
@@ -108,6 +108,9 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
   // à chaque rendu, est alors recalculé.
   const [, setDataVersion] = useState(0);
   const [isRestBannerDismissed, setIsRestBannerDismissed] = useState(isRestBannerDismissedToday);
+  // Marge du haut : la zone sûre du téléphone (barre d'état, encoche) + un peu d'air, sans
+  // descendre sous les 52 px d'avant sur un écran classique.
+  const insets = useSafeAreaInsets();
   const restAdvice = isRestBannerDismissed ? null : dashboardSummary.restAdvice;
 
   const handleSelect = (wId: number, wName: string) => {
@@ -125,11 +128,12 @@ export const SplitSelectScreen: React.FC<SplitSelectScreenProps> = ({
         style={StyleSheet.absoluteFill}
       />
       <SafeAreaView
+        edges={['left', 'right']}
         style={styles.safeArea}
         importantForAccessibility={isDashboardExpanded ? 'no-hide-descendants' : 'auto'}
         accessibilityElementsHidden={isDashboardExpanded}
       >
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: Math.max(52, insets.top + 20) }]}>
         {/* En-tête officiel mooscles */}
         <View style={styles.headerRow}>
           <View style={styles.brandRow}>
@@ -285,7 +289,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 52,
     // Marge basse : au-delà de ne pas cacher les cartes sous la feuille "Ton progrès" repliée
     // (PEEK_HEIGHT = 108 dans DashboardSheet.tsx), laisse une vraie zone morte au doigt entre le
     // bas de la carte Legs et le haut du tiroir — sans ça (paddingBottom trop proche de
