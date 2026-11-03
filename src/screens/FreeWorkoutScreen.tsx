@@ -3,7 +3,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
-  Alert,
   Animated,
   BackHandler,
   Easing,
@@ -55,6 +54,7 @@ import { preloadBuffRequinSounds } from '../utils/audio';
 import { fmtKg, parseLocalDate } from '../utils/format';
 import { triggerLightHaptic, triggerMediumHaptic, triggerSuccessHaptic, triggerWarningHaptic } from '../utils/haptics';
 import { useRepeatPress } from '../utils/useRepeatPress';
+import { showDialog } from '../utils/dialog';
 
 interface FreeWorkoutScreenProps {
   workoutId: number;
@@ -323,7 +323,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   const handleDeleteCatalogExercise = (ex: ConfiguredExercise) => {
     const hasLoggedSetsThisSession = completedExercises.some((c) => c.exerciseId === ex.id);
     if (hasLoggedSetsThisSession) {
-      Alert.alert(
+      showDialog(
         'Action impossible',
         'Tu as déjà validé des séries sur cet exercice dans cette séance.'
       );
@@ -331,7 +331,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     }
 
     triggerWarningHaptic();
-    Alert.alert(
+    showDialog(
       'Supprimer cet exercice ?',
       `« ${ex.name} » sera retiré du catalogue ${workoutName}. Ton historique de séances passées le concernant est conservé.`,
       [

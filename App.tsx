@@ -10,7 +10,7 @@ import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import * as Updates from 'expo-updates';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, BackHandler, Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Platform, StyleSheet, Text, View } from 'react-native';
 import notifee from 'react-native-notify-kit';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { getAppMetadata, initDatabase, setAppMetadata } from './src/database/db';
@@ -32,6 +32,8 @@ import {
   openExactAlarmSettings,
   requestRestTimerPermission,
 } from './src/utils/restTimerService';
+import { DialogHost } from './src/components/DialogHost';
+import { showDialog } from './src/utils/dialog';
 
 const BATTERY_TIP_METADATA_KEY = 'battery_optimization_tip_shown';
 // Clé distincte (et affichée même chez les personnes ayant déjà vu le conseil batterie) :
@@ -142,7 +144,7 @@ export default function App() {
       if (getAppMetadata(BATTERY_TIP_METADATA_KEY) !== '1') {
         setAppMetadata(BATTERY_TIP_METADATA_KEY, '1');
         await new Promise<void>((resolve) => {
-          Alert.alert(
+          showDialog(
             'Minuteur fiable en arrière-plan',
             "Pour que l'alerte de fin de repos sonne même écran verrouillé ou app fermée, autorise mooscles à ignorer l'optimisation de la batterie dans les réglages Android.",
             [
@@ -154,15 +156,14 @@ export default function App() {
                   resolve();
                 },
               },
-            ],
-            { onDismiss: () => resolve() }
+            ]
           );
         });
       }
 
       if (getAppMetadata(EXACT_ALARM_TIP_METADATA_KEY) !== '1') {
         setAppMetadata(EXACT_ALARM_TIP_METADATA_KEY, '1');
-        Alert.alert(
+        showDialog(
           'Alarmes exactes',
           "Pour que le minuteur sonne pile à l'heure (et pas avec quelques minutes de retard) une fois l'app quittée, autorise aussi mooscles à programmer des alarmes exactes.",
           [
@@ -262,6 +263,9 @@ export default function App() {
         {currentScreen === 'HISTORY' && (
           <HistoryScreen onBack={handleResetToHome} />
         )}
+
+        {/* Boîtes de dialogue de toute l'app, en feuille basse (utils/dialog.ts) */}
+        <DialogHost />
       </View>
     </SafeAreaProvider>
   );

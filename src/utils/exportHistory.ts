@@ -1,9 +1,9 @@
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { Alert } from 'react-native';
 import { FEELING_LABEL } from '../constants/feeling';
 import { formatLocalDate, getAllSessionFeedback, getAllSessionsForExport } from '../database/db';
 import { parseLocalDate } from './format';
+import { showDialog } from './dialog';
 
 const WORKOUT_NAMES: Record<number, string> = {
   1: 'Push (Pectoraux / Épaules / Triceps)',
@@ -89,7 +89,7 @@ export async function exportHistoryAsText(): Promise<void> {
 
     const canShare = await Sharing.isAvailableAsync();
     if (!canShare) {
-      Alert.alert('Partage indisponible', "Le partage de fichiers n'est pas disponible sur cet appareil.");
+      showDialog('Partage indisponible', "Le partage de fichiers n'est pas disponible sur cet appareil.");
       return;
     }
 
@@ -99,6 +99,6 @@ export async function exportHistoryAsText(): Promise<void> {
     });
   } catch (error) {
     console.error('Erreur exportHistoryAsText:', error);
-    Alert.alert('Erreur', "L'export a échoué. Réessaie dans un instant.");
+    showDialog('Erreur', "L'export a échoué. Réessaie dans un instant.");
   }
 }
