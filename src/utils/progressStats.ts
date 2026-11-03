@@ -243,6 +243,11 @@ export function volumeTrendPercent(rows: { date: string; weight: number; repsDon
 // charge. Comparées dans cet ordre, une charge en hausse est un progrès même si les reps
 // retombent (double progression : 12 reps à 20 kg, puis 8 reps à 22,5 kg), et à charge égale
 // une rep de plus compte. Au poids du corps (charge 0), seules les reps comptent.
+/** Clé d'un exercice : son nom, sans casse ni espaces superflus. */
+export function exerciseKey(name: string): string {
+  return name.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
 export interface TopSet {
   weight: number;
   reps: number;
@@ -276,25 +281,31 @@ function compareTopSets(latest: TopSet, reference: TopSet): Trend {
  * Exercices en hausse / stables / en baisse : série de tête de la dernière séance contre celle de
  * la séance de référence (la dernière d'avant la fenêtre, à défaut la première de la fenêtre).
  * Seuls comptent les exercices travaillés dans la fenêtre et faits au moins deux fois.
+ *
+ * Les exercices sont reconnus par leur NOM (sans casse ni espaces autour), pas par leur id : les
+ * anciens catalogues ont réattribué des ids (le leg curl d'hier porte l'id de l'extension triceps
+ * d'aujourd'hui), et les séances corrigées dans l'historique ont un id 0 quand le nom n'était pas
+ * au catalogue. Par id, on comparait un leg curl à 60 kg à une extension triceps à 27,5 kg.
  */
 export function exerciseProgression(rows: StatLogRow[], todayISO: string, windowDays: number = 28): ProgressionSummary {
   const windowStart = addDays(todayISO, -(windowDays - 1));
-  const byExercise = new Map<number, Map<string, TopSet>>();
-  const names = new Map<number, { name: string; date: string }>();
+  const byExercise = new Map<string, Map<string, TopSet>>();
+  const names = new Map<string, { name: string; date: string }>();
   for (const r of rows) {
     if (r.date > todayISO) continue;
-    if (!byExercise.has(r.exerciseId)) byExercise.set(r.exerciseId, new Map());
-    // Nom le plus récent (un exercice personnalisé peut avoir été renommé).
-    const known = names.get(r.exerciseId);
-    if (!known || r.date >= known.date) names.set(r.exerciseId, { name: r.exerciseName, date: r.date });
-    const byDate = byExercise.get(r.exerciseId)!;
+    const key = exerciseKey(r.exerciseName);
+    if (!byExercise.has(key)) byExercise.set(key, new Map());
+    // Graphie la plus récente du nom, pour l'affichage.
+    const known = names.get(key);
+    if (!known || r.date >= known.date) names.set(key, { name: r.exerciseName, date: r.date });
+    const byDate = byExercise.get(key)!;
     const top = byDate.get(r.date);
     if (!top || r.weight > top.weight + 1e-9) byDate.set(r.date, { weight: r.weight, reps: r.repsDone });
     else if (Math.abs(r.weight - top.weight) <= 1e-9 && r.repsDone > top.reps) top.reps = r.repsDone;
   }
 
   const result: ProgressionSummary = { up: 0, flat: 0, down: 0, items: [] };
-  for (const [exerciseId, byDate] of byExercise) {
+  for (const [key, byDate] of byExercise) {
     const dates = Array.from(byDate.keys()).sort();
     const latest = dates[dates.length - 1];
     if (latest < windowStart) continue;
@@ -306,7 +317,7 @@ export function exerciseProgression(rows: StatLogRow[], todayISO: string, window
     const trend = compareTopSets(to, from);
     result[trend]++;
     result.items.push({
-      exerciseName: names.get(exerciseId)!.name,
+      exerciseName: names.get(key)!.name,
       trend,
       from: { ...from, date: reference },
       to: { ...to, date: latest },

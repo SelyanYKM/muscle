@@ -17,6 +17,7 @@ import {
   consecutiveTrainingDays,
   daysSinceBySplit,
   energyTrend,
+  exerciseKey,
   exerciseProgression,
   goalStreakWeeks,
   lastRestDay,
@@ -1593,39 +1594,42 @@ function buildVolumeByMuscleGroup(
 export function getDashboardSummary(weeksCount: number = 8): DashboardSummary {
   let fullRows: { date: string; workoutId: number; exerciseId: number; exerciseName: string; muscleGroup: string | null; weight: number; repsDone: number }[];
 
+  // Groupe musculaire retrouvé par le NOM de l'exercice et pas par son id : d'anciens catalogues
+  // ont réattribué des ids (un leg curl d'avant porte l'id de l'extension triceps d'aujourd'hui),
+  // et les séances corrigées dans l'historique ont parfois un id 0. Nom inconnu : groupe "Autre".
   if (!db || Platform.OS === 'web') {
-    const seedMetaById = new Map(SEED_EXERCISES.map((ex) => [ex.id, ex]));
+    const groupByName = new Map(SEED_EXERCISES.map((ex) => [exerciseKey(ex.name), ex.muscleGroup ?? null]));
     fullRows = memoryLogs.map((l) => ({
       date: l.date,
       workoutId: l.workoutId,
       exerciseId: l.exerciseId,
       exerciseName: l.exerciseName,
-      muscleGroup: seedMetaById.get(l.exerciseId)?.muscleGroup ?? null,
+      muscleGroup: groupByName.get(exerciseKey(l.exerciseName)) ?? null,
       weight: l.weight,
       repsDone: l.repsDone,
     }));
   } else {
     try {
+      const groupByName = new Map<string, string | null>();
+      for (const e of db.getAllSync<{ name: string; muscle_group: string | null }>('SELECT name, muscle_group FROM exercises ORDER BY id;')) {
+        const key = exerciseKey(e.name);
+        if (!groupByName.has(key)) groupByName.set(key, e.muscle_group);
+      }
       fullRows = db
         .getAllSync<{
           date: string;
           workout_id: number;
           exercise_id: number;
           exercise_name: string;
-          muscle_group: string | null;
           weight: number;
           reps_done: number;
-        }>(
-          `SELECT l.date, l.workout_id, l.exercise_id, l.exercise_name, e.muscle_group, l.weight, l.reps_done
-           FROM workout_logs l
-           LEFT JOIN exercises e ON e.id = l.exercise_id;`
-        )
+        }>('SELECT date, workout_id, exercise_id, exercise_name, weight, reps_done FROM workout_logs;')
         .map((r) => ({
           date: r.date,
           workoutId: r.workout_id,
           exerciseId: r.exercise_id,
           exerciseName: r.exercise_name,
-          muscleGroup: r.muscle_group,
+          muscleGroup: groupByName.get(exerciseKey(r.exercise_name)) ?? null,
           weight: r.weight,
           repsDone: r.reps_done,
         }));

@@ -142,6 +142,19 @@ test('exerciseProgression : charge ou reps en hausse, baisse, stable, exclusions
   assert.deepEqual(items.find((i) => i.exerciseName === 'Ex 9').to, { weight: 30, reps: 9, date: '2026-10-27' });
 });
 
+test('exerciseProgression : exercices reconnus par leur nom, pas par leur id', () => {
+  const rows = [
+    // Même id 15 pour deux exercices différents (ancien catalogue) : jamais comparés entre eux.
+    L('2026-09-28', 15, 55, 8, 'Leg curl'), L('2026-10-11', 15, 60, 8, 'Leg curl'),
+    L('2026-10-19', 15, 25, 10, 'Extension triceps à la poulie'), L('2026-10-31', 15, 27.5, 10, 'Extension triceps à la poulie'),
+    // Même exercice sous l'id 0 (séance corrigée) puis sous son id du catalogue : un seul exercice.
+    L('2026-10-04', 0, 120, 8, 'Squat barre libre (Finisher)'), L('2026-10-30', 14, 125, 6, 'squat barre libre  (Finisher) '),
+  ];
+  const { up, flat, down, items } = exerciseProgression(rows, TODAY);
+  assert.deepEqual({ up, flat, down }, { up: 3, flat: 0, down: 0 });
+  assert.equal(items.find((i) => i.exerciseName.startsWith('squat')).from.weight, 120);
+});
+
 test('recordsWithRecent : gain sur l’ancien record, exercices neufs exclus du compte', () => {
   const rows = [
     L('2026-09-01', 1, 100, 5, 'Squat'), L('2026-10-20', 1, 105, 5, 'Squat'),
