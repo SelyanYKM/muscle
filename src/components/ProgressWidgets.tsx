@@ -287,7 +287,7 @@ export const EnergySparkline: React.FC<{ values: number[]; trend: Trend | null }
 // Exercices en progression : une case par exercice
 // ---------------------------------------------------------------------------
 
-export const ProgressionBlocks: React.FC<{ up: number; flat: number; down: number }> = ({ up, flat, down }) => {
+export const ProgressionBlocks: React.FC<{ up: number; flat: number; down: number; onPress: () => void }> = ({ up, flat, down, onPress }) => {
   const states: ('up' | 'flat' | 'down')[] = [
     ...Array<'up'>(up).fill('up'),
     ...Array<'flat'>(flat).fill('flat'),
@@ -295,9 +295,12 @@ export const ProgressionBlocks: React.FC<{ up: number; flat: number; down: numbe
   ];
   const plural = (n: number, one: string, many: string) => (n > 1 ? many : one);
   return (
-    <View
-      accessible
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.7}
+      accessibilityRole="button"
       accessibilityLabel={`Sur 4 semaines : ${up} exercice${up > 1 ? 's' : ''} en hausse, ${flat} ${plural(flat, 'stable', 'stables')}, ${down} en baisse`}
+      accessibilityHint="Affiche le détail par exercice"
     >
       <View style={styles.blocksRow}>
         {states.map((s, i) => (
@@ -324,9 +327,14 @@ export const ProgressionBlocks: React.FC<{ up: number; flat: number; down: numbe
           </Text>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
+
+/** Petit carré de la légende (hausse / stable / baisse), réutilisé dans le détail. */
+export const TrendSquare: React.FC<{ trend: Trend }> = ({ trend }) => (
+  <View style={[styles.legendSquare, trend === 'up' ? styles.blockUp : trend === 'flat' ? styles.blockFlat : styles.blockDown]} />
+);
 
 const styles = StyleSheet.create({
   // Jours

@@ -124,8 +124,22 @@ test('exerciseProgression : charge ou reps en hausse, baisse, stable, exclusions
     L('2026-10-27', 5, 20, 8), L('2026-09-01', 6, 20, 8), L('2026-09-10', 6, 25, 8),
     // 7 : poids du corps, reps en hausse ; meilleure série de la séance retenue
     L('2026-10-06', 7, 0, 10), L('2026-10-27', 7, 0, 12), L('2026-10-27', 7, 0, 9),
+    // 8 : double progression, la charge monte et les reps retombent -> en hausse
+    L('2026-10-06', 8, 20, 12), L('2026-10-27', 8, 22.5, 6),
+    // 9 : même charge, une rep de moins à l'échec -> en baisse ; série d'échauffement plus légère ignorée
+    L('2026-10-06', 9, 30, 10), L('2026-10-27', 9, 15, 15), L('2026-10-27', 9, 30, 9),
   ];
-  assert.deepEqual(exerciseProgression(rows, TODAY), { up: 3, flat: 1, down: 1 });
+  const { up, flat, down, items } = exerciseProgression(rows, TODAY);
+  assert.deepEqual({ up, flat, down }, { up: 4, flat: 1, down: 2 });
+  assert.equal(items.length, 7);
+  assert.deepEqual(items.map((i) => i.trend), ['up', 'up', 'up', 'up', 'flat', 'down', 'down']);
+  assert.deepEqual(items.find((i) => i.exerciseName === 'Ex 8'), {
+    exerciseName: 'Ex 8',
+    trend: 'up',
+    from: { weight: 20, reps: 12, date: '2026-10-06' },
+    to: { weight: 22.5, reps: 6, date: '2026-10-27' },
+  });
+  assert.deepEqual(items.find((i) => i.exerciseName === 'Ex 9').to, { weight: 30, reps: 9, date: '2026-10-27' });
 });
 
 test('recordsWithRecent : gain sur l’ancien record, exercices neufs exclus du compte', () => {

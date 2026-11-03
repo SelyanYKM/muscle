@@ -20,6 +20,7 @@ import {
   exerciseProgression,
   goalStreakWeeks,
   lastRestDay,
+  ProgressionSummary,
   RecordRow,
   recordsWithRecent,
   RestAdvice,
@@ -1495,7 +1496,7 @@ export interface DashboardSummary {
   restAdvice: RestAdvice | null;
   // Perf globale
   volumeTrendPercent: number | null;
-  progression: { up: number; flat: number; down: number };
+  progression: ProgressionSummary;
   records: RecordRow[];
   recordsBeaten: number;
   /** Répartition du volume des 4 dernières semaines par groupe musculaire. */

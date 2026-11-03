@@ -239,40 +239,81 @@ export function volumeTrendPercent(rows: { date: string; weight: number; repsDon
   return Math.round(((recent - prev) / prev) * 100);
 }
 
-// Meilleure série d'une séance : force estimée (Epley) quand il y a une charge, sinon les reps
-// (exercices au poids du corps) — une hausse de charge comme une rep de plus comptent.
-function setScore(weight: number, reps: number): number {
-  return weight > 0 ? weight * (1 + reps / 30) : reps;
+// Série de tête d'une séance : la charge la plus lourde, et le meilleur nombre de reps à cette
+// charge. Comparées dans cet ordre, une charge en hausse est un progrès même si les reps
+// retombent (double progression : 12 reps à 20 kg, puis 8 reps à 22,5 kg), et à charge égale
+// une rep de plus compte. Au poids du corps (charge 0), seules les reps comptent.
+export interface TopSet {
+  weight: number;
+  reps: number;
+}
+
+export interface ExerciseTrend {
+  exerciseName: string;
+  trend: Trend;
+  /** Séance de référence et dernière séance, avec leur série de tête. */
+  from: TopSet & { date: string };
+  to: TopSet & { date: string };
+}
+
+export interface ProgressionSummary {
+  up: number;
+  flat: number;
+  down: number;
+  /** Détail par exercice : en hausse, puis stables, puis en baisse, par nom. */
+  items: ExerciseTrend[];
+}
+
+function compareTopSets(latest: TopSet, reference: TopSet): Trend {
+  if (latest.weight > reference.weight + 1e-9) return 'up';
+  if (latest.weight < reference.weight - 1e-9) return 'down';
+  if (latest.reps > reference.reps) return 'up';
+  if (latest.reps < reference.reps) return 'down';
+  return 'flat';
 }
 
 /**
- * Exercices en hausse / stables / en baisse : meilleure série de la dernière séance contre celle
- * de la séance de référence (la dernière d'avant la fenêtre, à défaut la première de la fenêtre).
+ * Exercices en hausse / stables / en baisse : série de tête de la dernière séance contre celle de
+ * la séance de référence (la dernière d'avant la fenêtre, à défaut la première de la fenêtre).
  * Seuls comptent les exercices travaillés dans la fenêtre et faits au moins deux fois.
  */
-export function exerciseProgression(rows: StatLogRow[], todayISO: string, windowDays: number = 28): { up: number; flat: number; down: number } {
+export function exerciseProgression(rows: StatLogRow[], todayISO: string, windowDays: number = 28): ProgressionSummary {
   const windowStart = addDays(todayISO, -(windowDays - 1));
-  const byExercise = new Map<number, Map<string, number>>();
+  const byExercise = new Map<number, Map<string, TopSet>>();
+  const names = new Map<number, { name: string; date: string }>();
   for (const r of rows) {
     if (r.date > todayISO) continue;
     if (!byExercise.has(r.exerciseId)) byExercise.set(r.exerciseId, new Map());
+    // Nom le plus récent (un exercice personnalisé peut avoir été renommé).
+    const known = names.get(r.exerciseId);
+    if (!known || r.date >= known.date) names.set(r.exerciseId, { name: r.exerciseName, date: r.date });
     const byDate = byExercise.get(r.exerciseId)!;
-    byDate.set(r.date, Math.max(byDate.get(r.date) ?? 0, setScore(r.weight, r.repsDone)));
+    const top = byDate.get(r.date);
+    if (!top || r.weight > top.weight + 1e-9) byDate.set(r.date, { weight: r.weight, reps: r.repsDone });
+    else if (Math.abs(r.weight - top.weight) <= 1e-9 && r.repsDone > top.reps) top.reps = r.repsDone;
   }
 
-  const result = { up: 0, flat: 0, down: 0 };
-  for (const byDate of byExercise.values()) {
+  const result: ProgressionSummary = { up: 0, flat: 0, down: 0, items: [] };
+  for (const [exerciseId, byDate] of byExercise) {
     const dates = Array.from(byDate.keys()).sort();
     const latest = dates[dates.length - 1];
     if (latest < windowStart) continue;
     const before = dates.filter((d) => d < windowStart);
     const reference = before.length > 0 ? before[before.length - 1] : dates[0];
     if (reference === latest) continue;
-    const ratio = byDate.get(latest)! / Math.max(0.0001, byDate.get(reference)!);
-    if (ratio > 1.01) result.up++;
-    else if (ratio < 0.99) result.down++;
-    else result.flat++;
+    const from = byDate.get(reference)!;
+    const to = byDate.get(latest)!;
+    const trend = compareTopSets(to, from);
+    result[trend]++;
+    result.items.push({
+      exerciseName: names.get(exerciseId)!.name,
+      trend,
+      from: { ...from, date: reference },
+      to: { ...to, date: latest },
+    });
   }
+  const order: Record<Trend, number> = { up: 0, flat: 1, down: 2 };
+  result.items.sort((a, b) => order[a.trend] - order[b.trend] || a.exerciseName.localeCompare(b.exerciseName));
   return result;
 }
 

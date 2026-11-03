@@ -28,10 +28,19 @@ import { BodyWeightEntry } from '../types';
 import { pickBodyWeightPhoto } from '../utils/bodyPhoto';
 import { fmtKg, parseLocalDate } from '../utils/format';
 import { triggerLightHaptic, triggerMediumHaptic } from '../utils/haptics';
-import { daysBetween } from '../utils/progressStats';
+import { daysBetween, ExerciseTrend, TopSet } from '../utils/progressStats';
 import { BarChart } from './BarChart';
 import { LineChart } from './LineChart';
-import { EnergySparkline, GoalRing, ProgressionBlocks, RecoveryGauges, TrainingCalendar, WeekStrip, weekStripA11y } from './ProgressWidgets';
+import {
+  EnergySparkline,
+  GoalRing,
+  ProgressionBlocks,
+  RecoveryGauges,
+  TrainingCalendar,
+  TrendSquare,
+  WeekStrip,
+  weekStripA11y,
+} from './ProgressWidgets';
 import { BottomSheet } from './BottomSheet';
 import { Icon } from './Icon';
 
@@ -78,6 +87,17 @@ function fmtInt(v: number): string {
   return Math.round(v).toLocaleString('fr-FR');
 }
 
+/** "22,5 kg × 8", ou "12 reps" au poids du corps. */
+function fmtTopSet(t: TopSet): string {
+  return t.weight > 0 ? `${fmtKg(t.weight)} kg × ${t.reps}` : `${t.reps} reps`;
+}
+
+function topSetA11y(t: TopSet): string {
+  return t.weight > 0 ? `${fmtKg(t.weight)} kilos, ${t.reps} répétitions` : `${t.reps} répétitions`;
+}
+
+const TREND_LABEL: Record<ExerciseTrend['trend'], string> = { up: 'en hausse', flat: 'stable', down: 'en baisse' };
+
 /** "3,6" : une décimale, virgule française. */
 function fmtDec(v: number): string {
   return (Math.round(v * 10) / 10).toLocaleString('fr-FR');
@@ -112,6 +132,7 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
   const [newWeightPhotoUri, setNewWeightPhotoUri] = useState<string | null>(null);
   const [isPickingPhoto, setIsPickingPhoto] = useState(false);
   const [isGoalOpen, setIsGoalOpen] = useState(false);
+  const [isProgressionOpen, setIsProgressionOpen] = useState(false);
 
   const changeGoal = (step: number) => {
     const next = Math.min(WEEKLY_GOAL_MAX, Math.max(WEEKLY_GOAL_MIN, summary.weeklyGoal + step));
@@ -399,9 +420,21 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
           </View>
           <BarChart data={volumeChartData} formatValue={(v) => `${fmtInt(v)} kg`} lastCaption="semaine en cours" />
 
-          <Text style={[styles.sectionLabel, { marginTop: 20 }]} accessibilityRole="header">EXERCICES EN PROGRESSION · 4 SEM.</Text>
+          <View style={[styles.sectionHeaderRow, { marginTop: 20 }]}>
+            <Text style={[styles.sectionLabel, styles.noMargin]} accessibilityRole="header">EXERCICES EN PROGRESSION · 4 SEM.</Text>
+            {up + flat + down > 0 && (
+              <TouchableOpacity
+                onPress={() => setIsProgressionOpen(true)}
+                hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel="Détail des exercices en progression"
+              >
+                <Text style={styles.bwAddLink}>Détail</Text>
+              </TouchableOpacity>
+            )}
+          </View>
           {up + flat + down > 0 ? (
-            <ProgressionBlocks up={up} flat={flat} down={down} />
+            <ProgressionBlocks up={up} flat={flat} down={down} onPress={() => setIsProgressionOpen(true)} />
           ) : (
             <Text style={styles.hintText}>Il faut au moins deux séances d’un exercice pour voir sa tendance.</Text>
           )}
@@ -524,6 +557,35 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
         </ScrollView>
         </Animated.View>
       </Animated.View>
+
+      {/* FEUILLE : DÉTAIL DES EXERCICES EN PROGRESSION */}
+      <BottomSheet visible={isProgressionOpen} onClose={() => setIsProgressionOpen(false)}>
+        <Text style={styles.bwSheetTitle} accessibilityRole="header">Exercices sur 4 semaines</Text>
+        <Text style={styles.bwSheetSubtitle}>Série la plus lourde de la dernière séance, comparée à celle d’il y a 4 semaines.</Text>
+        <ScrollView style={styles.progressionList} showsVerticalScrollIndicator={false}>
+          {summary.progression.items.map((it, idx) => (
+            <View
+              key={it.exerciseName}
+              style={[styles.progressionRow, idx > 0 && styles.prRowDivider]}
+              accessible
+              accessibilityLabel={`${it.exerciseName}, ${TREND_LABEL[it.trend]} : ${topSetA11y(it.from)} le ${formatWeekLabel(it.from.date)}, puis ${topSetA11y(it.to)} le ${formatWeekLabel(it.to.date)}`}
+            >
+              <TrendSquare trend={it.trend} />
+              <View style={styles.progressionTextCol}>
+                <Text style={styles.progressionName} numberOfLines={1}>
+                  {it.exerciseName}
+                </Text>
+                <Text style={styles.progressionDetail}>
+                  {fmtTopSet(it.from)} ({formatShortDate(it.from.date)}) → {fmtTopSet(it.to)} ({formatShortDate(it.to.date)})
+                </Text>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+        <TouchableOpacity style={styles.bwSaveBtn} onPress={() => setIsProgressionOpen(false)} activeOpacity={0.85} accessibilityRole="button">
+          <Text style={styles.bwSaveBtnText}>Fermer</Text>
+        </TouchableOpacity>
+      </BottomSheet>
 
       {/* FEUILLE : OBJECTIF DE LA SEMAINE */}
       <BottomSheet visible={isGoalOpen} onClose={() => setIsGoalOpen(false)} maxHeightPercent={60}>
@@ -880,6 +942,32 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sansHeavy,
     fontSize: 12,
     color: THEME.colors.accentStrong,
+  },
+  // Feuille détail des exercices
+  progressionList: {
+    flexGrow: 0,
+    flexShrink: 1,
+    marginTop: 8,
+  },
+  progressionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+  },
+  progressionTextCol: {
+    flex: 1,
+  },
+  progressionName: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 13,
+    color: THEME.colors.textPrimary,
+  },
+  progressionDetail: {
+    fontFamily: THEME.fonts.sansSemi,
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+    marginTop: 2,
   },
   // Feuille objectif
   goalStepper: {
