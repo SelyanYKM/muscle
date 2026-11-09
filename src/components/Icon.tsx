@@ -6,6 +6,8 @@ export type IconName =
   | 'arrow-left'
   | 'x'
   | 'chevron-down'
+  | 'chevron-right'
+  | 'clock'
   | 'check'
   | 'moon'
   | 'trending-up'
@@ -23,6 +25,8 @@ const ICON_PATHS: Record<IconName, string[]> = {
   'arrow-left': ['M19 12H5', 'm12 19-7-7 7-7'],
   x: ['M18 6 6 18', 'm6 6 12 12'],
   'chevron-down': ['m6 9 6 6 6-6'],
+  'chevron-right': ['m9 18 6-6-6-6'],
+  clock: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z', 'M12 6v6l4 2'],
   check: ['M20 6 9 17l-5-5'],
   moon: ['M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z'],
   'trending-up': ['m22 7-8.5 8.5-5-5L2 17', 'M16 7h6v6'],

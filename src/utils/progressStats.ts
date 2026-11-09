@@ -28,11 +28,18 @@ export interface CalendarWeek {
 
 export type Trend = 'up' | 'flat' | 'down';
 
+export interface RecordStep {
+  date: string;
+  weight: number;
+}
+
 export interface RecordRow {
   exerciseName: string;
   maxWeight: number;
   /** Gain sur l'ancien record quand il a été battu dans la fenêtre récente, sinon null. */
   delta: number | null;
+  /** Les marches du record : la première séance, puis chaque fois qu'il a été battu. */
+  steps: RecordStep[];
 }
 
 export interface RestAdvice {
@@ -328,27 +335,165 @@ export function exerciseProgression(rows: StatLogRow[], todayISO: string, window
   return result;
 }
 
+/** Charge la plus lourde de chaque séance, par exercice (clé exerciseKey), dates triées. */
+function topWeightsByExercise(rows: StatLogRow[], todayISO: string): Map<string, { name: string; byDate: Map<string, number> }> {
+  const out = new Map<string, { name: string; nameDate: string; byDate: Map<string, number> }>();
+  for (const r of rows) {
+    if (r.date > todayISO) continue;
+    const key = exerciseKey(r.exerciseName);
+    let e = out.get(key);
+    if (!e) {
+      e = { name: r.exerciseName, nameDate: r.date, byDate: new Map() };
+      out.set(key, e);
+    }
+    // Graphie la plus récente du nom, pour l'affichage.
+    if (r.date >= e.nameDate) {
+      e.name = r.exerciseName;
+      e.nameDate = r.date;
+    }
+    e.byDate.set(r.date, Math.max(e.byDate.get(r.date) ?? 0, r.weight));
+  }
+  return out;
+}
+
+/** Marches d'un record : la première séance, puis chaque séance qui a battu le record d'avant. */
+export function recordSteps(byDate: Map<string, number>): RecordStep[] {
+  const steps: RecordStep[] = [];
+  let best = 0;
+  for (const date of Array.from(byDate.keys()).sort()) {
+    const w = byDate.get(date)!;
+    if (w > best + 1e-9) {
+      steps.push({ date, weight: w });
+      best = w;
+    }
+  }
+  return steps;
+}
+
 /**
  * Records (charge max par exercice), les `limit` plus lourds, avec le gain quand l'ancien record
  * a été battu dans les `windowDays` derniers jours ; `beaten` compte tous les records battus.
+ * Exercices reconnus par leur nom (voir exerciseProgression).
  */
 export function recordsWithRecent(rows: StatLogRow[], todayISO: string, windowDays: number = 28, limit: number = 5): { records: RecordRow[]; beaten: number } {
   const windowStart = addDays(todayISO, -(windowDays - 1));
-  const byName = new Map<string, { before: number; recent: number }>();
-  for (const r of rows) {
-    if (r.date > todayISO) continue;
-    if (!byName.has(r.exerciseName)) byName.set(r.exerciseName, { before: 0, recent: 0 });
-    const b = byName.get(r.exerciseName)!;
-    if (r.date >= windowStart) b.recent = Math.max(b.recent, r.weight);
-    else b.before = Math.max(b.before, r.weight);
+  const all: RecordRow[] = [];
+  for (const { name, byDate } of topWeightsByExercise(rows, todayISO).values()) {
+    let before = 0;
+    let recent = 0;
+    for (const [date, w] of byDate) {
+      if (date >= windowStart) recent = Math.max(recent, w);
+      else before = Math.max(before, w);
+    }
+    all.push({
+      exerciseName: name,
+      maxWeight: Math.max(before, recent),
+      // Un exercice tout neuf n'a pas d'ancien record à battre.
+      delta: before > 0 && recent > before ? Math.round((recent - before) * 10) / 10 : null,
+      steps: recordSteps(byDate),
+    });
   }
-  const all = Array.from(byName.entries()).map(([exerciseName, { before, recent }]) => ({
-    exerciseName,
-    maxWeight: Math.max(before, recent),
-    // Un exercice tout neuf n'a pas d'ancien record à battre.
-    delta: before > 0 && recent > before ? Math.round((recent - before) * 10) / 10 : null,
-  }));
   const beaten = all.filter((r) => r.delta !== null).length;
   all.sort((a, b) => b.maxWeight - a.maxWeight || a.exerciseName.localeCompare(b.exerciseName));
   return { records: all.filter((r) => r.maxWeight > 0).slice(0, limit), beaten };
+}
+
+// ---------------------------------------------------------------------------
+// Depuis la reprise
+// ---------------------------------------------------------------------------
+
+/**
+ * Début de la période d'entraînement en cours : la première séance après la dernière pause de
+ * plus de `gapDays` jours, à défaut la toute première séance. Null sans aucune séance.
+ */
+export function restartDate(dates: Iterable<string>, gapDays: number = 28): string | null {
+  const sorted = Array.from(new Set(dates)).sort();
+  if (sorted.length === 0) return null;
+  let start = sorted[0];
+  for (let i = 1; i < sorted.length; i++) {
+    if (daysBetween(sorted[i - 1], sorted[i]) > gapDays) start = sorted[i];
+  }
+  return start;
+}
+
+export interface RestartProgress {
+  exerciseName: string;
+  /** Charge la plus lourde de la première séance depuis la reprise, puis de la dernière. */
+  from: number;
+  to: number;
+  percent: number;
+}
+
+/**
+ * Évolution de chaque exercice depuis la reprise : charge la plus lourde de sa première séance
+ * depuis `restartISO` contre celle de sa dernière séance. Seuls comptent les exercices chargés,
+ * faits au moins deux fois depuis la reprise et encore travaillés dans les `activeDays` derniers
+ * jours. Du plus gros progrès au plus petit ; `averagePercent` : moyenne de tous.
+ */
+export function progressSinceRestart(
+  rows: StatLogRow[],
+  todayISO: string,
+  restartISO: string,
+  activeDays: number = 28
+): { items: RestartProgress[]; averagePercent: number | null } {
+  const activeStart = addDays(todayISO, -(activeDays - 1));
+  const items: RestartProgress[] = [];
+  for (const { name, byDate } of topWeightsByExercise(rows, todayISO).values()) {
+    const dates = Array.from(byDate.keys()).filter((d) => d >= restartISO).sort();
+    if (dates.length < 2 || dates[dates.length - 1] < activeStart) continue;
+    const from = byDate.get(dates[0])!;
+    const to = byDate.get(dates[dates.length - 1])!;
+    if (from <= 0) continue;
+    items.push({ exerciseName: name, from, to, percent: ((to - from) / from) * 100 });
+  }
+  items.sort((a, b) => b.percent - a.percent || a.exerciseName.localeCompare(b.exerciseName));
+  const averagePercent = items.length > 0 ? items.reduce((s, i) => s + i.percent, 0) / items.length : null;
+  return { items, averagePercent };
+}
+
+/**
+ * Exercices montrés dans l'éventail : les plus gros progrès, plus le plus net recul s'il y en a
+ * un (il dit autant que les progrès), `max` au total.
+ */
+export function fanSelection(items: RestartProgress[], max: number = 5): RestartProgress[] {
+  if (items.length <= max) return items;
+  const worst = items[items.length - 1];
+  if (worst.percent < 0) return [...items.slice(0, max - 1), worst];
+  return items.slice(0, max);
+}
+
+// ---------------------------------------------------------------------------
+// Muscles
+// ---------------------------------------------------------------------------
+
+/**
+ * Séries de la semaine en cours (lundi → aujourd'hui) par groupe musculaire, pour les groupes
+ * donnés (ceux du programme), même à 0. Du plus travaillé au moins travaillé.
+ */
+export function setsByMuscleThisWeek(
+  rows: { date: string; muscleGroup: string | null }[],
+  todayISO: string,
+  groups: string[]
+): { muscleGroup: string; sets: number }[] {
+  const weekStart = weekStartOf(todayISO);
+  const counts = new Map<string, number>(groups.map((g) => [g, 0]));
+  for (const r of rows) {
+    if (!r.muscleGroup || r.date < weekStart || r.date > todayISO || !counts.has(r.muscleGroup)) continue;
+    counts.set(r.muscleGroup, counts.get(r.muscleGroup)! + 1);
+  }
+  return groups.map((g) => ({ muscleGroup: g, sets: counts.get(g)! })).sort((a, b) => b.sets - a.sets);
+}
+
+/** Jours depuis la dernière série de chaque groupe (null : jamais travaillé). */
+export function daysSinceByMuscle(
+  rows: { date: string; muscleGroup: string | null }[],
+  todayISO: string,
+  groups: string[]
+): Map<string, number | null> {
+  const last = new Map<string, string>();
+  for (const r of rows) {
+    if (!r.muscleGroup || r.date > todayISO) continue;
+    if (!last.has(r.muscleGroup) || r.date > last.get(r.muscleGroup)!) last.set(r.muscleGroup, r.date);
+  }
+  return new Map(groups.map((g) => [g, last.has(g) ? daysBetween(last.get(g)!, todayISO) : null]));
 }

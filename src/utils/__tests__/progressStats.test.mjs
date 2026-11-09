@@ -8,11 +8,16 @@ import {
   consecutiveTrainingDays,
   daysSinceBySplit,
   energyTrend,
+  daysSinceByMuscle,
   exerciseProgression,
+  fanSelection,
   goalStreakWeeks,
   lastRestDay,
+  progressSinceRestart,
   recordsWithRecent,
+  restartDate,
   sessionsByDate,
+  setsByMuscleThisWeek,
   volumeTrendPercent,
   weekStartOf,
 } from '../progressStats.ts';
@@ -165,8 +170,63 @@ test('recordsWithRecent : gain sur l’ancien record, exercices neufs exclus du 
   const { records, beaten } = recordsWithRecent(rows, TODAY);
   assert.equal(beaten, 1);
   assert.deepEqual(records, [
-    { exerciseName: 'Deadlift', maxWeight: 120, delta: null },
-    { exerciseName: 'Squat', maxWeight: 105, delta: 5 },
-    { exerciseName: 'Bench', maxWeight: 80, delta: null },
+    { exerciseName: 'Deadlift', maxWeight: 120, delta: null, steps: [{ date: '2026-10-20', weight: 120 }] },
+    { exerciseName: 'Squat', maxWeight: 105, delta: 5, steps: [{ date: '2026-09-01', weight: 100 }, { date: '2026-10-20', weight: 105 }] },
+    { exerciseName: 'Bench', maxWeight: 80, delta: null, steps: [{ date: '2026-09-01', weight: 80 }] },
   ]);
+});
+
+test('recordsWithRecent : marches du record, exercice reconnu par son nom (casse, espaces)', () => {
+  const rows = [
+    L('2026-09-28', 14, 110, 4, 'Squat barre libre'), L('2026-10-04', 14, 120, 8, 'Squat barre libre'),
+    L('2026-10-11', 0, 120, 8, 'squat  barre libre'), L('2026-10-16', 14, 110, 8, 'Squat barre libre'),
+    L('2026-10-30', 14, 125, 6, 'Squat barre libre'),
+  ];
+  const { records, beaten } = recordsWithRecent(rows, TODAY);
+  assert.equal(records.length, 1);
+  assert.equal(beaten, 1);
+  assert.equal(records[0].delta, 5);
+  assert.deepEqual(records[0].steps.map((s) => [s.date, s.weight]), [['2026-09-28', 110], ['2026-10-04', 120], ['2026-10-30', 125]]);
+});
+
+test('restartDate : première séance après la dernière pause de plus de 28 jours', () => {
+  assert.equal(restartDate([]), null);
+  assert.equal(restartDate(['2026-09-20', '2026-09-25', '2026-10-02']), '2026-09-20');
+  assert.equal(restartDate(['2024-05-01', '2024-05-03', '2026-09-20', '2026-09-25']), '2026-09-20');
+});
+
+test('progressSinceRestart : première contre dernière séance, exercices abandonnés exclus', () => {
+  const rows = [
+    L('2026-09-20', 4, 70, 8, 'Shoulder Press'), L('2026-10-31', 4, 65, 8, 'Shoulder Press'),
+    L('2026-09-28', 14, 110, 6, 'Squat'), L('2026-10-30', 14, 125, 6, 'Squat'),
+    L('2026-09-20', 2, 50, 8, 'Bench'), L('2026-10-02', 2, 55, 8, 'Bench'), // plus fait depuis un mois
+    L('2026-10-20', 9, 0, 12, 'Tractions'), L('2026-10-27', 9, 0, 14, 'Tractions'), // poids du corps
+    L('2026-10-25', 7, 90, 8, 'Low Row'), // une seule séance
+  ];
+  const { items, averagePercent } = progressSinceRestart(rows, TODAY, '2026-09-20');
+  assert.deepEqual(items.map((i) => [i.exerciseName, i.from, i.to, Math.round(i.percent)]), [['Squat', 110, 125, 14], ['Shoulder Press', 70, 65, -7]]);
+  assert.equal(Math.round(averagePercent), 3);
+});
+
+test('fanSelection : les plus gros progrès et le plus net recul', () => {
+  const it = (n, p) => ({ exerciseName: n, from: 100, to: 100 + p, percent: p });
+  const items = [it('a', 19), it('b', 16), it('c', 15), it('d', 14), it('e', 10), it('f', -7)];
+  assert.deepEqual(fanSelection(items).map((i) => i.exerciseName), ['a', 'b', 'c', 'd', 'f']);
+  assert.deepEqual(fanSelection(items.slice(0, 5)).map((i) => i.exerciseName), ['a', 'b', 'c', 'd', 'e']);
+});
+
+test('setsByMuscleThisWeek et daysSinceByMuscle : semaine en cours, groupes du programme même à 0', () => {
+  const R = (date, muscleGroup) => ({ date, muscleGroup });
+  const rows = [
+    R('2026-10-26', 'QUADRICEPS'), R('2026-10-26', 'QUADRICEPS'), R('2026-10-27', 'DOS'),
+    R('2026-10-20', 'BICEPS'), R('2026-10-31', null), R('2026-10-31', 'MOLLETS'),
+  ];
+  const groups = ['DOS', 'QUADRICEPS', 'BICEPS'];
+  assert.deepEqual(setsByMuscleThisWeek(rows, TODAY, groups), [
+    { muscleGroup: 'QUADRICEPS', sets: 2 }, { muscleGroup: 'DOS', sets: 1 }, { muscleGroup: 'BICEPS', sets: 0 },
+  ]);
+  const since = daysSinceByMuscle(rows, TODAY, [...groups, 'ISCHIOS']);
+  assert.equal(since.get('BICEPS'), 12);
+  assert.equal(since.get('DOS'), 5);
+  assert.equal(since.get('ISCHIOS'), null);
 });
