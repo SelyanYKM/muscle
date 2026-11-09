@@ -119,6 +119,11 @@ function formatRestDay(dateISO: string | null): { short: string; long: string } 
   return { short: formatShortDate(dateISO), long: d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) };
 }
 
+/** Nom affiché dans les listes : sans « (Finisher) », qui coupait les noms longs. */
+function listName(name: string): string {
+  return name.replace(/\s*\(finisher\)\s*$/i, '');
+}
+
 /** Message sous le compte de la semaine : la barre à charger, puis l'invitation au repos. */
 function weekMessage(done: number, goal: number): string {
   if (done < goal) {
@@ -484,7 +489,7 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
                     <View style={styles.recordMain}>
                       <View style={styles.recordTop}>
                         <Text style={styles.prName} numberOfLines={1}>
-                          {r.exerciseName}
+                          {listName(r.exerciseName)}
                         </Text>
                         {r.delta !== null && (
                           <View style={styles.prDeltaPill}>
@@ -525,7 +530,7 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
                   const content = (
                     <View style={styles.watchMain}>
                       <Text style={styles.watchTitle} numberOfLines={1}>
-                        {w.title}
+                        {listName(w.title)}
                       </Text>
                       <View style={styles.watchDetailRow}>
                         {w.kind === 'deload' ? <SessionMarks sessions={w.sessions} /> : w.chip ? <WatchChip text={w.chip} /> : null}

@@ -229,7 +229,9 @@ export interface ChartSession {
   reps: number;
 }
 
-const LABEL_MIN_GAP = 36;
+const LABEL_MIN_GAP = 44;
+// Près du bord droit, l'étiquette passe à gauche de sa marche ; la date laisse la place à « auj. ».
+const EDGE_ZONE = 44;
 
 export const RecordChart: React.FC<{ sessions: ChartSession[]; steps: RecordStep[]; today: string; windowStart: string; height?: number }> = ({
   sessions,
@@ -331,11 +333,15 @@ export const RecordChart: React.FC<{ sessions: ChartSession[]; steps: RecordStep
               )}
             </Svg>
             <View style={StyleSheet.absoluteFill} pointerEvents="none" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-              {labelled.map((i) => (
-                <Text key={steps[i].date} style={[styles.stepLabel, { left: x(steps[i].date) + 7, top: y(steps[i].weight) - 19 }]}>
-                  {fmtKg(steps[i].weight)}
-                </Text>
-              ))}
+              {labelled.map((i) => {
+                const xi = x(steps[i].date);
+                const side = xi > w - EDGE_ZONE ? { right: w - xi + 7 } : { left: xi + 7 };
+                return (
+                  <Text key={steps[i].date} style={[styles.stepLabel, side, { top: y(steps[i].weight) - 19 }]}>
+                    {fmtKg(steps[i].weight)}
+                  </Text>
+                );
+              })}
               <Text style={styles.bandLabel}>4 dernières sem.</Text>
             </View>
             <View style={StyleSheet.absoluteFill}>
@@ -356,11 +362,13 @@ export const RecordChart: React.FC<{ sessions: ChartSession[]; steps: RecordStep
       </View>
       {w > 0 && (
         <View style={styles.axisRow} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-          {labelled.map((i) => (
-            <Text key={steps[i].date} style={[styles.axisLabel, { left: x(steps[i].date) - 20 }]}>
-              {shortDate(steps[i].date)}
-            </Text>
-          ))}
+          {labelled
+            .filter((i) => x(steps[i].date) <= w - EDGE_ZONE)
+            .map((i) => (
+              <Text key={steps[i].date} style={[styles.axisLabel, { left: x(steps[i].date) - 20 }]}>
+                {shortDate(steps[i].date)}
+              </Text>
+            ))}
           <Text style={styles.axisEnd}>auj.</Text>
         </View>
       )}
