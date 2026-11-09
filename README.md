@@ -112,6 +112,12 @@ Le champ `version` dans `app.json` pilote le `runtimeVersion` (politique `appVer
 
 ---
 
+## 📋 Backlog
+
+- **Exercices « variantes » (remplacement en salle bondée)** — tranché : pas d'injection de séance convertie dans la progression de l'exercice remplacé (la conversion entre équipements reste approximative, et le moteur v3 traiterait cette erreur comme un vrai signal de régression). Pour l'instant, une variante est un exercice normal du catalogue avec sa propre progression, choisi via « Changer d'exercice ». Plus tard, seulement sur feu vert explicite : un champ optionnel « remplace l'exercice X » dont le seul effet serait d'inclure les séances de la variante dans le calcul des jours depuis la dernière séance (réduction de reprise de `getPrescription`), sans toucher à la charge ni aux compteurs de l'exercice remplacé.
+
+---
+
 ## 🏗️ Structure du projet
 
 ```
