@@ -1,10 +1,12 @@
 import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
 import {
+  prescriptionFor,
   progressionSettingsOf,
   progressionStateOf,
   replayHistory,
   resolveSessionWeight,
+  upcomingDeload,
 } from '../engine/progressionV2';
 import {
   CatalogEntry,
@@ -15,7 +17,7 @@ import {
   planRelink,
   resolveExerciseLink,
 } from './exerciseLinks';
-import { BodyWeightEntry, ConfiguredExercise, EquipmentCategory, Exercise, ExerciseProgressionState, ProgressionMode, Workout, WorkoutLogEntry } from '../types';
+import { BodyWeightEntry, ConfiguredExercise, EquipmentCategory, Exercise, ExerciseProgressionState, Feeling, ProgressionMode, Workout, WorkoutLogEntry } from '../types';
 import { SEED_EXERCISES, SEED_WORKOUTS } from './seed';
 import {
   addDays,
@@ -24,17 +26,24 @@ import {
   buildRestAdvice,
   CalendarWeek,
   consecutiveTrainingDays,
+  daysBetween,
+  daysSinceByMuscle,
   daysSinceBySplit,
   energyTrend,
   exerciseKey,
   exerciseProgression,
   goalStreakWeeks,
   lastRestDay,
+  progressSinceRestart,
   ProgressionSummary,
   RecordRow,
   recordsWithRecent,
   RestAdvice,
+  restartDate,
+  RestartProgress,
   sessionsByDate,
+  setsByMuscleThisWeek,
+  StatLogRow,
   Trend,
   volumeTrendPercent,
 } from '../utils/progressStats';
@@ -1550,9 +1559,37 @@ export interface DashboardSummary {
   progression: ProgressionSummary;
   records: RecordRow[];
   recordsBeaten: number;
+  /** Début de la fenêtre des records récents (28 jours) : la bande dorée des escaliers. */
+  recordsWindowStart: string;
   /** Répartition du volume des 4 dernières semaines par groupe musculaire. */
   volumeByMuscleGroup: MuscleGroupVolume[];
+  /** Séries de la semaine en cours par groupe musculaire du programme. */
+  muscleSets: { muscleGroup: string; label: string; sets: number }[];
+  /** Progrès depuis la reprise (null tant qu'aucun exercice n'a deux séances). */
+  restart: { date: string; items: RestartProgress[]; averagePercent: number | null } | null;
+  /** Points à surveiller : décharge possible, reprise après une pause, muscle délaissé. */
+  watch: WatchItem[];
 }
+
+/**
+ * Un point « à surveiller ». `exerciseName` : l'exercice dont la fiche s'ouvre au toucher (null
+ * pour un groupe musculaire). `sessions` : ressentis des séries des dernières séances sans
+ * réussite, pour les points pleins / anneaux vides. `chip` : petite pastille (« 16 j »).
+ */
+export interface WatchItem {
+  kind: 'deload' | 'break' | 'muscle';
+  title: string;
+  exerciseName: string | null;
+  sessions: Feeling[][];
+  chip: string | null;
+  text: string;
+}
+
+/** Au-delà, un exercice ou un muscle est considéré comme sorti de la routine : plus signalé. */
+const WATCH_MAX_DAYS = 45;
+/** Un groupe musculaire est signalé après plus d'une semaine sans série. */
+const WATCH_MUSCLE_DAYS = 8;
+const WATCH_LIMIT = 5;
 
 const MUSCLE_GROUP_LABEL: Record<string, string> = {
   PECTORAUX: 'Pectoraux',
@@ -1641,15 +1678,17 @@ function buildVolumeByMuscleGroup(
     .sort((a, b) => b.volume - a.volume);
 }
 
-export function getDashboardSummary(weeksCount: number = 8): DashboardSummary {
-  let fullRows: { date: string; workoutId: number; exerciseId: number; exerciseName: string; muscleGroup: string | null; weight: number; repsDone: number }[];
+type DashboardRow = StatLogRow & { muscleGroup: string | null; setNumber: number; feeling: Feeling };
 
+/** Toutes les séries, avec le groupe musculaire de l'exercice, et les groupes du programme. */
+function loadDashboardRows(): { rows: DashboardRow[]; programGroups: string[] } {
   // Groupe musculaire retrouvé par le NOM de l'exercice et pas par son id : d'anciens catalogues
   // ont réattribué des ids (un leg curl d'avant porte l'id de l'extension triceps d'aujourd'hui),
   // et les séances corrigées dans l'historique ont parfois un id 0. Nom inconnu : groupe "Autre".
+  const groupByName = new Map<string, string | null>();
   if (!db || Platform.OS === 'web') {
-    const groupByName = new Map(SEED_EXERCISES.map((ex) => [exerciseKey(ex.name), ex.muscleGroup ?? null]));
-    fullRows = memoryLogs.map((l) => ({
+    for (const ex of SEED_EXERCISES) groupByName.set(exerciseKey(ex.name), ex.muscleGroup ?? null);
+    const rows = memoryLogs.map((l) => ({
       date: l.date,
       workoutId: l.workoutId,
       exerciseId: l.exerciseId,
@@ -1657,37 +1696,122 @@ export function getDashboardSummary(weeksCount: number = 8): DashboardSummary {
       muscleGroup: groupByName.get(exerciseKey(l.exerciseName)) ?? null,
       weight: l.weight,
       repsDone: l.repsDone,
+      setNumber: l.setNumber,
+      feeling: l.feeling,
     }));
-  } else {
-    try {
-      const groupByName = new Map<string, string | null>();
-      for (const e of db.getAllSync<{ name: string; muscle_group: string | null }>('SELECT name, muscle_group FROM exercises ORDER BY id;')) {
-        const key = exerciseKey(e.name);
-        if (!groupByName.has(key)) groupByName.set(key, e.muscle_group);
-      }
-      fullRows = db
-        .getAllSync<{
-          date: string;
-          workout_id: number;
-          exercise_id: number;
-          exercise_name: string;
-          weight: number;
-          reps_done: number;
-        }>('SELECT date, workout_id, exercise_id, exercise_name, weight, reps_done FROM workout_logs;')
-        .map((r) => ({
-          date: r.date,
-          workoutId: r.workout_id,
-          exerciseId: r.exercise_id,
-          exerciseName: r.exercise_name,
-          muscleGroup: groupByName.get(exerciseKey(r.exercise_name)) ?? null,
-          weight: r.weight,
-          repsDone: r.reps_done,
-        }));
-    } catch (error) {
-      console.error('Erreur getDashboardSummary:', error);
-      fullRows = [];
-    }
+    return { rows, programGroups: programGroupsOf(groupByName) };
   }
+  try {
+    for (const e of db.getAllSync<{ name: string; muscle_group: string | null }>('SELECT name, muscle_group FROM exercises ORDER BY id;')) {
+      const key = exerciseKey(e.name);
+      if (!groupByName.has(key)) groupByName.set(key, e.muscle_group);
+    }
+    const rows = db
+      .getAllSync<{
+        date: string;
+        workout_id: number;
+        exercise_id: number;
+        exercise_name: string;
+        weight: number;
+        reps_done: number;
+        set_number: number;
+        feeling: Feeling;
+      }>('SELECT date, workout_id, exercise_id, exercise_name, weight, reps_done, set_number, feeling FROM workout_logs;')
+      .map((r) => ({
+        date: r.date,
+        workoutId: r.workout_id,
+        exerciseId: r.exercise_id,
+        exerciseName: r.exercise_name,
+        muscleGroup: groupByName.get(exerciseKey(r.exercise_name)) ?? null,
+        weight: r.weight,
+        repsDone: r.reps_done,
+        setNumber: r.set_number,
+        feeling: r.feeling,
+      }));
+    return { rows, programGroups: programGroupsOf(groupByName) };
+  } catch (error) {
+    console.error('Erreur getDashboardSummary:', error);
+    return { rows: [], programGroups: [] };
+  }
+}
+
+/** Groupes musculaires du catalogue, dans l'ordre des libellés. */
+function programGroupsOf(groupByName: Map<string, string | null>): string[] {
+  const present = new Set(Array.from(groupByName.values()).filter((g): g is string => !!g));
+  return Object.keys(MUSCLE_GROUP_LABEL).filter((g) => present.has(g));
+}
+
+function kgText(w: number): string {
+  return String(Math.round(w * 100) / 100).replace('.', ',');
+}
+
+/** Ressentis des séries des `n` dernières séances d'un exercice, de la plus ancienne à la plus récente. */
+function lastSessionsFeelings(rows: DashboardRow[], key: string, n: number): Feeling[][] {
+  if (n <= 0) return [];
+  const byDate = new Map<string, { setNumber: number; feeling: Feeling }[]>();
+  for (const r of rows) {
+    if (exerciseKey(r.exerciseName) !== key) continue;
+    if (!byDate.has(r.date)) byDate.set(r.date, []);
+    byDate.get(r.date)!.push({ setNumber: r.setNumber, feeling: r.feeling });
+  }
+  return Array.from(byDate.keys())
+    .sort()
+    .slice(-n)
+    .map((d) => byDate.get(d)!.sort((a, b) => a.setNumber - b.setNumber).map((x) => x.feeling));
+}
+
+/**
+ * Points à surveiller, du plus pressant au moins pressant : décharge que déclencherait la
+ * prochaine séance (règles du moteur), réduction de charge après une pause, groupe musculaire
+ * sans série depuis plus d'une semaine. Les exercices et muscles délaissés depuis plus de
+ * WATCH_MAX_DAYS jours ne sont plus signalés.
+ */
+function buildWatchItems(rows: DashboardRow[], today: string, programGroups: string[]): WatchItem[] {
+  const now = new Date();
+  const previousWorkoutDate = getLastTrainingDateBefore(today);
+  const deloads: WatchItem[] = [];
+  const breaks: WatchItem[] = [];
+  const seen = new Set<string>();
+  for (const ex of getAllCatalogExercises()) {
+    const key = exerciseKey(ex.name);
+    if (seen.has(key) || ex.isCalibrating || !ex.lastSessionDate) continue;
+    seen.add(key);
+    if (daysBetween(ex.lastSessionDate, today) > WATCH_MAX_DAYS) continue;
+    const p = prescriptionFor(ex, now, previousWorkoutDate);
+    if (p.resumedAfterBreak) {
+      breaks.push({
+        kind: 'break',
+        title: ex.name,
+        exerciseName: ex.name,
+        sessions: [],
+        chip: `${p.daysOff} j`,
+        text: `${kgText(ex.currentWeight)} → ${kgText(p.weight)} kg à la reprise`,
+      });
+      continue;
+    }
+    const next = upcomingDeload(progressionSettingsOf(ex), progressionStateOf(ex));
+    const action = next.onMiss ?? next.onFailure;
+    if (!action) continue;
+    const count = next.onMiss ? ex.sessionsWithoutSuccess : ex.consecutiveFailures;
+    deloads.push({
+      kind: 'deload',
+      title: ex.name,
+      exerciseName: ex.name,
+      sessions: lastSessionsFeelings(rows, key, Math.min(3, count)),
+      chip: null,
+      text: `${action.charAt(0).toLowerCase()}${action.slice(1)} si la prochaine ${next.onMiss ? 'n’est pas réussie' : 'est ratée'}`,
+    });
+  }
+  const muscles: WatchItem[] = [];
+  for (const [group, days] of daysSinceByMuscle(rows, today, programGroups)) {
+    if (days === null || days < WATCH_MUSCLE_DAYS || days > WATCH_MAX_DAYS) continue;
+    muscles.push({ kind: 'muscle', title: MUSCLE_GROUP_LABEL[group] || group, exerciseName: null, sessions: [], chip: `${days} j`, text: 'sans aucune série' });
+  }
+  return [...deloads, ...breaks, ...muscles].slice(0, WATCH_LIMIT);
+}
+
+export function getDashboardSummary(weeksCount: number = 8): DashboardSummary {
+  const { rows: fullRows, programGroups } = loadDashboardRows();
 
   const today = formatLocalDate(new Date());
   const goal = getWeeklyGoal();
@@ -1713,6 +1837,16 @@ export function getDashboardSummary(weeksCount: number = 8): DashboardSummary {
   // musculaire — une photo de l'équilibre d'entraînement récent, pas un cumul depuis le début.
   const sinceDate = addDays(today, -27);
 
+  const restartISO = restartDate(byDate.keys());
+  const restartProgress = restartISO ? progressSinceRestart(fullRows, today, restartISO) : null;
+
+  let watch: WatchItem[] = [];
+  try {
+    watch = buildWatchItems(fullRows, today, programGroups);
+  } catch (error) {
+    console.error('Erreur buildWatchItems:', error);
+  }
+
   return {
     weeklyStats: buildWeeklyStats(fullRows, weeksCount),
     weeklyGoal: goal,
@@ -1736,7 +1870,78 @@ export function getDashboardSummary(weeksCount: number = 8): DashboardSummary {
     progression: exerciseProgression(fullRows, today),
     records,
     recordsBeaten: beaten,
+    recordsWindowStart: sinceDate,
     volumeByMuscleGroup: buildVolumeByMuscleGroup(fullRows, sinceDate),
+    muscleSets: setsByMuscleThisWeek(fullRows, today, programGroups).map((m) => ({
+      ...m,
+      label: MUSCLE_GROUP_LABEL[m.muscleGroup] || m.muscleGroup,
+    })),
+    restart:
+      restartISO && restartProgress && restartProgress.items.length > 0
+        ? { date: restartISO, items: restartProgress.items, averagePercent: restartProgress.averagePercent }
+        : null,
+    watch,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Fiche d'un exercice (ouverte depuis « Records » ou « À surveiller »)
+// ---------------------------------------------------------------------------
+
+export interface ExerciseDetailSet {
+  weight: number;
+  repsDone: number;
+  repsTarget: number;
+  feeling: Feeling;
+}
+
+export interface ExerciseDetail {
+  exerciseName: string;
+  category: EquipmentCategory | null;
+  workoutId: number | null;
+  /** Séances, de la plus ancienne à la plus récente, séries dans l'ordre. */
+  sessions: { date: string; sets: ExerciseDetailSet[] }[];
+  record: RecordRow | null;
+  /** Début de la fenêtre des records récents (bande dorée de l'escalier). */
+  recordsWindowStart: string;
+  /** Prochaine séance, réduction de reprise comprise (null hors catalogue ou en calibration). */
+  next: { weight: number; targetReps: number; reason: string | null } | null;
+}
+
+export function getExerciseDetail(exerciseName: string): ExerciseDetail {
+  const key = exerciseKey(exerciseName);
+  const today = formatLocalDate(new Date());
+  const logs = getRecentLogs(Number.MAX_SAFE_INTEGER).filter((l) => exerciseKey(l.exerciseName) === key && l.date <= today);
+  const byDate = new Map<string, WorkoutLogEntry[]>();
+  for (const l of logs) {
+    if (!byDate.has(l.date)) byDate.set(l.date, []);
+    byDate.get(l.date)!.push(l);
+  }
+  const sessions = Array.from(byDate.keys())
+    .sort()
+    .map((date) => ({
+      date,
+      sets: byDate
+        .get(date)!
+        .sort((a, b) => a.setNumber - b.setNumber)
+        .map((l) => ({ weight: l.weight, repsDone: l.repsDone, repsTarget: l.repsTarget, feeling: l.feeling })),
+    }));
+  const ex = getAllCatalogExercises().find((e) => exerciseKey(e.name) === key) ?? null;
+  const next =
+    ex && !ex.isCalibrating && ex.lastSessionDate
+      ? (() => {
+          const p = prescriptionFor(ex, new Date(), getLastTrainingDateBefore(today));
+          return { weight: p.weight, targetReps: p.targetReps, reason: p.reason };
+        })()
+      : null;
+  return {
+    exerciseName: ex?.name ?? logs[0]?.exerciseName ?? exerciseName,
+    category: ex?.category ?? null,
+    workoutId: ex?.workoutId ?? logs[0]?.workoutId ?? null,
+    sessions,
+    record: recordsWithRecent(logs, today, 28, 1).records[0] ?? null,
+    recordsWindowStart: addDays(today, -27),
+    next,
   };
 }
 

@@ -7,6 +7,7 @@ import {
   replayHistory,
   selectWorkingSets,
   suggestNextPrescription,
+  upcomingDeload,
 } from '../progressionV2.ts';
 
 const settings = (o = {}) => ({
@@ -347,4 +348,27 @@ test('dernière séance d’un exercice supprimée : il repasse en calibration',
 test('calibration sans charge dominante (70 / 60 / 80) : la plus lourde', () => {
   const d = run(settings(), state({ isCalibrating: true }), sets([70, 8], [60, 8], [80, 8]));
   assert.equal(d.nextWeight, 80);
+});
+
+// --- Ce que déclencherait la prochaine séance (« À surveiller ») ---
+
+test('upcomingDeload : 3 séances sans réussite en mode CHARGE → −1 palier si la prochaine n’est pas réussie', () => {
+  const r = upcomingDeload(settings(), state({ sessionsWithoutSuccess: 3, consecutiveFailures: 0 }));
+  assert.equal(r.onMiss, '−1 palier');
+  assert.equal(r.onFailure, '−1 palier');
+});
+
+test('upcomingDeload : 2 échecs en mode CHARGE → −10 % seulement si la prochaine est ratée', () => {
+  const r = upcomingDeload(settings(), state({ sessionsWithoutSuccess: 2, consecutiveFailures: 2 }));
+  assert.equal(r.onMiss, null);
+  assert.equal(r.onFailure, '−10 %');
+});
+
+test('upcomingDeload : double progression au-dessus du minimum → retour au minimum de reps', () => {
+  const r = upcomingDeload(reps(), state({ currentTargetReps: 10, sessionsWithoutSuccess: 3 }));
+  assert.equal(r.onMiss, 'Retour à 8 reps');
+});
+
+test('upcomingDeload : rien à craindre après une séance réussie', () => {
+  assert.deepEqual(upcomingDeload(settings(), state()), { onMiss: null, onFailure: null });
 });

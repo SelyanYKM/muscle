@@ -279,6 +279,34 @@ function applyDeloadRules(
   return { state: { ...reset, currentWeight: w }, reason: `−1 palier (${why}) : ${fmt(w)} kg` };
 }
 
+/**
+ * Ce que déclencherait la PROCHAINE séance si elle n'était pas réussie, d'après les mêmes règles
+ * de décharge (pour prévenir avant, dans « À surveiller ») :
+ * - `onMiss` : une séance « presque » (PARTIAL) suffirait à décharger (stagnation) ;
+ * - `onFailure` : une séance ratée (FAILED) déchargerait.
+ * Chaque valeur est l'action, sans sa cause (« −1 palier », « −10 % », « Retour à 8 reps »),
+ * ou null si cette séance ne déclencherait rien. Ne modifie rien.
+ */
+export function upcomingDeload(
+  settings: ExerciseProgressionSettings,
+  state: ExerciseProgressionState
+): { onMiss: string | null; onFailure: string | null } {
+  const cfg = normalizeSettings(settings);
+  const plan = progressionPlan(cfg, state.currentWeight);
+  const action = (s: ExerciseProgressionState): string | null => {
+    const deload = applyDeloadRules(cfg, plan, s);
+    return deload ? deload.reason.split(' (')[0] : null;
+  };
+  return {
+    onMiss: action({ ...state, sessionsWithoutSuccess: state.sessionsWithoutSuccess + 1 }),
+    onFailure: action({
+      ...state,
+      sessionsWithoutSuccess: state.sessionsWithoutSuccess + 1,
+      consecutiveFailures: state.consecutiveFailures + 1,
+    }),
+  };
+}
+
 // Première séance sur l'exercice : la charge et l'objectif suivants sont estimés d'après les
 // reps réellement faites (Epley), au lieu de reprendre la charge telle quelle.
 function calibrate(

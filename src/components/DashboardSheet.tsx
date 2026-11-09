@@ -12,13 +12,17 @@ import {
   View
 } from 'react-native';
 import { File } from 'expo-file-system';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   DashboardSummary,
   deleteBodyWeightEntry,
+  ExerciseDetail,
   formatLocalDate,
   getBodyWeightLogs,
+  getExerciseDetail,
   saveBodyWeightEntry,
   setWeeklyGoal,
+  WatchItem,
   WEEKLY_GOAL_MAX,
   WEEKLY_GOAL_MIN,
 } from '../database/db';
@@ -27,17 +31,17 @@ import { BodyWeightEntry } from '../types';
 import { pickBodyWeightPhoto } from '../utils/bodyPhoto';
 import { fmtKg, parseLocalDate } from '../utils/format';
 import { triggerLightHaptic, triggerMediumHaptic } from '../utils/haptics';
-import { daysBetween, ExerciseTrend, TopSet } from '../utils/progressStats';
-import { BarChart } from './BarChart';
+import { CalendarWeek, daysBetween, exerciseKey, ExerciseTrend, fanSelection, TopSet } from '../utils/progressStats';
+import { ExerciseDetailSheet, SessionMarks } from './ExerciseDetailSheet';
 import { LineChart } from './LineChart';
+import { Barbell, FluidBarbell, RecordStairs, RestartFan } from './ProgressCharts';
 import {
   EnergySparkline,
-  GoalRing,
   ProgressionBlocks,
   RecoveryGauges,
+  splitName,
   TrainingCalendar,
   TrendSquare,
-  WeekStrip,
   weekStripA11y,
 } from './ProgressWidgets';
 import { BottomSheet } from './BottomSheet';
@@ -48,6 +52,8 @@ const SCREEN_HEIGHT = Dimensions.get('window').height;
 const PEEK_HEIGHT = 108;
 const EXPANDED_HEIGHT = Math.round(SCREEN_HEIGHT * 0.82);
 const COLLAPSED_TRANSLATE = EXPANDED_HEIGHT - PEEK_HEIGHT;
+// Poids de corps masqué au lot 8 (le code reste en place, prêt à revenir).
+const SHOW_BODY_WEIGHT = false;
 
 
 interface DashboardSheetProps {
@@ -82,11 +88,6 @@ function round1(v: number): number {
   return Math.round(v * 10) / 10;
 }
 
-/** "4 520" : séparateur de milliers français. */
-function fmtInt(v: number): string {
-  return Math.round(v).toLocaleString('fr-FR');
-}
-
 /** "22,5 kg × 8", ou "12 reps" au poids du corps. */
 function fmtTopSet(t: TopSet): string {
   return t.weight > 0 ? `${fmtKg(t.weight)} kg × ${t.reps}` : `${t.reps} reps`;
@@ -118,6 +119,88 @@ function formatRestDay(dateISO: string | null): { short: string; long: string } 
   return { short: formatShortDate(dateISO), long: d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) };
 }
 
+/** Message sous le compte de la semaine : la barre à charger, puis l'invitation au repos. */
+function weekMessage(done: number, goal: number): string {
+  if (done < goal) {
+    const left = goal - done;
+    return `Encore ${left === 1 ? 'une séance' : `${left} séances`} pour charger la barre.`;
+  }
+  if (done === goal) return 'Barre chargée. Place au repos.';
+  const over = done - goal;
+  return `${over === 1 ? 'Une' : over} de plus que prévu. Pense au repos.`;
+}
+
+/** Splits de la semaine dans l'ordre où ils ont été faits (un disque chacun). */
+function weekSessions(week: CalendarWeek | undefined): number[] {
+  return week ? week.days.flatMap((d) => d.workoutIds) : [];
+}
+
+/** Haut du tiroir : la semaine, en barre qu'on charge séance après séance. */
+const WeekHero: React.FC<{ week: CalendarWeek | undefined; goal: number; streak: number; onSetGoal: () => void }> = ({
+  week,
+  goal,
+  streak,
+  onSetGoal,
+}) => {
+  const sessions = weekSessions(week);
+  const done = sessions.length;
+  const message = weekMessage(done, goal);
+  const label = week
+    ? `Semaine du ${parseLocalDate(week.weekStart).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`
+    : 'Cette semaine';
+  return (
+    <View style={styles.hero}>
+      <LinearGradient
+        colors={[THEME.colors.bgGradientPeach, THEME.colors.bgGradientPink, THEME.colors.bgGradientSand]}
+        locations={[0, 0.52, 1]}
+        start={{ x: 0.15, y: 0 }}
+        end={{ x: 0.85, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View style={styles.heroTop}>
+        <Text style={styles.heroLabel}>{label}</Text>
+        <TouchableOpacity
+          onPress={onSetGoal}
+          hitSlop={{ top: 14, bottom: 14, left: 14, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel={`Régler l’objectif de la semaine, actuellement ${goal} séance${goal > 1 ? 's' : ''}`}
+        >
+          <Text style={styles.linkText}>Régler</Text>
+        </TouchableOpacity>
+      </View>
+      <View
+        accessible
+        accessibilityLabel={`${done} séance${done > 1 ? 's' : ''} sur ${goal}${sessions.length > 0 ? ` : ${sessions.map(splitName).join(', ')}` : ''}. ${message}`}
+      >
+        <Text style={styles.heroValue}>
+          {done}
+          <Text style={styles.heroGoal}>/{goal} séances</Text>
+        </Text>
+        <Text style={styles.heroMessage}>{message}</Text>
+        <View style={styles.heroBar} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+          <FluidBarbell sessions={sessions} goal={goal} height={96} />
+        </View>
+      </View>
+      {streak > 0 && (
+        <View style={styles.streakChip} accessible accessibilityLabel={`${streak} semaine${streak > 1 ? 's' : ''} de suite à l’objectif`}>
+          <View style={styles.streakDisc}>
+            <Text style={styles.streakDiscText}>{streak}</Text>
+          </View>
+          <Text style={styles.streakText}>{streak > 1 ? 'semaines de suite à l’objectif' : 'semaine à l’objectif'}</Text>
+        </View>
+      )}
+    </View>
+  );
+};
+
+/** Pastille d'un point « à surveiller » sans séances à montrer (« 16 j »). */
+const WatchChip: React.FC<{ text: string }> = ({ text }) => (
+  <View style={styles.watchChip}>
+    <Icon name="clock" size={12} color={THEME.colors.textPrimary} strokeWidth={2.4} />
+    <Text style={styles.watchChipText}>{text}</Text>
+  </View>
+);
+
 export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpandedChange, onDataChange }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const translateY = useRef(new Animated.Value(COLLAPSED_TRANSLATE)).current;
@@ -133,6 +216,12 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
   const [isPickingPhoto, setIsPickingPhoto] = useState(false);
   const [isGoalOpen, setIsGoalOpen] = useState(false);
   const [isProgressionOpen, setIsProgressionOpen] = useState(false);
+  const [detail, setDetail] = useState<ExerciseDetail | null>(null);
+
+  const openDetail = (exerciseName: string) => {
+    triggerLightHaptic();
+    setDetail(getExerciseDetail(exerciseName));
+  };
 
   const changeGoal = (step: number) => {
     const next = Math.min(WEEKLY_GOAL_MAX, Math.max(WEEKLY_GOAL_MIN, summary.weeklyGoal + step));
@@ -247,16 +336,15 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
     extrapolate: 'clamp',
   });
 
-  const volumeChartData = summary.weeklyStats.map((w) => ({
-    label: formatWeekLabel(w.weekStart),
-    axisLabel: formatShortDate(w.weekStart),
-    value: w.totalVolume,
-  }));
   const currentWeek = summary.calendar[summary.calendar.length - 1];
   const goal = summary.weeklyGoal;
   const lastRest = formatRestDay(summary.lastRestDate);
   const { up, flat, down } = summary.progression;
-  const volumeTrend = summary.volumeTrendPercent;
+  const today = formatLocalDate(new Date());
+  // Début commun des escaliers : la toute première marche des records affichés.
+  const recordsStart = summary.records.reduce((min, r) => (r.steps[0] && r.steps[0].date < min ? r.steps[0].date : min), today);
+  const watchCount = summary.watch.length;
+  const detailWatch = detail ? summary.watch.find((w) => w.exerciseName && exerciseKey(w.exerciseName) === exerciseKey(detail.exerciseName)) : undefined;
   const bodyWeightChartData = bodyWeightLogs.map((e) => ({
     label: formatWeekLabel(e.date),
     axisLabel: formatShortDate(e.date),
@@ -301,17 +389,39 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
               onPress={() => snapTo(true)}
               activeOpacity={0.8}
               accessibilityRole="button"
-              accessibilityLabel={`Ton progrès. Cette semaine : ${summary.thisWeekCount} séance${summary.thisWeekCount > 1 ? 's' : ''} sur ${goal}. ${currentWeek ? weekStripA11y(currentWeek) : ''}`}
+              accessibilityLabel={`Ton progrès. Cette semaine : ${summary.thisWeekCount} séance${summary.thisWeekCount > 1 ? 's' : ''} sur ${goal}. ${currentWeek ? weekStripA11y(currentWeek) : ''}${summary.recordsBeaten > 0 ? ` ${summary.recordsBeaten} record${summary.recordsBeaten > 1 ? 's' : ''} battu${summary.recordsBeaten > 1 ? 's' : ''} en 4 semaines.` : ''}${watchCount > 0 ? ` ${watchCount} point${watchCount > 1 ? 's' : ''} à surveiller.` : ''}`}
               accessibilityHint="Déplie le tableau de bord"
               accessibilityState={{ expanded: false }}
             >
-              <Text style={styles.peekLabel}>TON PROGRÈS · CETTE SEMAINE</Text>
+              <View style={styles.peekTopRow}>
+                <Text style={styles.peekLabel}>TON PROGRÈS</Text>
+                <View style={styles.peekChips}>
+                  {summary.recordsBeaten > 0 && (
+                    <View style={styles.recordChip}>
+                      <View style={styles.recordChipDisc} />
+                      <Text style={styles.recordChipText}>
+                        {summary.recordsBeaten} record{summary.recordsBeaten > 1 ? 's' : ''}
+                      </Text>
+                    </View>
+                  )}
+                  {watchCount > 0 && (
+                    <View style={styles.watchCount}>
+                      <View style={styles.watchCountBadge}>
+                        <Text style={styles.watchCountBadgeText}>{watchCount}</Text>
+                      </View>
+                      <Text style={styles.watchCountText}>à surveiller</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
               <View style={styles.peekRow}>
                 <Text style={styles.peekValue}>
                   {summary.thisWeekCount}
                   <Text style={styles.peekGoal}>/{goal} séances</Text>
                 </Text>
-                {currentWeek && <WeekStrip week={currentWeek} />}
+                <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+                  <Barbell sessions={weekSessions(currentWeek)} goal={goal} width={168} height={38} mini />
+                </View>
               </View>
             </TouchableOpacity>
           ) : (
@@ -346,26 +456,178 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
           importantForAccessibility={isExpanded ? 'auto' : 'no-hide-descendants'}
           accessibilityElementsHidden={!isExpanded}
         >
-          {/* RÉGULARITÉ : objectif de la semaine + calendrier des 8 dernières semaines */}
-          <Text style={styles.sectionLabel} accessibilityRole="header">RÉGULARITÉ · CETTE SEMAINE</Text>
-          <View style={styles.goalRow}>
-            <GoalRing done={summary.thisWeekCount} goal={goal} onPress={() => setIsGoalOpen(true)} />
-            <View style={styles.kpiCol}>
-              <View
-                style={styles.kpiRow}
-                accessible
-                accessibilityLabel={`${summary.goalStreakWeeks} semaine${summary.goalStreakWeeks > 1 ? 's' : ''} de suite à l’objectif`}
-              >
-                <Text style={styles.kpiValue}>{summary.goalStreakWeeks}</Text>
-                <Text style={styles.kpiLabel}>sem. de suite à l’objectif</Text>
+          {/* LA SEMAINE : la barre qu'on charge séance après séance */}
+          <WeekHero week={currentWeek} goal={goal} streak={summary.goalStreakWeeks} onSetGoal={() => setIsGoalOpen(true)} />
+
+          {/* RECORDS : chaque ligne ouvre la fiche de l'exercice ; l'escalier n'est qu'un aperçu */}
+          {summary.records.length > 0 && (
+            <>
+              <View style={[styles.sectionHeaderRow, styles.sectionGap]}>
+                <Text style={[styles.sectionLabel, styles.noMargin]} accessibilityRole="header">RECORDS</Text>
+                {summary.recordsBeaten > 0 && (
+                  <Text style={styles.headerAside}>
+                    <Text style={styles.headerAsideCount}>{summary.recordsBeaten}</Text> battu{summary.recordsBeaten > 1 ? 's' : ''} en 4 sem.
+                  </Text>
+                )}
               </View>
-              {summary.avgSessionsPerWeek !== null && (
-                <View style={styles.kpiRow} accessible accessibilityLabel={`${fmtDec(summary.avgSessionsPerWeek)} séances par semaine en moyenne`}>
-                  <Text style={styles.kpiValue}>{fmtDec(summary.avgSessionsPerWeek)}</Text>
-                  <Text style={styles.kpiLabel}>séances / sem. en moyenne</Text>
-                </View>
-              )}
-            </View>
+              <View style={styles.recordList}>
+                {summary.records.map((r, idx) => (
+                  <TouchableOpacity
+                    key={r.exerciseName}
+                    style={[styles.recordRow, idx > 0 && styles.prRowDivider]}
+                    onPress={() => openDetail(r.exerciseName)}
+                    activeOpacity={0.6}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${r.exerciseName} : record de ${fmtKg(r.maxWeight)} kilos${r.delta !== null ? `, battu de ${fmtKg(r.delta)} kilos ces 4 dernières semaines` : ''}, ${r.steps.length} palier${r.steps.length > 1 ? 's' : ''} depuis la reprise`}
+                    accessibilityHint="Ouvre la fiche de l’exercice"
+                  >
+                    <View style={styles.recordMain}>
+                      <View style={styles.recordTop}>
+                        <Text style={styles.prName} numberOfLines={1}>
+                          {r.exerciseName}
+                        </Text>
+                        {r.delta !== null && (
+                          <View style={styles.prDeltaPill}>
+                            <Text style={styles.prDeltaText}>+{fmtKg(r.delta)}</Text>
+                          </View>
+                        )}
+                        <Text style={styles.recordValue}>
+                          {fmtKg(r.maxWeight)}
+                          <Text style={styles.recordUnit}> kg</Text>
+                        </Text>
+                      </View>
+                      <RecordStairs steps={r.steps} start={recordsStart} today={today} windowStart={summary.recordsWindowStart} />
+                    </View>
+                    <View style={styles.chevronBox}>
+                      <Icon name="chevron-right" size={16} color={THEME.colors.textMuted} />
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.stairsLegend} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+                <Text style={styles.stairsLegendText}>reprise</Text>
+                <Text style={styles.stairsLegendText}>4 dernières sem.</Text>
+              </View>
+            </>
+          )}
+
+          {/* À SURVEILLER : ce que la prochaine séance peut déclencher, pauses, muscles délaissés */}
+          {watchCount > 0 && (
+            <>
+              <View style={[styles.sectionHeaderRow, styles.sectionGap]}>
+                <Text style={[styles.sectionLabel, styles.noMargin]} accessibilityRole="header">À SURVEILLER</Text>
+                <Text style={styles.headerAside}>
+                  <Text style={styles.headerAsideCount}>{watchCount}</Text> point{watchCount > 1 ? 's' : ''}
+                </Text>
+              </View>
+              <View style={styles.watchList}>
+                {summary.watch.map((w: WatchItem, idx) => {
+                  const content = (
+                    <View style={styles.watchMain}>
+                      <Text style={styles.watchTitle} numberOfLines={1}>
+                        {w.title}
+                      </Text>
+                      <View style={styles.watchDetailRow}>
+                        {w.kind === 'deload' ? <SessionMarks sessions={w.sessions} /> : w.chip ? <WatchChip text={w.chip} /> : null}
+                        <Text style={styles.watchDetail}>{w.text}</Text>
+                      </View>
+                    </View>
+                  );
+                  const label = `${w.title}${w.chip ? `, ${w.chip.replace(' j', ' jours')}` : ''} : ${w.text}`;
+                  return w.exerciseName ? (
+                    <TouchableOpacity
+                      key={`${w.kind}${w.title}`}
+                      style={[styles.watchRow, idx > 0 && styles.prRowDivider]}
+                      onPress={() => openDetail(w.exerciseName!)}
+                      activeOpacity={0.6}
+                      accessibilityRole="button"
+                      accessibilityLabel={label}
+                      accessibilityHint="Ouvre la fiche de l’exercice"
+                    >
+                      {content}
+                      <View style={styles.chevronBox}>
+                        <Icon name="chevron-right" size={16} color={THEME.colors.textMuted} />
+                      </View>
+                    </TouchableOpacity>
+                  ) : (
+                    <View key={`${w.kind}${w.title}`} style={[styles.watchRow, idx > 0 && styles.prRowDivider]} accessible accessibilityLabel={label}>
+                      {content}
+                    </View>
+                  );
+                })}
+              </View>
+            </>
+          )}
+
+          {/* DEPUIS TA REPRISE : l'éventail */}
+          {summary.restart && (
+            <>
+              <View style={[styles.sectionHeaderRow, styles.sectionGap]}>
+                <Text style={[styles.sectionLabel, styles.noMargin]} accessibilityRole="header">DEPUIS TA REPRISE</Text>
+                {summary.restart.averagePercent !== null && (
+                  <Text style={styles.headerAside}>
+                    moyenne{' '}
+                    <Text style={styles.headerAsideCount}>
+                      {summary.restart.averagePercent >= 0 ? '+' : '−'}
+                      {Math.abs(Math.round(summary.restart.averagePercent))}{'\u202F'}%
+                    </Text>
+                  </Text>
+                )}
+              </View>
+              <RestartFan items={fanSelection(summary.restart.items)} restartDateISO={summary.restart.date} />
+            </>
+          )}
+
+          <View style={[styles.sectionHeaderRow, { marginTop: 22 }]}>
+            <Text style={[styles.sectionLabel, styles.noMargin]} accessibilityRole="header">EXERCICES EN PROGRESSION · 4 SEM.</Text>
+            {up + flat + down > 0 && (
+              <TouchableOpacity
+                onPress={() => setIsProgressionOpen(true)}
+                hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel="Détail des exercices en progression"
+              >
+                <Text style={styles.bwAddLink}>Détail</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          {up + flat + down > 0 ? (
+            <ProgressionBlocks up={up} flat={flat} down={down} onPress={() => setIsProgressionOpen(true)} />
+          ) : (
+            <Text style={styles.hintText}>Il faut au moins deux séances d’un exercice pour voir sa tendance.</Text>
+          )}
+
+          {/* MUSCLES : séries de la semaine en cours par groupe du programme */}
+          {summary.muscleSets.length > 0 && (
+            <>
+              <Text style={[styles.sectionLabel, styles.sectionGap]} accessibilityRole="header">MUSCLES CETTE SEMAINE · SÉRIES</Text>
+              {(() => {
+                const maxSets = Math.max(1, ...summary.muscleSets.map((m) => m.sets));
+                return summary.muscleSets.map((m) => (
+                  <View key={m.muscleGroup} style={styles.groupRow} accessible accessibilityLabel={`${m.label} : ${m.sets} série${m.sets > 1 ? 's' : ''} cette semaine`}>
+                    <Text style={styles.groupLabel} numberOfLines={1}>
+                      {m.label}
+                    </Text>
+                    <View style={styles.groupTrack}>
+                      {m.sets > 0 && <View style={[styles.groupFill, { width: `${(m.sets / maxSets) * 100}%` }]} />}
+                    </View>
+                    <Text style={[styles.groupValue, m.sets === 0 && styles.groupValueZero]}>
+                      {m.sets} série{m.sets > 1 ? 's' : ''}
+                    </Text>
+                  </View>
+                ));
+              })()}
+            </>
+          )}
+
+          {/* RÉGULARITÉ : les 8 dernières semaines */}
+          <View style={[styles.sectionHeaderRow, styles.sectionGap]}>
+            <Text style={[styles.sectionLabel, styles.noMargin]} accessibilityRole="header">TES 8 DERNIÈRES SEMAINES</Text>
+            {summary.avgSessionsPerWeek !== null && (
+              <Text style={styles.headerAside} accessibilityLabel={`${fmtDec(summary.avgSessionsPerWeek)} séances par semaine en moyenne`}>
+                <Text style={styles.headerAsideCount}>{fmtDec(summary.avgSessionsPerWeek)}</Text> séances / sem.
+              </Text>
+            )}
           </View>
           <TrainingCalendar weeks={summary.calendar} goal={goal} />
 
@@ -396,104 +658,8 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
             <Text style={styles.hintText}>Note ton énergie au bilan de fin de séance pour suivre ta forme ici.</Text>
           )}
 
-          {/* PERF GLOBALE */}
-          <View style={[styles.sectionHeaderRow, styles.sectionGap]}>
-            <Text style={[styles.sectionLabel, styles.noMargin]} accessibilityRole="header">VOLUME PAR SEMAINE</Text>
-            {volumeTrend !== null && (
-              <View
-                style={[styles.trendPill, volumeTrend < 0 && styles.trendPillDown]}
-                accessible
-                accessibilityLabel={`Volume des 4 dernières semaines : ${volumeTrend >= 0 ? 'en hausse' : 'en baisse'} de ${Math.abs(volumeTrend)} % par rapport aux 4 précédentes`}
-              >
-                <Icon
-                  name={volumeTrend >= 0 ? 'trending-up' : 'trending-down'}
-                  size={12}
-                  color={volumeTrend >= 0 ? THEME.colors.accentStrong : THEME.colors.textSecondary}
-                  strokeWidth={2.6}
-                />
-                <Text style={[styles.trendPillText, volumeTrend < 0 && styles.trendPillTextDown]}>
-                  {volumeTrend > 0 ? '+' : volumeTrend < 0 ? '−' : ''}
-                  {Math.abs(volumeTrend)}{'\u202F'}% · 4 sem.
-                </Text>
-              </View>
-            )}
-          </View>
-          <BarChart data={volumeChartData} formatValue={(v) => `${fmtInt(v)} kg`} lastCaption="semaine en cours" />
-
-          <View style={[styles.sectionHeaderRow, { marginTop: 20 }]}>
-            <Text style={[styles.sectionLabel, styles.noMargin]} accessibilityRole="header">EXERCICES EN PROGRESSION · 4 SEM.</Text>
-            {up + flat + down > 0 && (
-              <TouchableOpacity
-                onPress={() => setIsProgressionOpen(true)}
-                hitSlop={{ top: 14, bottom: 14, left: 10, right: 10 }}
-                accessibilityRole="button"
-                accessibilityLabel="Détail des exercices en progression"
-              >
-                <Text style={styles.bwAddLink}>Détail</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          {up + flat + down > 0 ? (
-            <ProgressionBlocks up={up} flat={flat} down={down} onPress={() => setIsProgressionOpen(true)} />
-          ) : (
-            <Text style={styles.hintText}>Il faut au moins deux séances d’un exercice pour voir sa tendance.</Text>
-          )}
-
-          {summary.records.length > 0 && (
-            <>
-              <View style={[styles.sectionHeaderRow, { marginTop: 22 }]}>
-                <Text style={[styles.sectionLabel, styles.noMargin]} accessibilityRole="header">RECORDS</Text>
-                {summary.recordsBeaten > 0 && (
-                  <Text style={styles.headerAside}>
-                    <Text style={styles.headerAsideCount}>{summary.recordsBeaten}</Text> battu{summary.recordsBeaten > 1 ? 's' : ''} en 4 sem.
-                  </Text>
-                )}
-              </View>
-              <View style={styles.prList}>
-                {summary.records.map((r, idx) => (
-                  <View
-                    key={r.exerciseName}
-                    style={[styles.prRow, idx > 0 && styles.prRowDivider]}
-                    accessible
-                    accessibilityLabel={`${r.exerciseName} : ${fmtKg(r.maxWeight)} kilos${r.delta !== null ? `, record battu de ${fmtKg(r.delta)} kilos` : ''}`}
-                  >
-                    <Text style={styles.prName} numberOfLines={1}>
-                      {r.exerciseName}
-                    </Text>
-                    {r.delta !== null && (
-                      <View style={styles.prDeltaPill}>
-                        <Text style={styles.prDeltaText}>+{fmtKg(r.delta)}</Text>
-                      </View>
-                    )}
-                    <Text style={styles.prWeight}>{fmtKg(r.maxWeight)} kg</Text>
-                  </View>
-                ))}
-              </View>
-            </>
-          )}
-
-          {/* Répartition du volume par groupe musculaire (4 dernières semaines), en lignes compactes */}
-          {summary.volumeByMuscleGroup.length > 0 && (
-            <>
-              <Text style={[styles.sectionLabel, { marginTop: 22 }]} accessibilityRole="header">RÉPARTITION PAR GROUPE · 4 SEM.</Text>
-              {(() => {
-                const maxVolume = Math.max(1, ...summary.volumeByMuscleGroup.map((g) => g.volume));
-                return summary.volumeByMuscleGroup.map((g) => (
-                  <View key={g.muscleGroup} style={styles.groupRow} accessible accessibilityLabel={`${g.label} : ${fmtInt(g.volume)} kilos`}>
-                    <Text style={styles.groupLabel} numberOfLines={1}>
-                      {g.label}
-                    </Text>
-                    <View style={styles.groupTrack}>
-                      <View style={[styles.groupFill, { width: `${Math.max(4, (g.volume / maxVolume) * 100)}%` }]} />
-                    </View>
-                    <Text style={styles.groupValue}>{fmtDec(g.volume / 1000)} t</Text>
-                  </View>
-                ));
-              })()}
-            </>
-          )}
-
-          {/* Poids de corps (optionnellement accompagné d'une photo) */}
+          {/* Poids de corps (optionnellement accompagné d'une photo), masqué depuis le lot 8 */}
+          {SHOW_BODY_WEIGHT && (
           <View style={styles.sectionGap}>
             <View style={styles.bwHeaderRow}>
               <Text style={styles.sectionLabel} accessibilityRole="header">POIDS DE CORPS</Text>
@@ -555,10 +721,16 @@ export const DashboardSheet: React.FC<DashboardSheetProps> = ({ summary, onExpan
               </>
             )}
           </View>
+          )}
 
         </ScrollView>
         </Animated.View>
       </Animated.View>
+
+      {/* FEUILLE : FICHE D'UN EXERCICE (depuis un record ou un point à surveiller) */}
+      <BottomSheet visible={detail !== null} onClose={() => setDetail(null)} maxHeightPercent={90}>
+        {detail && <ExerciseDetailSheet detail={detail} watch={detailWatch} onClose={() => setDetail(null)} />}
+      </BottomSheet>
 
       {/* FEUILLE : DÉTAIL DES EXERCICES EN PROGRESSION */}
       <BottomSheet visible={isProgressionOpen} onClose={() => setIsProgressionOpen(false)}>
@@ -760,6 +932,247 @@ const styles = StyleSheet.create({
     color: THEME.colors.accentStrong,
     letterSpacing: 1,
   },
+  peekTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 20,
+  },
+  peekChips: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  recordChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingLeft: 4,
+    paddingRight: 9,
+    paddingVertical: 3,
+    borderRadius: THEME.radius.pill,
+    backgroundColor: THEME.colors.accent,
+  },
+  recordChipDisc: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: THEME.colors.accentBright,
+    borderWidth: 1.5,
+    borderColor: '#E2AE00',
+  },
+  recordChipText: {
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 11,
+    color: THEME.colors.accentTextDark,
+  },
+  watchCount: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  watchCountBadge: {
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 5,
+    borderRadius: 9,
+    backgroundColor: THEME.colors.textPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  watchCountBadgeText: {
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 10,
+    color: '#FFFFFF',
+  },
+  watchCountText: {
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 11,
+    color: THEME.colors.textPrimary,
+  },
+  // La semaine (barre)
+  hero: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 16,
+  },
+  heroTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  heroLabel: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+  },
+  linkText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
+    color: THEME.colors.accentStrong,
+  },
+  heroValue: {
+    marginTop: 4,
+    fontFamily: THEME.fonts.serif,
+    fontSize: 44,
+    lineHeight: 50,
+    color: THEME.colors.textPrimary,
+    includeFontPadding: false,
+  },
+  heroGoal: {
+    fontSize: 20,
+    color: THEME.colors.textSecondary,
+  },
+  heroMessage: {
+    marginTop: 2,
+    fontFamily: THEME.fonts.sansSemi,
+    fontSize: 13,
+    color: THEME.colors.textSecondary,
+  },
+  heroBar: {
+    marginTop: 12,
+    marginBottom: 10,
+    marginHorizontal: -4,
+  },
+  streakChip: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingLeft: 4,
+    paddingRight: 12,
+    paddingVertical: 4,
+    borderRadius: THEME.radius.pill,
+    backgroundColor: '#FFFFFF',
+    shadowColor: THEME.colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  streakDisc: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: THEME.colors.accent,
+    borderWidth: 1,
+    borderColor: '#E2AE00',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  streakDiscText: {
+    fontFamily: THEME.fonts.serif,
+    fontSize: 14,
+    lineHeight: 18,
+    color: THEME.colors.textPrimary,
+    includeFontPadding: false,
+  },
+  streakText: {
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 12,
+    color: THEME.colors.textPrimary,
+  },
+  // Records (escaliers)
+  recordList: {
+    backgroundColor: THEME.colors.cardInner,
+    borderRadius: THEME.radius.card,
+    paddingLeft: 14,
+    paddingRight: 6,
+  },
+  recordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingTop: 11,
+    paddingBottom: 10,
+    minHeight: 64,
+  },
+  recordMain: {
+    flex: 1,
+    gap: 6,
+  },
+  recordTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  recordValue: {
+    fontFamily: THEME.fonts.serif,
+    fontSize: 20,
+    lineHeight: 24,
+    color: THEME.colors.textPrimary,
+  },
+  recordUnit: {
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 11,
+    color: THEME.colors.textSecondary,
+  },
+  chevronBox: {
+    width: 26,
+    alignItems: 'center',
+  },
+  stairsLegend: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+    paddingLeft: 14,
+    paddingRight: 40,
+  },
+  stairsLegendText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 11,
+    color: THEME.colors.textMuted,
+  },
+  // À surveiller
+  watchList: {
+    backgroundColor: THEME.colors.cardInner,
+    borderRadius: THEME.radius.card,
+    paddingLeft: 14,
+    paddingRight: 6,
+  },
+  watchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 11,
+    minHeight: 56,
+  },
+  watchMain: {
+    flex: 1,
+  },
+  watchTitle: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 13,
+    color: THEME.colors.textPrimary,
+  },
+  watchDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    columnGap: 8,
+    rowGap: 4,
+    marginTop: 5,
+  },
+  watchDetail: {
+    fontFamily: THEME.fonts.sansSemi,
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
+  },
+  watchChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: THEME.radius.pill,
+    backgroundColor: '#FFFFFF',
+  },
+  watchChipText: {
+    fontFamily: THEME.fonts.sansHeavy,
+    fontSize: 11,
+    color: THEME.colors.textPrimary,
+  },
   expandedHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -817,34 +1230,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   // Régularité
-  goalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 22,
-    marginBottom: 16,
-  },
-  kpiCol: {
-    flex: 1,
-    gap: 8,
-  },
-  kpiRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  kpiValue: {
-    fontFamily: THEME.fonts.serif,
-    fontSize: 24,
-    lineHeight: 28,
-    color: THEME.colors.textPrimary,
-    includeFontPadding: false,
-  },
-  kpiLabel: {
-    flexShrink: 1,
-    fontFamily: THEME.fonts.sans,
-    fontSize: 12,
-    color: THEME.colors.textSecondary,
-  },
   // Repos
   tilesRow: {
     flexDirection: 'row',
@@ -872,26 +1257,6 @@ const styles = StyleSheet.create({
     color: THEME.colors.textSecondary,
   },
   // Perf globale
-  trendPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: THEME.radius.pill,
-    backgroundColor: '#DCE8F5',
-  },
-  trendPillDown: {
-    backgroundColor: THEME.colors.cardInner,
-  },
-  trendPillText: {
-    fontFamily: THEME.fonts.sansHeavy,
-    fontSize: 11,
-    color: THEME.colors.accentStrong,
-  },
-  trendPillTextDown: {
-    color: THEME.colors.textSecondary,
-  },
   headerAside: {
     fontFamily: THEME.fonts.sans,
     fontSize: 12,
@@ -939,11 +1304,14 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.colors.accentStrong,
   },
   groupValue: {
-    width: 52,
+    width: 58,
     textAlign: 'right',
     fontFamily: THEME.fonts.sansHeavy,
     fontSize: 12,
     color: THEME.colors.accentStrong,
+  },
+  groupValueZero: {
+    color: THEME.colors.textMuted,
   },
   // Feuille détail des exercices
   progressionList: {
