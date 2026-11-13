@@ -110,6 +110,7 @@ function exerciseToConfigured(ex: Exercise): ConfiguredExercise {
     lastSessionDate: null,
     lastDecisionReason: null,
     isCalibrating: true,
+    perSideLoad: ex.perSideLoad ?? true,
   };
 }
 
@@ -188,6 +189,7 @@ export async function initDatabase(): Promise<void> {
       ['min_weight_kg', 'min_weight_kg REAL'],
       ['rest_seconds', 'rest_seconds INTEGER DEFAULT 90'],
       ['muscle_group', 'muscle_group TEXT'],
+      ['per_side_load', 'per_side_load INTEGER DEFAULT 1'],
     ]);
 
     ensureColumns(db, 'exercise_progression_state', [
@@ -285,16 +287,18 @@ export async function initDatabase(): Promise<void> {
         const minWeightKg = ex.minWeightKg ?? ex.baseWeight;
         const restSeconds = ex.restSeconds ?? defaultRestSecondsFor(ex.category);
 
+        const perSideLoad = ex.perSideLoad === false ? 0 : 1;
+
         const existing = db.getFirstSync<{ id: number }>('SELECT id FROM exercises WHERE id = ?;', [ex.id]);
         if (existing) {
           db.runSync(
             `UPDATE exercises
              SET name = ?, category = ?, workout_id = ?, order_index = ?, base_weight = ?, default_target_reps = ?, default_starting_weight = ?,
-                 mode = ?, reps_min = ?, reps_max = ?, min_weight_kg = ?, rest_seconds = ?
+                 mode = ?, reps_min = ?, reps_max = ?, min_weight_kg = ?, rest_seconds = ?, per_side_load = ?
              WHERE id = ?;`,
             [
               ex.name, ex.category, ex.workoutId, ex.orderIndex, ex.baseWeight, ex.defaultTargetReps, ex.defaultStartingWeight,
-              mode, ex.defaultTargetReps, repsMax, minWeightKg, restSeconds,
+              mode, ex.defaultTargetReps, repsMax, minWeightKg, restSeconds, perSideLoad,
               ex.id,
             ]
           );
@@ -302,8 +306,8 @@ export async function initDatabase(): Promise<void> {
           db.runSync(
             `INSERT INTO exercises
             (id, workout_id, name, category, min_increment, base_weight, order_index, default_target_reps, default_starting_weight, default_sets_count,
-             mode, reps_min, reps_max, min_weight_kg, rest_seconds)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+             mode, reps_min, reps_max, min_weight_kg, rest_seconds, per_side_load)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
             [
               ex.id,
               ex.workoutId,
@@ -320,6 +324,7 @@ export async function initDatabase(): Promise<void> {
               repsMax,
               minWeightKg,
               restSeconds,
+              perSideLoad,
             ]
           );
 
@@ -516,6 +521,16 @@ export async function initDatabase(): Promise<void> {
     runOnceMigration(db, 'reorder_push_legs_v1', 'réordonnancement push/legs', (database) => {
       for (const ex of SEED_EXERCISES) {
         database.runSync('UPDATE exercises SET order_index = ? WHERE id = ?;', [ex.orderIndex, ex.id]);
+      }
+    });
+
+    // per_side_load n'est mis à jour par la migration v5 que pour les installs qui ne l'ont pas
+    // encore passée : resynchronise la colonne pour tout le monde (Leg Extension/Leg Curl, en
+    // réalité des machines pure strength malgré leur nom de catalogue, passent à false — rien à
+    // répartir par côté, voir seed.ts).
+    runOnceMigration(db, 'per_side_load_repair_v1', 'répartition par côté', (database) => {
+      for (const ex of SEED_EXERCISES) {
+        database.runSync('UPDATE exercises SET per_side_load = ? WHERE id = ?;', [ex.perSideLoad === false ? 0 : 1, ex.id]);
       }
     });
 
@@ -720,6 +735,7 @@ interface ExerciseRow {
   last_session_date: string | null;
   last_decision_reason: string | null;
   is_calibrating: number | null;
+  per_side_load: number | null;
 }
 
 const EXERCISE_JOIN_SELECT = `
@@ -750,6 +766,7 @@ function rowToConfiguredExercise(r: ExerciseRow): ConfiguredExercise {
     lastSessionDate: r.last_session_date,
     lastDecisionReason: r.last_decision_reason,
     isCalibrating: !!r.is_calibrating,
+    perSideLoad: r.per_side_load !== 0,
   };
 }
 
@@ -893,6 +910,7 @@ export function addCustomExercise(
     lastSessionDate: null,
     lastDecisionReason: null,
     isCalibrating: true,
+    perSideLoad: true,
   };
 
   if (!db || Platform.OS === 'web') {
