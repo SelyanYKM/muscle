@@ -1022,7 +1022,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                   </TouchableOpacity>
                 </View>
 
-                {warmupPopupIdx !== null && currentExercise && (
+                {warmupPopupIdx !== null && currentExercise && currentExercise.perSideLoad && (
                   <View style={styles.warmupPopup} pointerEvents="none">
                     <PlateBreakdown
                       totalWeight={warmupSets[warmupPopupIdx].weight}
@@ -1115,8 +1115,9 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
             </View>
           </View>
 
-          {/* Disques (hors poulie : pile à broche, rien à décomposer) */}
-          {currentExercise && currentExercise.category !== 'CABLE' && (
+          {/* Disques (hors poulie et machines à pile à broche type Leg Extension/Leg Curl :
+              rien à décomposer par côté) */}
+          {currentExercise && currentExercise.category !== 'CABLE' && currentExercise.perSideLoad && (
             <PlateBreakdown
               totalWeight={currentWeight}
               baseWeight={currentExercise.baseWeight}
