@@ -201,15 +201,21 @@ const isPerformed = (s: LoggedSet): boolean =>
  * des séries droites (ex. 3×8 à la même charge) :
  * - STRAIGHT : au moins targetSets séries à une même charge (la plus lourde si plusieurs). Les
  *   autres séries (série test, série bonus, série de retour au calme) sont ignorées.
- * - MIXED : pas de séries droites. Une série plus lourde que la prescription et ratée est une
- *   tentative, ignorée ; on garde ensuite les targetSets premières séries, charge = la plus légère.
+ * - MIXED : pas de séries droites. Une série plus lourde que la base de la séance et ratée est
+ *   une tentative, ignorée ; on garde ensuite les targetSets premières séries, charge = la plus
+ *   légère. La base est la charge prévue si au moins une série a été faite à cette charge ou en
+ *   dessous. Si TOUTES les séries sont au-dessus, c'est une montée volontaire : la base est la plus
+ *   légère d'entre elles, et seule une série vraiment ratée (sous NEAR_MISS_RATIO du seuil) est une
+ *   tentative.
  * - INCOMPLETE : pas assez de séries, tentatives exclues.
+ * `heavierMinReps` : reps qu'une série plus lourde doit atteindre pour compter comme du travail
+ * (l'objectif en mode CHARGE, le bas de la plage en double progression).
  */
 export function selectWorkingSets(
   allSets: LoggedSet[],
   targetSets: number,
   prescribedWeight: number,
-  targetReps: number
+  heavierMinReps: number
 ): WorkingSelection {
   const sets = allSets.filter(isPerformed);
 
@@ -221,7 +227,10 @@ export function selectWorkingSets(
     return { sets: sets.filter((s) => s.weight === weight).slice(0, targetSets), weight, pattern: 'STRAIGHT' };
   }
 
-  const kept = sets.filter((s) => !(s.weight > prescribedWeight + EPS && s.reps < targetReps));
+  const allAbove = sets.length > 0 && sets.every((s) => s.weight > prescribedWeight + EPS);
+  const base = allAbove ? Math.min(...sets.map((s) => s.weight)) : prescribedWeight;
+  const attemptBelow = allAbove ? NEAR_MISS_RATIO * heavierMinReps - EPS : heavierMinReps;
+  const kept = sets.filter((s) => !(s.weight > base + EPS && s.reps < attemptBelow));
   if (kept.length < targetSets) {
     return { sets: kept, weight: kept.length ? Math.min(...kept.map((s) => s.weight)) : 0, pattern: 'INCOMPLETE' };
   }
@@ -367,8 +376,11 @@ export function suggestNextPrescription(
   const finish = (status: SessionStatus, next: ExerciseProgressionState, reason: string) =>
     decision(status, next, prefix + reason, resumed);
 
-  // 3. Séries qui comptent.
-  const sel = selectWorkingSets(performed, cfg.targetSets, ref, prescription.targetReps);
+  // 3. Séries qui comptent. En double progression, une série plus lourde que prévu se juge contre le
+  // bas de la plage (comme après une montée de charge normale), pas contre l'objectif du moment.
+  const planAtRef = progressionPlan(cfg, ref);
+  const heavierMinReps = planAtRef.mode === 'REPS_PUIS_CHARGE' ? planAtRef.repsMin : prescription.targetReps;
+  const sel = selectWorkingSets(performed, cfg.targetSets, ref, heavierMinReps);
   if (sel.pattern === 'INCOMPLETE') {
     return finish('INCOMPLETE', s, `Séance incomplète (${sel.sets.length}/${cfg.targetSets} séries) : charge inchangée`);
   }
@@ -380,14 +392,18 @@ export function suggestNextPrescription(
   // réussie (sinon la prescription aurait bougé), c'est un choix qui se confirme : la charge faite
   // devient la référence et la progression repart d'elle, sans dépasser la prescription.
   const previous = session.previousSets?.length
-    ? selectWorkingSets(session.previousSets, cfg.targetSets, ref, prescription.targetReps)
+    ? selectWorkingSets(session.previousSets, cfg.targetSets, ref, heavierMinReps)
     : null;
   const previousAlsoLighter =
     !!previous && previous.pattern !== 'INCOMPLETE' && previous.weight < ref - EPS && s.sessionsWithoutSuccess >= 1;
   const followLighter = lighter && sel.pattern === 'STRAIGHT' && previousAlsoLighter;
   const evalWeight = heavier || followLighter ? sel.weight : ref;
   const plan = progressionPlan(cfg, evalWeight);
-  const target = clamp(s.currentTargetReps, plan.repsMin, plan.repsMax);
+  // Double progression, charge plus lourde que prévu : on la juge comme après une montée de charge
+  // normale, contre le bas de la plage (ex. 10 kg × 11 pour une plage 12-15), et non contre
+  // l'objectif atteint à l'ancienne charge (15 reps), qui ferait passer toute montée pour un échec.
+  const target =
+    heavier && plan.mode === 'REPS_PUIS_CHARGE' ? plan.repsMin : clamp(s.currentTargetReps, plan.repsMin, plan.repsMax);
   s = { ...s, currentTargetReps: target };
 
   // 4. Classification par le volume : reps plafonnées à l'objectif, rapportées au volume visé.
@@ -402,9 +418,11 @@ export function suggestNextPrescription(
   // 5a. Plus lourd que prévu : la nouvelle charge n'est adoptée que si elle a été tenue.
   if (heavier) {
     if (outcome === 'FAILED') {
-      return finish('FAILED', s, `${fmt(sel.weight)} kg non tenus (${pct} % du volume) : retour à ${fmt(ref)} kg`);
+      // Retour à la prescription telle quelle, objectif de reps compris.
+      return finish('FAILED', { ...s, currentTargetReps: prescription.targetReps }, `${fmt(sel.weight)} kg non tenus (${pct} % du volume) : retour à ${fmt(ref)} kg`);
     }
     s = { ...s, currentWeight: sel.weight, consecutiveFailures: 0, sessionsWithoutSuccess: 0 };
+    note = `Montée à ${fmt(sel.weight)} kg · `;
   }
 
   // 5b. Séries droites plus légères : on suit la charge réellement choisie.

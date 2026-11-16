@@ -615,6 +615,15 @@ export async function initDatabase(): Promise<void> {
       relinkWorkoutLogs(database);
       recomputeProgression(database, null, false);
     });
+
+    // Double progression : une charge plus lourde que prévu était jugée contre l'objectif atteint à
+    // l'ancienne charge (ex. 15 reps), si bien qu'une montée décidée en séance (7,5 → 10 kg aux
+    // élévations latérales) passait pour une série de tentatives ratées et la séance était ignorée.
+    // Le moteur la juge désormais contre le bas de la plage : on rejoue l'historique une fois pour
+    // que l'état mémorisé en tienne compte.
+    runOnceMigration(db, 'replay_heavier_reps_v1', 'rejeu de l\'historique (montée en double progression)', (database) => {
+      recomputeProgression(database, null, false);
+    });
   } catch (error) {
     console.warn('Erreur initialisation SQLite, utilisation du mode mémoire de secours:', error);
     initMemoryFallback();
