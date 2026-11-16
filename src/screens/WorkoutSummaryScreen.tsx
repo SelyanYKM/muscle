@@ -51,7 +51,7 @@ interface NextDelta {
  * où la séance faite n'était qu'un repère.
  */
 function nextSessionDelta(decision: ProgressionDecision, results: SetResult[]): NextDelta | null {
-  if (results.length === 0 || decision.status === 'CALIBRATION' || decision.status === 'SKIPPED') return null;
+  if (results.length === 0 || decision.status === 'CALIBRATION' || decision.status === 'SKIPPED' || decision.status === 'TECHNIQUE') return null;
   const doneWeight = resolveSessionWeight(results.map((r) => r.weight));
   const weightDelta = Math.round((decision.nextWeight - doneWeight) * 100) / 100;
   if (weightDelta !== 0) {
@@ -124,6 +124,7 @@ const STATUS_LABEL: Record<SessionStatus, string> = {
   CALIBRATION: 'Calibration',
   INCOMPLETE: 'Incomplète',
   SKIPPED: 'Non faite',
+  TECHNIQUE: 'Technique',
   RESUMED_AFTER_BREAK: 'Reprise',
 };
 
@@ -280,12 +281,20 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
                     {item.results.map((res, rIdx) => (
                       <View
                         key={rIdx}
-                        style={styles.setResultBadge}
+                        style={[styles.setResultBadge, res.technique && { backgroundColor: THEME.technique.pastilleBg }]}
                         accessible
-                        accessibilityLabel={setA11yLabel(res.setNumber, res.repsDone, res.weight, res.feeling, res.markedEasy)}
+                        accessibilityLabel={
+                          res.technique
+                            ? `Série ${res.setNumber} : ${res.repsDone} reps à ${kgA11y(res.weight)}, technique, charge gelée`
+                            : setA11yLabel(res.setNumber, res.repsDone, res.weight, res.feeling, res.markedEasy)
+                        }
                       >
-                        <FeelingMark feeling={res.feeling} />
-                        <Text style={styles.setResultText}>
+                        {res.technique ? (
+                          <Icon name="target" size={10} color={THEME.technique.pastilleText} />
+                        ) : (
+                          <FeelingMark feeling={res.feeling} />
+                        )}
+                        <Text style={[styles.setResultText, res.technique && { color: THEME.technique.pastilleText }]}>
                           S{res.setNumber} · {res.repsDone} × {fmtKg(res.weight)}kg
                         </Text>
                       </View>
@@ -306,11 +315,18 @@ export const WorkoutSummaryScreen: React.FC<WorkoutSummaryProps> = ({
                       <Text style={[styles.nextWeightsText, { color: ink }]}>
                         {fmtKg(item.decision.nextWeight)} kg × {item.decision.nextTargetReps}
                       </Text>
-                      {delta && (
-                        <View style={[styles.deltaPill, delta.up && styles.deltaPillUp]}>
-                          {delta.up && <Icon name="trending-up" size={12} color={THEME.colors.accentStrong} strokeWidth={2.6} />}
-                          <Text style={[styles.deltaPillText, delta.up && styles.deltaPillTextUp]}>{delta.text}</Text>
+                      {item.decision.status === 'TECHNIQUE' ? (
+                        <View style={[styles.deltaPill, { backgroundColor: THEME.technique.pastilleBg }]}>
+                          <Icon name="lock" size={11} color={THEME.technique.pastilleText} />
+                          <Text style={[styles.deltaPillText, { color: THEME.technique.pastilleText }]}>Technique · charge gelée</Text>
                         </View>
+                      ) : (
+                        delta && (
+                          <View style={[styles.deltaPill, delta.up && styles.deltaPillUp]}>
+                            {delta.up && <Icon name="trending-up" size={12} color={THEME.colors.accentStrong} strokeWidth={2.6} />}
+                            <Text style={[styles.deltaPillText, delta.up && styles.deltaPillTextUp]}>{delta.text}</Text>
+                          </View>
+                        )
                       )}
                     </View>
                     <Text style={styles.planMessageText}>{item.decision.reason}</Text>

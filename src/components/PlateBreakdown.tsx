@@ -14,6 +14,9 @@ interface PlateBreakdownProps {
   // Masque le séparateur du haut : utile quand le composant n'est pas enchaîné après un autre
   // bloc (ex. dans une fenêtre contextuelle flottante plutôt qu'en ligne sur la carte sombre).
   hideHairline?: boolean;
+  // Collier de technique posé sur cet exercice : petit repère lavande après le disque le plus
+  // léger (au bout de la barre, comme un vrai collier), purement visuel.
+  techniqueCollar?: boolean;
 }
 
 // Taille fixe par type de disque (pas une formule : des valeurs de design figées), plus
@@ -46,6 +49,7 @@ export const PlateBreakdown: React.FC<PlateBreakdownProps> = ({
   baseWeight = 0,
   category,
   hideHairline = false,
+  techniqueCollar = false,
 }) => {
   const plates = getPlateBreakdownPerSide(totalWeight, baseWeight);
   const weightToLoad = Math.max(0, totalWeight - baseWeight);
@@ -86,6 +90,7 @@ export const PlateBreakdown: React.FC<PlateBreakdownProps> = ({
                 />
               );
             })}
+            {techniqueCollar && <View style={styles.collarMark} />}
           </View>
         )}
 
@@ -133,6 +138,13 @@ const styles = StyleSheet.create({
   },
   plateBar: {
     borderRadius: 4,
+  },
+  collarMark: {
+    width: 6,
+    height: 40,
+    borderRadius: 3,
+    backgroundColor: THEME.technique.collarMark,
+    marginLeft: 1,
   },
   valueCol: {
     alignItems: 'flex-end',

@@ -193,8 +193,12 @@ export interface WorkingSelection {
   pattern: SetPattern;
 }
 
-const isPerformed = (s: LoggedSet): boolean =>
+// Série réellement validée (poids/reps valides, pas un échauffement) — collier posé ou non.
+const isLogged = (s: LoggedSet): boolean =>
   !s.isWarmup && Number.isFinite(s.weight) && s.weight >= 0 && Number.isFinite(s.reps) && s.reps > 0;
+
+// Série qui compte pour la progression : en plus, collier de technique pas posé.
+const isPerformed = (s: LoggedSet): boolean => isLogged(s) && !s.technique;
 
 /**
  * Choisit les séries qui comptent et la charge qui représente la séance. Le moteur est pensé pour
@@ -351,8 +355,20 @@ export function suggestNextPrescription(
   const performed = (session.sets ?? []).filter(isPerformed);
 
   // 0. Aucune série faite : rien ne change, pas même la date (sinon une séance vide
-  // effacerait une vraie pause).
+  // effacerait une vraie pause). Collier posé sur toute la séance : pas de décision, charge,
+  // objectif, compteurs et motif intacts — seule la date avance, pour que le temps passé en
+  // technique ne déclenche pas la réduction de reprise au retrait du collier.
   if (performed.length === 0) {
+    const hadTechnique = (session.sets ?? []).some((x) => isLogged(x) && x.technique);
+    if (hadTechnique) {
+      return {
+        status: 'TECHNIQUE',
+        nextWeight: state.currentWeight,
+        nextTargetReps: state.currentTargetReps,
+        reason: 'Séance technique : charge gelée',
+        newState: { ...state, lastSessionDate: todayStr },
+      };
+    }
     return { ...decision('SKIPPED', state, 'Aucune série enregistrée : rien ne change'), newState: state };
   }
 
@@ -535,7 +551,9 @@ export function replayHistory(
     );
     if (result.status === 'SKIPPED') continue;
     state = result.newState;
-    previousSets = session.sets;
+    // Une séance 100 % technique n'est pas une vraie performance : elle ne doit pas servir de
+    // référence de comparaison ("2e séance de suite plus légère") pour la séance suivante.
+    if (result.status !== 'TECHNIQUE') previousSets = session.sets;
   }
   return state;
 }

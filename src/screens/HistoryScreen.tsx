@@ -81,6 +81,10 @@ interface EditableSet {
    * sélecteur (voir setEditingSetFeeling) — l'éditeur n'offre pas de coche dédiée pour
    * (re)confirmer "facile", donc un changement explicite de ressenti l'efface. */
   markedEasy?: boolean;
+  /** Mode (GUIDED/FREE) et collier de technique hérités tels quels de la série chargée — portés
+   * par série comme en base, pour ne pas les perdre à la réécriture de la séance. */
+  mode?: 'GUIDED' | 'FREE' | null;
+  technique?: boolean;
 }
 interface EditableExercise {
   originalName: string;
@@ -123,11 +127,15 @@ function buildSessionBilan(session: GroupedSession, feedback?: SessionFeedbackRo
   const allSets = session.exercises.flatMap((e) => e.sets);
   if (allSets.length === 0) return '';
 
-  const notMetCount = allSets.filter((s) => s.feeling !== 'EASY').length;
-  const ratio = notMetCount / allSets.length;
+  // Séries techniques (charge gelée) exclues : ni réussite ni échec, elles ne doivent pas
+  // gonfler artificiellement la part de réussite de la séance.
+  const realSets = allSets.filter((s) => !s.technique);
+  const notMetCount = realSets.filter((s) => s.feeling !== 'EASY').length;
+  const ratio = realSets.length > 0 ? notMetCount / realSets.length : 0;
 
   let perf: string;
-  if (ratio === 0) perf = 'Séance solide, tout réussi';
+  if (realSets.length === 0) perf = 'Séance technique';
+  else if (ratio === 0) perf = 'Séance solide, tout réussi';
   else if (ratio <= 0.25) perf = 'Bonne séance, presque tout réussi';
   else if (ratio <= 0.5) perf = 'Séance correcte, quelques séries sous l’objectif';
   else perf = 'Séance difficile, plusieurs séries sous l’objectif';
@@ -358,6 +366,8 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
           repsDone: s.repsDone,
           feeling: s.feeling as Feeling,
           markedEasy: s.markedEasy,
+          mode: s.mode,
+          technique: s.technique,
         })),
       })),
       removedExerciseNames: [],
@@ -765,14 +775,22 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                                   {ex.sets.map((set, setIdx) => (
                                     <View
                                       key={setIdx}
-                                      style={styles.setChip}
+                                      style={[styles.setChip, set.technique && { backgroundColor: THEME.technique.pastilleBg }]}
                                       accessible
-                                      accessibilityLabel={setA11yLabel(set.setNumber, set.repsDone, set.weight, set.feeling as Feeling, set.markedEasy)}
+                                      accessibilityLabel={
+                                        set.technique
+                                          ? `Série ${set.setNumber} : ${set.repsDone} reps à ${kgA11y(set.weight)}, technique, charge gelée`
+                                          : setA11yLabel(set.setNumber, set.repsDone, set.weight, set.feeling as Feeling, set.markedEasy)
+                                      }
                                     >
-                                      <FeelingMark feeling={set.feeling as Feeling} />
-                                      <Text style={styles.setChipText}>
+                                      {set.technique ? (
+                                        <Icon name="target" size={10} color={THEME.technique.pastilleText} />
+                                      ) : (
+                                        <FeelingMark feeling={set.feeling as Feeling} />
+                                      )}
+                                      <Text style={[styles.setChipText, set.technique && { color: THEME.technique.pastilleText }]}>
                                         S{set.setNumber} · {set.repsDone} × {fmtKg(set.weight)}kg ·{' '}
-                                        {resolveFeelingLabel(set.feeling as Feeling, set.markedEasy)}
+                                        {set.technique ? 'Technique' : resolveFeelingLabel(set.feeling as Feeling, set.markedEasy)}
                                       </Text>
                                     </View>
                                   ))}
@@ -970,16 +988,21 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
                     </View>
                   </View>
 
-                  {/* Ressenti déduit des reps, comme en séance */}
+                  {/* Ressenti déduit des reps, comme en séance — sauf série technique : collier
+                      posé, jamais jugée en réussite/échec. */}
                   <View style={styles.setStatusRow}>
-                    <FeelingMark feeling={feelingFromReps(s.repsDone, s.repsTarget)} size={8} />
+                    {s.technique ? (
+                      <Icon name="target" size={8} color={THEME.technique.pastilleText} />
+                    ) : (
+                      <FeelingMark feeling={feelingFromReps(s.repsDone, s.repsTarget)} size={8} />
+                    )}
                     <Text
                       style={[
                         styles.setStatusText,
-                        { color: FEELING_INK[feelingFromReps(s.repsDone, s.repsTarget)] },
+                        { color: s.technique ? THEME.technique.pastilleText : FEELING_INK[feelingFromReps(s.repsDone, s.repsTarget)] },
                       ]}
                     >
-                      {s.repsDone >= s.repsTarget ? 'Réussi' : 'Échec'} · {s.repsDone}/{s.repsTarget} reps
+                      {s.technique ? 'Technique' : s.repsDone >= s.repsTarget ? 'Réussi' : 'Échec'} · {s.repsDone}/{s.repsTarget} reps
                     </Text>
                   </View>
                 </View>

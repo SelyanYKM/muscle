@@ -57,6 +57,8 @@ export interface RestNext {
   details?: string;
   /** Choix proposés sous la carte (autre exercice, une série de plus…). */
   actions?: RestNextAction[];
+  /** L'exercice suivant a son collier de technique posé (petit cadenas, si simple à montrer). */
+  nextFrozen?: boolean;
 }
 
 interface RestTimerOverlayProps {
@@ -122,10 +124,14 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
   };
 
   // Retour sur la série validée : réussie si l'objectif de reps est atteint (même règle que
-  // FreeWorkoutScreen.handleCompleteSet), sinon "sous l'objectif".
+  // FreeWorkoutScreen.handleCompleteSet), sinon "sous l'objectif". Une série technique n'est ni
+  // l'un ni l'autre : son propre libellé, jamais au ressenti vert/ambre/rouge.
   const lastSetMet = !!lastSet && lastSet.feeling !== 'HARD';
+  const techniqueRest = !!lastSet?.technique;
   const lastSetText = lastSet
-    ? `Série ${lastSet.setNumber} ${lastSetMet ? 'réussie' : "sous l'objectif"} · ${lastSet.repsDone}/${lastSet.targetReps} reps`
+    ? techniqueRest
+      ? `Série ${lastSet.setNumber} technique · ${lastSet.repsDone} reps`
+      : `Série ${lastSet.setNumber} ${lastSetMet ? 'réussie' : "sous l'objectif"} · ${lastSet.repsDone}/${lastSet.targetReps} reps`
     : null;
   const notificationBody = next.set ? `${next.title} • Série ${next.set.number} • ${fmtKg(next.set.weight)} kg` : next.title;
 
@@ -337,7 +343,11 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     <Modal visible transparent animationType="fade">
       <View style={styles.root}>
         <LinearGradient
-          colors={[THEME.colors.textPrimary, THEME.colors.accentDark, THEME.colors.accentStrong]}
+          colors={
+            techniqueRest
+              ? [THEME.technique.restGradientViolet, THEME.technique.restGradientBlue, THEME.technique.restGradientMist]
+              : [THEME.colors.textPrimary, THEME.colors.accentDark, THEME.colors.accentStrong]
+          }
           locations={[0, 0.55, 1]}
           start={{ x: 0.15, y: 0 }}
           end={{ x: 0.85, y: 1 }}
@@ -350,14 +360,18 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
             <Text style={styles.topSub}>{isPaused ? 'EN PAUSE' : 'RÉCUPÉRATION'}</Text>
             {!!lastSetText && (
               <View style={styles.lastSetPill}>
-                <View
-                  style={[
-                    styles.lastSetMark,
-                    lastSetMet
-                      ? { backgroundColor: FEELING_DOT[lastSet!.feeling] }
-                      : { borderWidth: 2, borderColor: FEELING_DOT.HARD },
-                  ]}
-                />
+                {techniqueRest ? (
+                  <Icon name="target" size={12} color={THEME.technique.restRing} />
+                ) : (
+                  <View
+                    style={[
+                      styles.lastSetMark,
+                      lastSetMet
+                        ? { backgroundColor: FEELING_DOT[lastSet!.feeling] }
+                        : { borderWidth: 2, borderColor: FEELING_DOT.HARD },
+                    ]}
+                  />
+                )}
                 <Text style={styles.lastSetText}>{lastSetText}</Text>
               </View>
             )}
@@ -383,7 +397,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
                 cx={ringSize / 2}
                 cy={ringSize / 2}
                 r={ringRadius}
-                stroke={THEME.colors.accent}
+                stroke={techniqueRest ? THEME.technique.restRing : THEME.colors.accent}
                 strokeWidth={RING_STROKE}
                 fill="none"
                 strokeLinecap="round"
@@ -464,9 +478,12 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
                   </View>
                 )}
               </View>
-              <Text style={styles.nextSetTitle} numberOfLines={1}>
-                {next.title}
-              </Text>
+              <View style={styles.nextSetTitleRow}>
+                {!!next.nextFrozen && <Icon name="lock" size={13} color="#FFFFFF" />}
+                <Text style={styles.nextSetTitle} numberOfLines={1}>
+                  {next.title}
+                </Text>
+              </View>
               {next.set ? (
                 <Text style={styles.nextSetDetails}>
                   Série {next.set.number} · <Text style={styles.nextSetHighlight}>{fmtKg(next.set.weight)} kg</Text> × {next.set.reps}
@@ -664,6 +681,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#FFFFFF',
   },
+  nextSetTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' },
   nextSetTitle: {
     fontFamily: THEME.fonts.serif,
     fontSize: 21,

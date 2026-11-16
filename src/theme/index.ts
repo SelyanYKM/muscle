@@ -241,6 +241,41 @@ export const THEME_BLUE_GOLD = {
     3: { gradient: ['#00296B', '#001D4F'] as [string, string], fg: '#FFFFFF', tint: '#D9E1EF', ink: '#00296B', chipBg: 'rgba(255,255,255,0.16)', btnBg: '#FFFFFF', btnFg: '#00296B', mark: '#00296B' },
   } as Record<number, { gradient: [string, string]; fg: string; tint: string; ink: string; chipBg: string; btnBg: string; btnFg: string; mark: string }>,
   radius: { sheet: 28, hero: 28, card: 20, inner: 14, pill: 999 },
+  // Mode « séance technique » (collier posé) : tout l'écran de séance passe en lavande à la
+  // place du bleu/or habituel, pour que le mode se voie avant même de lire un badge. Contrastes
+  // déjà vérifiés contre leurs équivalents ci-dessus (voir le tableau de la maquette validée).
+  // Ne recolore jamais les ressentis (vert/ambre/rouge) ni les couleurs de split : ces deux
+  // palettes restent celles de `colors`/`splits` ci-dessus, même en mode technique.
+  technique: {
+    bg: '#F7F4FD',
+    bgGradientTop: '#E5DBFB', // à la place de la teinte du split, en haut de l'écran de séance
+    textPrimary: '#2B1A63', // 13,5:1
+    textSecondary: '#5A5276', // 6,7:1
+    textMuted: '#6A6286', // 5,2:1
+    controlBorder: '#837AA0', // 3,7:1
+    accentStrong: '#5A3EC0', // lien, accent texte — 7,3:1
+    seriesCardFrom: '#2B1A63',
+    seriesCardMid: '#3F2B8C',
+    seriesCardTo: '#5339A8',
+    textOnDark: '#F5F1FF', // texte sur la carte de série — 7,5:1
+    validateBtnBg: '#4A2D9E', // bouton Valider — blanc 9,7:1
+    chronoPoint: '#B8A2F7', // point du chrono (remplace l'or)
+    restGradientViolet: '#24145A',
+    restGradientBlue: '#37247F',
+    restGradientMist: '#4A31A0',
+    restRing: '#C3AEFF', // anneau du repos — 4,8:1, remplace l'or
+    badgeBg: 'rgba(184, 162, 247, 0.22)', // encart/badge « TECHNIQUE »
+    badgeText: '#DCD0FF', // 5,8:1
+    pastilleBg: '#ECE5FC', // pastille de série technique (jamais vert/ambre/rouge)
+    pastilleText: '#4A2D9E', // 8:1
+    bottomBar: 'rgba(247, 244, 253, 0.96)',
+    // Déclenchement caché (appui long) et rail du collier (CollarRail.tsx).
+    pressRing: '#C3AEFF',
+    railTint: '#E7DEFB', // teinte du rail derrière le collier pendant le glisser
+    railPosedBg: '#4A2D9E', // fond du rail une fois le collier posé
+    collarMark: '#C3AEFF', // collier sur PlateBreakdown
+    frozenStepperBorder: 'rgba(220, 208, 255, 0.35)', // steppers gelés, pointillés (#DCD0FF à 35 %)
+  },
 };
 
 // Bascule active : il suffit de repointer sur THEME_SOFT_STRENGTH pour revenir en arrière instantanément !
