@@ -109,6 +109,19 @@ test('séances regroupées par date, dans l’ordre chronologique', () => {
   assert.equal(sessions[1].easy, true);
 });
 
+test('séances regroupées : le collier de technique est porté par série, pas par séance', () => {
+  const sessions = groupSessionsByDate([
+    { date: '2026-10-16', weight: 50, reps_done: 8, marked_easy: 0, technique: 0 },
+    { date: '2026-10-16', weight: 50, reps_done: 8, marked_easy: 0, technique: 0 },
+    { date: '2026-10-16', weight: 20, reps_done: 1, marked_easy: 0, technique: 1 },
+  ]);
+  assert.equal(sessions.length, 1);
+  assert.deepEqual(
+    sessions[0].sets.map((s) => s.technique),
+    [false, false, true]
+  );
+});
+
 const settings = { mode: 'CHARGE', targetSets: 3, repsMin: 8, repsMax: 8, incrementKg: 2.5, minWeightKg: 0, restSeconds: 90 };
 const neverDone = { currentWeight: 62.5, currentTargetReps: 8, consecutiveFailures: 0, sessionsWithoutSuccess: 0, lastSessionDate: null, lastDecisionReason: null, isCalibrating: false };
 

@@ -9,6 +9,9 @@ export interface StatLogRow {
   exerciseName: string;
   weight: number;
   repsDone: number;
+  /** Collier de technique posé pour cette série : exclue des tendances et des records (voir
+   * exerciseProgression/recordsWithRecent), gardée dans le calendrier, les séances et le volume. */
+  technique?: boolean;
 }
 
 export interface CalendarDay {
@@ -292,6 +295,7 @@ export function exerciseProgression(rows: StatLogRow[], todayISO: string, window
   const byExercise = new Map<string, Map<string, TopSet>>();
   const names = new Map<string, { name: string; date: string }>();
   for (const r of rows) {
+    if (r.technique) continue; // charge gelée pour la technique : ne compte pas comme un progrès
     if (r.date > todayISO) continue;
     const key = exerciseKey(r.exerciseName);
     if (!byExercise.has(key)) byExercise.set(key, new Map());
@@ -336,6 +340,7 @@ export function recordsWithRecent(rows: StatLogRow[], todayISO: string, windowDa
   const windowStart = addDays(todayISO, -(windowDays - 1));
   const byName = new Map<string, { before: number; recent: number }>();
   for (const r of rows) {
+    if (r.technique) continue; // charge gelée pour la technique : jamais un record
     if (r.date > todayISO) continue;
     if (!byName.has(r.exerciseName)) byName.set(r.exerciseName, { before: 0, recent: 0 });
     const b = byName.get(r.exerciseName)!;

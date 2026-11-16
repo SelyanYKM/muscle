@@ -110,6 +110,7 @@ function exerciseToConfigured(ex: Exercise): ConfiguredExercise {
     lastSessionDate: null,
     lastDecisionReason: null,
     isCalibrating: true,
+    techniqueLock: null,
   };
 }
 
@@ -197,6 +198,11 @@ export async function initDatabase(): Promise<void> {
       ['last_session_date', 'last_session_date TEXT'],
       ['last_decision_reason', 'last_decision_reason TEXT'],
       ['is_calibrating', 'is_calibrating INTEGER DEFAULT 0'],
+      // Collier de technique : charge/reps gelées au moment où il est posé, et depuis quand.
+      // NULL = pas de collier (comportement "force" actuel).
+      ['technique_weight', 'technique_weight REAL'],
+      ['technique_reps', 'technique_reps INTEGER'],
+      ['technique_since', 'technique_since TEXT'],
     ]);
 
     db.execSync(`
@@ -219,9 +225,12 @@ export async function initDatabase(): Promise<void> {
     // "marked_easy" : la coche "Dernière série facile" cochée pour CETTE série précise (pas une
     // marge de reps déduite après coup) — permet de distinguer dans l'historique une série
     // "Réussi" ordinaire d'une série explicitement marquée "Facile".
+    // "technique" : collier de technique posé pour CETTE série précise (charge gelée, hors
+    // progression) — même principe que "marked_easy".
     ensureColumns(db, 'workout_logs', [
       ['mode', 'mode TEXT'],
       ['marked_easy', 'marked_easy INTEGER DEFAULT 0'],
+      ['technique', 'technique INTEGER DEFAULT 0'],
     ]);
 
     db.execSync(`
@@ -729,11 +738,15 @@ interface ExerciseRow {
   last_session_date: string | null;
   last_decision_reason: string | null;
   is_calibrating: number | null;
+  technique_weight: number | null;
+  technique_reps: number | null;
+  technique_since: string | null;
 }
 
 const EXERCISE_JOIN_SELECT = `
   SELECT e.*, p.consecutive_failures, p.current_weight, p.current_target_reps,
-         p.sessions_without_success, p.last_session_date, p.last_decision_reason, p.is_calibrating
+         p.sessions_without_success, p.last_session_date, p.last_decision_reason, p.is_calibrating,
+         p.technique_weight, p.technique_reps, p.technique_since
   FROM exercises e
   LEFT JOIN exercise_progression_state p ON e.id = p.exercise_id
 `;
@@ -759,6 +772,10 @@ function rowToConfiguredExercise(r: ExerciseRow): ConfiguredExercise {
     lastSessionDate: r.last_session_date,
     lastDecisionReason: r.last_decision_reason,
     isCalibrating: !!r.is_calibrating,
+    techniqueLock:
+      r.technique_since != null
+        ? { weight: r.technique_weight ?? r.current_weight ?? r.default_starting_weight, reps: r.technique_reps ?? r.current_target_reps ?? r.default_target_reps, since: r.technique_since }
+        : null,
   };
 }
 
@@ -781,7 +798,7 @@ export function getExercisesForWorkout(workoutId: number): ConfiguredExercise[] 
 
 export interface LastExercisePerformance {
   date: string;
-  sets: { setNumber: number; weight: number; repsDone: number; feeling: 'EASY' | 'MEDIUM' | 'HARD' }[];
+  sets: { setNumber: number; weight: number; repsDone: number; feeling: 'EASY' | 'MEDIUM' | 'HARD'; technique?: boolean }[];
 }
 
 /**
@@ -799,7 +816,7 @@ export function getLastExercisePerformance(exerciseId: number, exerciseName: str
     const sets = logs
       .filter((l) => l.date === lastDate)
       .sort((a, b) => a.setNumber - b.setNumber)
-      .map((l) => ({ setNumber: l.setNumber, weight: l.weight, repsDone: l.repsDone, feeling: l.feeling }));
+      .map((l) => ({ setNumber: l.setNumber, weight: l.weight, repsDone: l.repsDone, feeling: l.feeling, technique: !!l.technique }));
     return { date: lastDate, sets };
   }
 
@@ -812,6 +829,7 @@ export function getLastExercisePerformance(exerciseId: number, exerciseName: str
       weight: number;
       reps_done: number;
       feeling: 'EASY' | 'MEDIUM' | 'HARD';
+      technique: number | null;
     }>(LINK_SQL.sessionSets, [exerciseId, exerciseName, lastDateRow.date]);
 
     return {
@@ -821,6 +839,7 @@ export function getLastExercisePerformance(exerciseId: number, exerciseName: str
         weight: r.weight,
         repsDone: r.reps_done,
         feeling: r.feeling,
+        technique: !!r.technique,
       })),
     };
   } catch (error) {
@@ -902,6 +921,7 @@ export function addCustomExercise(
     lastSessionDate: null,
     lastDecisionReason: null,
     isCalibrating: true,
+    techniqueLock: null,
   };
 
   if (!db || Platform.OS === 'web') {
@@ -971,8 +991,8 @@ export function saveWorkoutLogs(logs: WorkoutLogEntry[]): void {
     for (const log of logs) {
       db.runSync(
         `INSERT INTO workout_logs
-        (workout_id, exercise_id, exercise_name, date, set_number, weight, reps_target, reps_done, feeling, mode, marked_easy)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        (workout_id, exercise_id, exercise_name, date, set_number, weight, reps_target, reps_done, feeling, mode, marked_easy, technique)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
         [
           log.workoutId,
           log.exerciseId,
@@ -985,6 +1005,7 @@ export function saveWorkoutLogs(logs: WorkoutLogEntry[]): void {
           log.feeling,
           log.mode || null,
           log.markedEasy ? 1 : 0,
+          log.technique ? 1 : 0,
         ]
       );
     }
@@ -1177,6 +1198,50 @@ export function saveExerciseProgressionState(exerciseId: number, state: Exercise
   }
 }
 
+/**
+ * Pose le collier de technique sur un exercice : gèle la charge/reps affichées à cet instant,
+ * jusqu'au retrait (clearTechniqueLock). N'a aucun effet sur l'état de progression lui-même
+ * (charge, objectif, compteurs) — ce sont deux colonnes indépendantes.
+ */
+export function setTechniqueLock(exerciseId: number, weight: number, reps: number, since: string): void {
+  if (!db || Platform.OS === 'web') {
+    const ex = memoryExercises.find((e) => e.id === exerciseId);
+    if (ex) ex.techniqueLock = { weight, reps, since };
+    return;
+  }
+
+  try {
+    db.runSync(
+      `UPDATE exercise_progression_state
+       SET technique_weight = ?, technique_reps = ?, technique_since = ?
+       WHERE exercise_id = ?;`,
+      [weight, reps, since, exerciseId]
+    );
+  } catch (error) {
+    console.error('Erreur setTechniqueLock:', error);
+  }
+}
+
+/** Retire le collier de technique : la progression reprend normalement dès la prochaine séance. */
+export function clearTechniqueLock(exerciseId: number): void {
+  if (!db || Platform.OS === 'web') {
+    const ex = memoryExercises.find((e) => e.id === exerciseId);
+    if (ex) ex.techniqueLock = null;
+    return;
+  }
+
+  try {
+    db.runSync(
+      `UPDATE exercise_progression_state
+       SET technique_weight = NULL, technique_reps = NULL, technique_since = NULL
+       WHERE exercise_id = ?;`,
+      [exerciseId]
+    );
+  } catch (error) {
+    console.error('Erreur clearTechniqueLock:', error);
+  }
+}
+
 export function getRecentLogs(limit: number = 200): WorkoutLogEntry[] {
   if (!db || Platform.OS === 'web') {
     return [...memoryLogs].reverse().slice(0, limit);
@@ -1196,6 +1261,7 @@ export function getRecentLogs(limit: number = 200): WorkoutLogEntry[] {
       feeling: 'EASY' | 'MEDIUM' | 'HARD';
       mode: 'GUIDED' | 'FREE' | null;
       marked_easy: number | null;
+      technique: number | null;
     }>(
       `SELECT * FROM workout_logs ORDER BY id DESC LIMIT ?;`,
       [limit]
@@ -1214,6 +1280,7 @@ export function getRecentLogs(limit: number = 200): WorkoutLogEntry[] {
       feeling: r.feeling,
       mode: r.mode,
       markedEasy: !!r.marked_easy,
+      technique: !!r.technique,
     }));
   } catch (error) {
     console.error('Erreur getRecentLogs:', error);
@@ -1234,6 +1301,7 @@ type WorkoutLogRow = {
   feeling: 'EASY' | 'MEDIUM' | 'HARD';
   mode: 'GUIDED' | 'FREE' | null;
   marked_easy: number | null;
+  technique: number | null;
 };
 
 function mapWorkoutLogRow(r: WorkoutLogRow): WorkoutLogEntry {
@@ -1250,6 +1318,7 @@ function mapWorkoutLogRow(r: WorkoutLogRow): WorkoutLogEntry {
     feeling: r.feeling,
     mode: r.mode,
     markedEasy: !!r.marked_easy,
+    technique: !!r.technique,
   };
 }
 
@@ -1399,6 +1468,10 @@ export function insertExerciseLogsForSession(
     repsDone: number;
     feeling: 'EASY' | 'MEDIUM' | 'HARD';
     markedEasy?: boolean;
+    // Portés par série, comme en base : perdus par le passé (bug corrigé en même temps que
+    // l'ajout du collier de technique, qui suit le même principe).
+    mode?: 'GUIDED' | 'FREE' | null;
+    technique?: boolean;
   }[]
 ): void {
   if (!db || Platform.OS === 'web') {
@@ -1415,6 +1488,8 @@ export function insertExerciseLogsForSession(
         repsDone: s.repsDone,
         feeling: s.feeling,
         markedEasy: !!s.markedEasy,
+        mode: s.mode,
+        technique: !!s.technique,
       });
     }
     return;
@@ -1425,9 +1500,9 @@ export function insertExerciseLogsForSession(
     for (const s of sets) {
       db.runSync(
         `INSERT INTO workout_logs
-        (workout_id, exercise_id, exercise_name, date, set_number, weight, reps_target, reps_done, feeling, marked_easy)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-        [workoutId, link.exerciseId, link.exerciseName, date, s.setNumber, s.weight, s.repsTarget, s.repsDone, s.feeling, s.markedEasy ? 1 : 0]
+        (workout_id, exercise_id, exercise_name, date, set_number, weight, reps_target, reps_done, feeling, mode, marked_easy, technique)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        [workoutId, link.exerciseId, link.exerciseName, date, s.setNumber, s.weight, s.repsTarget, s.repsDone, s.feeling, s.mode || null, s.markedEasy ? 1 : 0, s.technique ? 1 : 0]
       );
     }
   } catch (error) {
@@ -1651,7 +1726,7 @@ function buildVolumeByMuscleGroup(
 }
 
 export function getDashboardSummary(weeksCount: number = 8): DashboardSummary {
-  let fullRows: { date: string; workoutId: number; exerciseId: number; exerciseName: string; muscleGroup: string | null; weight: number; repsDone: number }[];
+  let fullRows: { date: string; workoutId: number; exerciseId: number; exerciseName: string; muscleGroup: string | null; weight: number; repsDone: number; technique: boolean }[];
 
   // Groupe musculaire retrouvé par le NOM de l'exercice et pas par son id : d'anciens catalogues
   // ont réattribué des ids (un leg curl d'avant porte l'id de l'extension triceps d'aujourd'hui),
@@ -1666,6 +1741,7 @@ export function getDashboardSummary(weeksCount: number = 8): DashboardSummary {
       muscleGroup: groupByName.get(exerciseKey(l.exerciseName)) ?? null,
       weight: l.weight,
       repsDone: l.repsDone,
+      technique: !!l.technique,
     }));
   } else {
     try {
@@ -1682,7 +1758,8 @@ export function getDashboardSummary(weeksCount: number = 8): DashboardSummary {
           exercise_name: string;
           weight: number;
           reps_done: number;
-        }>('SELECT date, workout_id, exercise_id, exercise_name, weight, reps_done FROM workout_logs;')
+          technique: number | null;
+        }>('SELECT date, workout_id, exercise_id, exercise_name, weight, reps_done, technique FROM workout_logs;')
         .map((r) => ({
           date: r.date,
           workoutId: r.workout_id,
@@ -1691,6 +1768,7 @@ export function getDashboardSummary(weeksCount: number = 8): DashboardSummary {
           muscleGroup: groupByName.get(exerciseKey(r.exercise_name)) ?? null,
           weight: r.weight,
           repsDone: r.reps_done,
+          technique: !!r.technique,
         }));
     } catch (error) {
       console.error('Erreur getDashboardSummary:', error);

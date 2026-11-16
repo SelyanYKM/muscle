@@ -50,6 +50,9 @@ export interface ConfiguredExercise {
   lastSessionDate: string | null;
   lastDecisionReason: string | null;
   isCalibrating: boolean;
+  // Collier de technique posé sur cet exercice : charge/reps gelées depuis `since`. null = pas de
+  // collier (comportement "force" actuel).
+  techniqueLock: { weight: number; reps: number; since: string } | null;
 }
 
 export interface Workout {
@@ -68,6 +71,9 @@ export interface SetResult {
    * déduit après coup d'une marge de reps, contrairement au statut "Réussie facile" du bilan
    * de fin de séance (qui combine cette coche et une marge automatique). */
   markedEasy?: boolean;
+  /** Collier de technique posé au moment de valider CETTE série précise : charge gelée, hors
+   * progression. Absent/false = série "force", comportement actuel. */
+  technique?: boolean;
 }
 
 export type SessionMode = 'GUIDED' | 'FREE';
@@ -88,6 +94,9 @@ export interface WorkoutLogEntry {
   /** Coche "Dernière série facile" cochée pour CETTE série précise. Absent (false) sur les
    * séances enregistrées avant son ajout. */
   markedEasy?: boolean;
+  /** Collier de technique posé pour CETTE série précise. Absent (false) sur les séances
+   * enregistrées avant son ajout. */
+  technique?: boolean;
 }
 
 export interface PlateInfo {
@@ -116,6 +125,7 @@ export type SessionStatus =
   | 'CALIBRATION' // Première séance sur cet exercice : charge et objectif estimés d'après les reps faites
   | 'INCOMPLETE' // Moins de séries que l'objectif : séance non exploitable
   | 'SKIPPED' // Aucune série enregistrée : rien ne change
+  | 'TECHNIQUE' // Collier posé sur toute la séance : ni réussite ni échec, seule la date avance
   | 'RESUMED_AFTER_BREAK'; // Plus émis depuis la v3 : la reprise est portée par Prescription.resumedAfterBreak
 
 // Réglages par exercice (catalogue). minIncrement/baseWeight existent déjà sur Exercise ;
@@ -146,6 +156,7 @@ export interface LoggedSet {
   weight: number;
   reps: number;
   isWarmup?: boolean; // les échauffements ne sont pas logués aujourd'hui ; prévu pour le jour où ils le seront
+  technique?: boolean; // collier posé pour cette série : exclue de la progression (voir isPerformed)
 }
 
 // Une séance sur un exercice : TOUTES les séries loguées, dans l'ordre. Le moteur choisit

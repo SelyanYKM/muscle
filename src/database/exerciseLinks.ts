@@ -94,20 +94,22 @@ export interface HistoryLogRow {
   weight: number;
   reps_done: number;
   marked_easy: number | null;
+  technique: number | null;
 }
 
 export interface GroupedSession {
   date: string;
-  sets: { weight: number; reps: number }[];
+  sets: { weight: number; reps: number; technique?: boolean }[];
   easy: boolean;
 }
 
-/** Regroupe les séries d'un exercice par date de séance, dans l'ordre chronologique. */
+/** Regroupe les séries d'un exercice par date de séance, dans l'ordre chronologique. Le collier
+ * de technique est porté par série (une séance peut commencer en force et finir gelée). */
 export function groupSessionsByDate(rows: readonly HistoryLogRow[]): GroupedSession[] {
   const byDate = new Map<string, GroupedSession>();
   for (const r of rows) {
     const session = byDate.get(r.date) ?? { date: r.date, sets: [], easy: false };
-    session.sets.push({ weight: r.weight, reps: r.reps_done });
+    session.sets.push({ weight: r.weight, reps: r.reps_done, technique: !!r.technique });
     session.easy = session.easy || !!r.marked_easy;
     byDate.set(r.date, session);
   }
@@ -122,13 +124,13 @@ export const LINK_SQL = {
   allLogLinks: 'SELECT id, exercise_id, exercise_name FROM workout_logs;',
   relinkLog: 'UPDATE workout_logs SET exercise_id = ?, exercise_name = ? WHERE id = ?;',
   trainingDates: 'SELECT DISTINCT date FROM workout_logs ORDER BY date ASC;',
-  exerciseHistory: `SELECT date, weight, reps_done, marked_easy FROM workout_logs
+  exerciseHistory: `SELECT date, weight, reps_done, marked_easy, technique FROM workout_logs
     WHERE exercise_id = ? AND exercise_name = ?
     ORDER BY date ASC, set_number ASC, id ASC;`,
   lastSessionDate: `SELECT date FROM workout_logs
     WHERE exercise_id = ? AND exercise_name = ?
     ORDER BY date DESC, id DESC LIMIT 1;`,
-  sessionSets: `SELECT set_number, weight, reps_done, feeling FROM workout_logs
+  sessionSets: `SELECT set_number, weight, reps_done, feeling, technique FROM workout_logs
     WHERE exercise_id = ? AND exercise_name = ? AND date = ?
     ORDER BY set_number ASC, id ASC;`,
 } as const;

@@ -170,3 +170,33 @@ test('recordsWithRecent : gain sur l’ancien record, exercices neufs exclus du 
     { exerciseName: 'Bench', maxWeight: 80, delta: null },
   ]);
 });
+
+// --- Mode « séance technique » : exclu des tendances et des records, gardé dans le volume ---
+
+test('exerciseProgression : une montée en série technique n’est pas un progrès', () => {
+  const rows = [
+    L('2026-10-06', 10, 50, 8, 'Presse'),
+    { ...L('2026-10-27', 10, 55, 8, 'Presse'), technique: true },
+  ];
+  const { items } = exerciseProgression(rows, TODAY);
+  assert.equal(items.find((i) => i.exerciseName === 'Presse'), undefined);
+});
+
+test('recordsWithRecent : une série technique plus lourde n’est jamais un record', () => {
+  const rows = [
+    L('2026-09-01', 11, 100, 5, 'Développé'),
+    { ...L('2026-10-20', 11, 120, 5, 'Développé'), technique: true },
+  ];
+  const { records, beaten } = recordsWithRecent(rows, TODAY);
+  assert.deepEqual(records.find((r) => r.exerciseName === 'Développé'), { exerciseName: 'Développé', maxWeight: 100, delta: null });
+  assert.equal(beaten, 0);
+});
+
+test('volumeTrendPercent : les séries techniques comptent dans le volume', () => {
+  const rows = [
+    L('2026-09-15', 12, 50, 10), // fenêtre précédente : 500 kg
+    L('2026-10-20', 12, 50, 10), // fenêtre récente : 500 kg
+    { ...L('2026-10-25', 12, 50, 10), technique: true }, // + 500 kg techniques : si exclus, 0 % au lieu de 100 %
+  ];
+  assert.equal(volumeTrendPercent(rows, TODAY), 100);
+});

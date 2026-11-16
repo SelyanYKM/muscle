@@ -401,3 +401,63 @@ test('mode CHARGE inchangé : dernière série plus lourde un peu ratée = tenta
   assert.equal(d.status, 'INCOMPLETE');
   assert.equal(d.nextWeight, 50);
 });
+
+// --- Mode « séance technique » (collier posé) ---
+
+const touch = (weight, r) => ({ weight, reps: r, technique: true });
+
+test('séance 100 % technique : état inchangé, seule la date avance', () => {
+  const before = state();
+  const d = run(settings(), before, [touch(20, 1), touch(20, 1), touch(20, 1)]);
+  assert.equal(d.status, 'TECHNIQUE');
+  assert.equal(d.nextWeight, before.currentWeight);
+  assert.equal(d.nextTargetReps, before.currentTargetReps);
+  assert.deepEqual(d.newState, { ...before, lastSessionDate: '2026-10-23' });
+});
+
+test('collier posé en cours d’exercice : seules les séries d’avant comptent', () => {
+  const d = run(settings(), state(), [...sets([50, 8], [50, 8], [50, 8]), touch(20, 1)]);
+  assert.equal(d.status, 'SUCCESS');
+  assert.equal(d.nextWeight, 52.5);
+});
+
+test('calibration : une séance 100 % technique ne calibre pas, reste en calibration', () => {
+  const d = run(settings(), state({ isCalibrating: true, lastSessionDate: null }), [touch(50, 1), touch(50, 1), touch(50, 1)]);
+  assert.equal(d.status, 'TECHNIQUE');
+  assert.equal(d.newState.isCalibrating, true);
+});
+
+test('rejeu : une séance technique entre deux vraies ne change rien (14 j de part et d’autre, pas de reprise ni avec ni sans)', () => {
+  const base = state({ isCalibrating: true, lastSessionDate: null, currentWeight: 40, currentTargetReps: 8 });
+  const withTechnique = replayHistory(settings(), base, [
+    { date: '2026-10-01', sets: x(3, 50, 8) },
+    { date: '2026-10-08', sets: [touch(20, 1), touch(20, 1), touch(20, 1)] },
+    { date: '2026-10-15', sets: x(3, 50, 8) },
+  ]);
+  const withoutTechnique = replayHistory(settings(), base, [
+    { date: '2026-10-01', sets: x(3, 50, 8) },
+    { date: '2026-10-15', sets: x(3, 50, 8) },
+  ]);
+  assert.equal(withTechnique.lastSessionDate, '2026-10-15');
+  assert.deepEqual({ ...withTechnique, lastSessionDate: null }, { ...withoutTechnique, lastSessionDate: null });
+});
+
+test('rejeu : des séances techniques comblent une longue pause, la réduction de reprise ne se déclenche pas', () => {
+  const base = state({ isCalibrating: true, lastSessionDate: null, currentWeight: 40, currentTargetReps: 8 });
+  // Sans technique : 31 j entre les deux vraies séances → réduction de reprise (−20 %, level 2).
+  const withoutBridge = replayHistory(settings(), base, [
+    { date: '2026-10-01', sets: x(3, 50, 8) },
+    { date: '2026-11-01', sets: x(3, 40, 8) }, // charge réduite tenue (40 = 50 × 0,8)
+  ]);
+  assert.equal(withoutBridge.currentWeight, 42.5); // réussie à charge réduite : +1 palier
+
+  // Avec des séances techniques qui comblent la pause : la dernière (10-31) n'est qu'à 1 jour de
+  // la vraie séance du 11-01, donc aucune réduction — la séance à 50 kg est classée normalement.
+  const withBridge = replayHistory(settings(), base, [
+    { date: '2026-10-01', sets: x(3, 50, 8) },
+    { date: '2026-10-16', sets: [touch(20, 1), touch(20, 1), touch(20, 1)] },
+    { date: '2026-10-31', sets: [touch(20, 1), touch(20, 1), touch(20, 1)] },
+    { date: '2026-11-01', sets: x(3, 50, 8) },
+  ]);
+  assert.equal(withBridge.currentWeight, 52.5); // réussie à pleine charge : +1 palier, pas de reprise
+});

@@ -20,11 +20,13 @@ import { Dot } from '../components/Dot';
 import { FeelingMark } from '../components/FeelingMark';
 import { Icon } from '../components/Icon';
 import { BuffRequin, preloadBuffRequinAssets } from '../components/BuffRequin';
+import { CollarRail } from '../components/CollarRail';
 import { PlateBreakdown, plateBreakdownA11yLabel } from '../components/PlateBreakdown';
 import { RestNext, RestNextAction, RestTimerOverlay } from '../components/RestTimerOverlay';
 import { FEELING_BG, FEELING_INK } from '../constants/feeling';
 import {
   addCustomExercise,
+  clearTechniqueLock,
   deleteExercise,
   formatLocalDate,
   getAllCatalogExercises,
@@ -33,6 +35,7 @@ import {
   LastExercisePerformance,
   saveExerciseProgressionState,
   saveWorkoutLogs,
+  setTechniqueLock,
 } from '../database/db';
 import {
   prescriptionFor,
@@ -148,6 +151,18 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   // Case "facile" (2+ reps en réserve), affichée uniquement sur la dernière série d'un
   // exercice : par exercice, pour survivre à un "Changer d'exercice" en cours de séance.
   const [easyByExerciseId, setEasyByExerciseId] = useState<Record<number, boolean>>({});
+
+  // Collier de technique : sorti (visible) pendant CETTE visite de l'exercice, même pas encore
+  // posé. Se range (repasse à false) dès qu'on change d'exercice — règle de visibilité du
+  // collier. Le collier déjà posé (currentExercise.techniqueLock) reste toujours visible, lui.
+  const [collarRevealed, setCollarRevealed] = useState<boolean>(false);
+  // Anneau lavande qui se remplit pendant l'appui long (~800 ms) sur la charge, déclencheur
+  // caché du collier (même esprit que le requin).
+  const pressRingProgress = useRef(new Animated.Value(0)).current;
+
+  // Toast du collier, distinct du toast "séance vide" (textes et déclencheurs différents).
+  const [collarToast, setCollarToast] = useState<string | null>(null);
+  const collarToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Minuteur de repos
   const [isResting, setIsResting] = useState<boolean>(false);
@@ -275,10 +290,16 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     const list = getAllCatalogExercises(workoutId);
     setCatalogExercises(list);
     if (list.length > 0 && !currentExercise) {
-      const first = prescribedFor(list[0]);
-      setCurrentExercise(list[0]);
-      setCurrentWeight(first.weight);
-      setCurrentReps(first.targetReps);
+      const firstEx = list[0];
+      setCurrentExercise(firstEx);
+      if (firstEx.techniqueLock) {
+        setCurrentWeight(firstEx.techniqueLock.weight);
+        setCurrentReps(firstEx.techniqueLock.reps);
+      } else {
+        const first = prescribedFor(firstEx);
+        setCurrentWeight(first.weight);
+        setCurrentReps(first.targetReps);
+      }
     }
 
     const perfMap: Record<number, LastExercisePerformance | null> = {};
@@ -291,6 +312,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   useEffect(() => {
     return () => {
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+      if (collarToastTimeoutRef.current) clearTimeout(collarToastTimeoutRef.current);
     };
   }, []);
 
@@ -312,6 +334,9 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   // charge/reps par défaut du catalogue — utilisé à la fois par la sélection manuelle
   // ("Changer d'exercice") et par le passage automatique après la dernière série.
   const resolveStartingWeightReps = (ex: ConfiguredExercise): { weight: number; reps: number } => {
+    // Exercice gelé : les steppers prennent la charge/reps mémorisées au moment où le collier a
+    // été posé, jamais la prescription du moteur ni la dernière série de cette séance.
+    if (ex.techniqueLock) return { weight: ex.techniqueLock.weight, reps: ex.techniqueLock.reps };
     const existing = completedExercises.find((c) => c.exerciseId === ex.id);
     if (existing && existing.sets.length > 0) {
       const lastSet = existing.sets[existing.sets.length - 1];
@@ -323,6 +348,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
   const applyExercise = (ex: ConfiguredExercise) => {
     setCurrentExercise(ex);
+    setCollarRevealed(false);
     const { weight, reps } = resolveStartingWeightReps(ex);
     setCurrentWeight(weight);
     setCurrentReps(reps);
@@ -434,6 +460,55 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     setCurrentReps((prev) => Math.max(1, prev + delta));
   };
 
+  const showCollarToast = (message: string) => {
+    setCollarToast(message);
+    if (collarToastTimeoutRef.current) clearTimeout(collarToastTimeoutRef.current);
+    collarToastTimeoutRef.current = setTimeout(() => setCollarToast(null), 2500);
+  };
+
+  // Déclenchement caché du collier (même esprit que le requin) : appui long (~800 ms) sur la
+  // valeur de la charge. L'anneau se remplit pendant l'appui ; au bout, le rail apparaît.
+  const handleChargePressIn = () => {
+    if (!currentExercise || currentExercise.techniqueLock) return; // déjà posé : rien à révéler
+    Animated.timing(pressRingProgress, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (!finished) return;
+      triggerMediumHaptic();
+      setCollarRevealed(true);
+      showCollarToast('Collier sorti · glisse-le contre les disques');
+    });
+  };
+
+  const handleChargePressOut = () => {
+    pressRingProgress.stopAnimation((value) => {
+      if (value >= 1) return; // appui allé au bout : l'anneau reste pour marquer l'état sorti
+      Animated.timing(pressRingProgress, { toValue: 0, duration: 150, useNativeDriver: false }).start();
+    });
+  };
+
+  // Pose ou retire le collier : gèle (ou libère) la charge/reps affichées à cet instant. Le
+  // retrait remet la progression en jeu dès la prochaine séance (toast dédié) ; la pose n'a pas
+  // besoin du sien, déjà annoncée par le toast "Collier sorti" de l'appui long.
+  const handleToggleTechniqueLock = (posed: boolean) => {
+    if (!currentExercise) return;
+    const exerciseId = currentExercise.id;
+    if (posed) {
+      const since = formatLocalDate(new Date());
+      setTechniqueLock(exerciseId, currentWeight, currentReps, since);
+      const lock = { weight: currentWeight, reps: currentReps, since };
+      setCurrentExercise((prev) => (prev && prev.id === exerciseId ? { ...prev, techniqueLock: lock } : prev));
+      setCatalogExercises((prev) => prev.map((e) => (e.id === exerciseId ? { ...e, techniqueLock: lock } : e)));
+    } else {
+      clearTechniqueLock(exerciseId);
+      setCurrentExercise((prev) => (prev && prev.id === exerciseId ? { ...prev, techniqueLock: null } : prev));
+      setCatalogExercises((prev) => prev.map((e) => (e.id === exerciseId ? { ...e, techniqueLock: null } : e)));
+      showCollarToast('Collier retiré · la progression reprend');
+    }
+  };
+
   // Props communes aux 4 boutons − / + : tap = un pas, maintenir = répétition accélérée
   // (une vibration au déclenchement, pas une par pas).
   const stepperPressProps = (step: (withHaptic: boolean) => void) => ({
@@ -458,16 +533,20 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   const handleCompleteSet = () => {
     if (!currentExercise) return;
 
+    const locked = !!currentExercise.techniqueLock;
     const objective = currentExercise.currentTargetReps;
     const metObjective = currentReps >= objective;
     const feeling: Feeling = metObjective ? 'EASY' : 'HARD';
-    if (metObjective) triggerLightHaptic();
+    // Collier posé : ni réussite ni échec, jamais le retour haptique d'échec (on choisit le
+    // nombre de reps pour travailler le geste, pas pour atteindre l'objectif).
+    if (locked || metObjective) triggerLightHaptic();
     else triggerWarningHaptic();
 
     const setNumber = getCurrentSetNumber();
     // Coche "Dernière série facile" : affichée (et cochable) uniquement sur la toute dernière
-    // série de l'exercice, donc n'a de sens à capturer qu'à ce moment précis.
-    const markedEasy = setNumber === currentExercise.numSets && !!easyByExerciseId[currentExercise.id];
+    // série de l'exercice, donc n'a de sens à capturer qu'à ce moment précis. Masquée (et donc
+    // sans effet) quand le collier est posé.
+    const markedEasy = !locked && setNumber === currentExercise.numSets && !!easyByExerciseId[currentExercise.id];
     const newSet: SetResult = {
       setNumber,
       targetReps: objective,
@@ -475,6 +554,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       weight: currentWeight,
       feeling,
       markedEasy,
+      technique: locked,
     };
 
     setCompletedExercises((prev) => {
@@ -602,6 +682,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           feeling: s.feeling,
           mode: 'FREE',
           markedEasy: s.markedEasy,
+          technique: s.technique,
         });
       }
 
@@ -617,10 +698,10 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         progressionSettingsOf(catalogEx),
         progressionStateOf(catalogEx),
         {
-          sets: exLog.sets.map((s) => ({ weight: s.weight, reps: s.repsDone })),
+          sets: exLog.sets.map((s) => ({ weight: s.weight, reps: s.repsDone, technique: s.technique })),
           easy: easyByExerciseId[exLog.exerciseId] || false,
           // Dernière séance connue avant celle-ci (chargée à l'ouverture de l'écran).
-          previousSets: lastPerfByExerciseId[exLog.exerciseId]?.sets.map((s) => ({ weight: s.weight, reps: s.repsDone })),
+          previousSets: lastPerfByExerciseId[exLog.exerciseId]?.sets.map((s) => ({ weight: s.weight, reps: s.repsDone, technique: s.technique })),
         },
         today,
         previousWorkoutDate
@@ -682,16 +763,25 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 <Text style={[styles.catalogIndexText, isSelected && styles.catalogIndexTextActive]}>{idx + 1}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.catalogItemName}>{catEx.name}</Text>
+                <View style={styles.catalogNameRow}>
+                  {!!catEx.techniqueLock && <Icon name="lock" size={12} color={THEME.technique.accentStrong} />}
+                  <Text style={styles.catalogItemName}>{catEx.name}</Text>
+                </View>
                 <Text style={styles.catalogItemSub}>
-                  {CATEGORY_SUB_LABEL[catEx.category]} · conseillé {fmtKg(prescribedFor(catEx).weight)} kg
+                  {catEx.techniqueLock
+                    ? `Technique · charge gelée à ${fmtKg(catEx.techniqueLock.weight)} kg`
+                    : `${CATEGORY_SUB_LABEL[catEx.category]} · conseillé ${fmtKg(prescribedFor(catEx).weight)} kg`}
                 </Text>
               </View>
               {doneSets.length > 0 && (
                 <View style={styles.catalogDoneDots}>
-                  {doneSets.map((s, sIdx) => (
-                    <FeelingMark key={sIdx} feeling={s.feeling} />
-                  ))}
+                  {doneSets.map((s, sIdx) =>
+                    s.technique ? (
+                      <Icon key={sIdx} name="target" size={10} color={THEME.technique.pastilleText} />
+                    ) : (
+                      <FeelingMark key={sIdx} feeling={s.feeling} />
+                    )
+                  )}
                 </View>
               )}
             </TouchableOpacity>
@@ -769,7 +859,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       },
     };
 
-    if (!restPlan) return { label: 'PROCHAINE SÉRIE', title: currentExercise.name, set: extraSet };
+    if (!restPlan) return { label: 'PROCHAINE SÉRIE', title: currentExercise.name, set: extraSet, nextFrozen: !!currentExercise.techniqueLock };
     if (restPlan.kind === 'next') {
       const { weight, reps } = resolveStartingWeightReps(restPlan.exercise);
       return {
@@ -778,6 +868,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         title: restPlan.exercise.name,
         set: { number: setsDoneFor(restPlan.exercise.id) + 1, weight, reps },
         actions: [otherAction, extraAction],
+        nextFrozen: !!restPlan.exercise.techniqueLock,
       };
     }
     if (restPlan.kind === 'extra') {
@@ -786,6 +877,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         label: 'PROCHAINE SÉRIE',
         title: currentExercise.name,
         set: extraSet,
+        nextFrozen: !!currentExercise.techniqueLock,
         actions: [
           otherAction,
           suggested
@@ -811,6 +903,16 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   // dernière décision du moteur.
   const currentReason = currentExercise ? prescribedFor(currentExercise).reason : null;
   const currentLastPerf = currentExercise ? lastPerfByExerciseId[currentExercise.id] : null;
+  // Collier posé : remplace la raison du moteur par le rappel de la charge gelée — formulation
+  // différente la 1re fois (juste posé) et aux séances suivantes (depuis telle date).
+  const frozenMessage = (() => {
+    const lock = currentExercise?.techniqueLock;
+    if (!lock) return null;
+    const justPosed = lock.since === formatLocalDate(new Date());
+    return justPosed
+      ? `Charge gelée à ${fmtKg(lock.weight)} kg × ${lock.reps}, ici et aux prochaines séances, jusqu'à ce que tu retires le collier.`
+      : `Charge gelée depuis le ${formatLastPerfDate(lock.since)} à ${fmtKg(lock.weight)} kg × ${lock.reps}.`;
+  })();
   const activeIndex = currentExercise ? catalogExercises.findIndex((e) => e.id === currentExercise.id) : -1;
   const warmupSets =
     currentExercise && currentExercise.category !== 'CABLE' && currentSetNum === 1
@@ -823,11 +925,18 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   }, 0);
   const liveSetCount = completedExercises.reduce((acc, e) => acc + e.sets.length, 0);
 
+  // Collier posé sur l'exercice en cours : tout l'écran passe en lavande (sauf les ressentis et
+  // la couleur de split, jamais recolorés) pour que le mode se voie avant même de lire un badge.
+  const techniqueActive = !!currentExercise?.techniqueLock;
+  const tech = THEME.technique;
+  // Visible si posé, ou sorti pendant cette visite de l'exercice (règle de visibilité du collier).
+  const collarRailVisible = !!currentExercise && (techniqueActive || collarRevealed);
+
   return (
     <View style={styles.root}>
       <BuffRequin active={isSharkActive}>
       <LinearGradient
-        colors={[split.tint, THEME.colors.bg]}
+        colors={techniqueActive ? [tech.bgGradientTop, tech.bg] : [split.tint, THEME.colors.bg]}
         locations={[0, 0.42]}
         start={{ x: 0.15, y: 0 }}
         end={{ x: 0.85, y: 1 }}
@@ -842,7 +951,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
               <Text style={[styles.headerBadgeText, { color: split.fg }]}>{workoutName.charAt(0)}</Text>
             </LinearGradient>
             <View style={styles.headerTitleCol}>
-              <Text style={styles.sessionTitle} numberOfLines={1} accessibilityRole="header">{workoutName}</Text>
+              <Text style={[styles.sessionTitle, techniqueActive && { color: tech.textPrimary }]} numberOfLines={1} accessibilityRole="header">{workoutName}</Text>
             </View>
           </View>
 
@@ -858,7 +967,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                   isBuffRemanent ? `. Buff requin actif encore ${durationA11y(buffSecondsLeft)}` : ''
                 }`}
               >
-                <Dot color={THEME.colors.accent} size={7} />
+                <Dot color={techniqueActive ? tech.chronoPoint : THEME.colors.accent} size={7} />
                 <Text style={styles.timerText}>{formatElapsedTime(elapsedSeconds)}</Text>
                 {isBuffRemanent && (
                   <View style={styles.buffBadge}>
@@ -893,8 +1002,18 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                     style={[
                       styles.progressSegment,
                       // Exercices faits en bleu atténué pour tous les splits (l'or de Push et le
-                      // bleu nuit de Legs se confondaient avec l'exercice en cours).
-                      { backgroundColor: isActive ? THEME.colors.textPrimary : isDone ? 'rgba(0, 41, 107, 0.42)' : 'rgba(0, 41, 107, 0.12)' },
+                      // bleu nuit de Legs se confondaient avec l'exercice en cours). L'exercice
+                      // actif passe en lavande quand son collier de technique est posé.
+                      {
+                        backgroundColor:
+                          isActive && techniqueActive
+                            ? tech.textPrimary
+                            : isActive
+                            ? THEME.colors.textPrimary
+                            : isDone
+                            ? 'rgba(0, 41, 107, 0.42)'
+                            : 'rgba(0, 41, 107, 0.12)',
+                      },
                     ]}
                   />
                 );
@@ -915,8 +1034,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 accessibilityRole="button"
                 accessibilityLabel="Changer d'exercice"
               >
-                <Text style={styles.changeExBtnText}>Changer d'exercice</Text>
-                <Icon name="chevron-down" size={15} color={THEME.colors.accentStrong} />
+                <Text style={[styles.changeExBtnText, techniqueActive && { color: tech.accentStrong }]}>Changer d'exercice</Text>
+                <Icon name="chevron-down" size={15} color={techniqueActive ? tech.accentStrong : THEME.colors.accentStrong} />
               </TouchableOpacity>
             </View>
           </View>
@@ -924,7 +1043,11 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
         {/* Carte héro : exercice actuel, dernière fois, charge/reps, disques */}
         <LinearGradient
-          colors={[THEME.colors.seriesCardFrom, THEME.colors.seriesCardMid, THEME.colors.seriesCardTo]}
+          colors={
+            techniqueActive
+              ? [tech.seriesCardFrom, tech.seriesCardMid, tech.seriesCardTo]
+              : [THEME.colors.seriesCardFrom, THEME.colors.seriesCardMid, THEME.colors.seriesCardTo]
+          }
           locations={[0, 0.6, 1]}
           start={{ x: 0.1, y: 0 }}
           end={{ x: 0.9, y: 1 }}
@@ -936,7 +1059,15 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 {currentExercise ? CATEGORY_LABEL[currentExercise.category] : 'HAMMER STRENGTH'}
               </Text>
             </View>
-            <Text style={styles.setCounterText}>Série {currentSetNum}</Text>
+            <View style={styles.techniqueBadgeRow}>
+              {techniqueActive && (
+                <View style={[styles.typeBadge, styles.techniqueBadge, { backgroundColor: tech.badgeBg }]}>
+                  <Icon name="target" size={11} color={tech.badgeText} />
+                  <Text style={[styles.typeBadgeText, { color: tech.badgeText }]}>TECHNIQUE</Text>
+                </View>
+              )}
+              <Text style={styles.setCounterText}>Série {currentSetNum}</Text>
+            </View>
           </View>
 
           <TouchableOpacity
@@ -946,12 +1077,19 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
             accessibilityLabel={`Exercice : ${currentExercise?.name || 'aucun'}, série ${currentSetNum}`}
             accessibilityHint="Ouvre la liste des exercices"
           >
-            <Text style={styles.currentExName} numberOfLines={2}>
+            <Text style={[styles.currentExName, techniqueActive && { color: tech.textOnDark }]} numberOfLines={2}>
               {currentExercise?.name || 'Sélectionner un exercice'}
             </Text>
           </TouchableOpacity>
 
-          {currentLastPerf && currentLastPerf.sets.length > 0 ? (
+          {techniqueActive ? (
+            <View style={styles.suggestionReasonRow}>
+              <View style={[styles.suggestionReasonIcon, { backgroundColor: 'rgba(255,255,255,0.14)' }]}>
+                <Icon name="lock" size={12} color={tech.textOnDark} strokeWidth={2.4} />
+              </View>
+              <Text style={[styles.suggestionReasonText, { color: tech.textOnDark }]}>{frozenMessage}</Text>
+            </View>
+          ) : currentLastPerf && currentLastPerf.sets.length > 0 ? (
             <View style={styles.lastPerfBlock}>
               <Text style={styles.lastPerfLabel}>DERNIÈRE FOIS · {formatLastPerfDate(currentLastPerf.date)}</Text>
               <View style={styles.lastPerfChipsRow}>
@@ -1040,15 +1178,20 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
           <View style={styles.stepperContainer}>
             <View style={styles.stepperFullRow}>
               <TouchableOpacity
-                style={styles.stepperBtnLg}
-                {...stepperPressProps((h) => adjustWeight(-2.5, h))}
-                activeOpacity={0.7}
+                style={[styles.stepperBtnLg, techniqueActive && styles.stepperBtnLgFrozen]}
+                {...(techniqueActive ? {} : stepperPressProps((h) => adjustWeight(-2.5, h)))}
+                activeOpacity={techniqueActive ? 1 : 0.7}
+                disabled={techniqueActive}
                 accessibilityRole="button"
                 accessibilityLabel="Retirer 2,5 kilos"
               >
-                <Text style={styles.stepperBtnLgText}>−2,5</Text>
+                {techniqueActive ? (
+                  <Icon name="lock" size={14} color={tech.textMuted} />
+                ) : (
+                  <Text style={styles.stepperBtnLgText}>−2,5</Text>
+                )}
               </TouchableOpacity>
-              <View
+              <Pressable
                 style={styles.stepperCenterCol}
                 accessible
                 accessibilityRole="adjustable"
@@ -1056,34 +1199,62 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 accessibilityValue={{ text: kgA11y(currentWeight) }}
                 accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
                 onAccessibilityAction={(e) => adjustWeight(e.nativeEvent.actionName === 'increment' ? 2.5 : -2.5)}
+                onPressIn={handleChargePressIn}
+                onPressOut={handleChargePressOut}
+                delayLongPress={800}
               >
-                <Text style={styles.stepperRowLabel}>CHARGE · KG</Text>
+                <Text style={[styles.stepperRowLabel, techniqueActive && { color: tech.textOnDark }]}>CHARGE · KG</Text>
                 <View style={styles.stepperValueBox}>
-                  <Text style={styles.stepperBigValue} numberOfLines={1} adjustsFontSizeToFit>
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[
+                      styles.pressRingOverlay,
+                      {
+                        opacity: pressRingProgress,
+                        borderColor: tech.pressRing,
+                        borderWidth: pressRingProgress.interpolate({ inputRange: [0, 1], outputRange: [0, 3] }),
+                      },
+                    ]}
+                  />
+                  <Text
+                    style={[styles.stepperBigValue, techniqueActive && { color: tech.textOnDark }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
                     {fmtKg(currentWeight)}
                   </Text>
                 </View>
-              </View>
+              </Pressable>
               <TouchableOpacity
-                style={styles.stepperBtnLg}
-                {...stepperPressProps((h) => adjustWeight(2.5, h))}
-                activeOpacity={0.7}
+                style={[styles.stepperBtnLg, techniqueActive && styles.stepperBtnLgFrozen]}
+                {...(techniqueActive ? {} : stepperPressProps((h) => adjustWeight(2.5, h)))}
+                activeOpacity={techniqueActive ? 1 : 0.7}
+                disabled={techniqueActive}
                 accessibilityRole="button"
                 accessibilityLabel="Ajouter 2,5 kilos"
               >
-                <Text style={styles.stepperBtnLgText}>+2,5</Text>
+                {techniqueActive ? (
+                  <Icon name="lock" size={14} color={tech.textMuted} />
+                ) : (
+                  <Text style={styles.stepperBtnLgText}>+2,5</Text>
+                )}
               </TouchableOpacity>
             </View>
 
             <View style={styles.stepperFullRow}>
               <TouchableOpacity
-                style={styles.stepperBtnLg}
-                {...stepperPressProps((h) => adjustReps(-1, h))}
-                activeOpacity={0.7}
+                style={[styles.stepperBtnLg, techniqueActive && styles.stepperBtnLgFrozen]}
+                {...(techniqueActive ? {} : stepperPressProps((h) => adjustReps(-1, h)))}
+                activeOpacity={techniqueActive ? 1 : 0.7}
+                disabled={techniqueActive}
                 accessibilityRole="button"
                 accessibilityLabel="Retirer une répétition"
               >
-                <Text style={styles.stepperBtnLgText}>−1</Text>
+                {techniqueActive ? (
+                  <Icon name="lock" size={14} color={tech.textMuted} />
+                ) : (
+                  <Text style={styles.stepperBtnLgText}>−1</Text>
+                )}
               </TouchableOpacity>
               <View
                 style={styles.stepperCenterCol}
@@ -1096,21 +1267,30 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
                 onAccessibilityAction={(e) => adjustReps(e.nativeEvent.actionName === 'increment' ? 1 : -1)}
               >
-                <Text style={styles.stepperRowLabel}>RÉPÉTITIONS</Text>
+                <Text style={[styles.stepperRowLabel, techniqueActive && { color: tech.textOnDark }]}>RÉPÉTITIONS</Text>
                 <View style={styles.stepperValueBox}>
-                  <Text style={styles.stepperBigValue} numberOfLines={1} adjustsFontSizeToFit>
+                  <Text
+                    style={[styles.stepperBigValue, techniqueActive && { color: tech.textOnDark }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
                     {currentReps}
                   </Text>
                 </View>
               </View>
               <TouchableOpacity
-                style={styles.stepperBtnLg}
-                {...stepperPressProps((h) => adjustReps(1, h))}
-                activeOpacity={0.7}
+                style={[styles.stepperBtnLg, techniqueActive && styles.stepperBtnLgFrozen]}
+                {...(techniqueActive ? {} : stepperPressProps((h) => adjustReps(1, h)))}
+                activeOpacity={techniqueActive ? 1 : 0.7}
+                disabled={techniqueActive}
                 accessibilityRole="button"
                 accessibilityLabel="Ajouter une répétition"
               >
-                <Text style={styles.stepperBtnLgText}>+1</Text>
+                {techniqueActive ? (
+                  <Icon name="lock" size={14} color={tech.textMuted} />
+                ) : (
+                  <Text style={styles.stepperBtnLgText}>+1</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -1121,6 +1301,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
               totalWeight={currentWeight}
               baseWeight={currentExercise.baseWeight}
               category={currentExercise.category}
+              techniqueCollar={techniqueActive}
             />
           )}
         </LinearGradient>
@@ -1146,12 +1327,19 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                     {cEx.sets.map((s, sIdx) => (
                       <View
                         key={sIdx}
-                        style={[styles.setChip, { backgroundColor: FEELING_BG[s.feeling] }]}
+                        style={[
+                          styles.setChip,
+                          { backgroundColor: s.technique ? tech.pastilleBg : FEELING_BG[s.feeling] },
+                        ]}
                         accessible
-                        accessibilityLabel={setA11yLabel(s.setNumber, s.repsDone, s.weight, s.feeling, s.markedEasy)}
+                        accessibilityLabel={
+                          s.technique
+                            ? `Série ${s.setNumber} : ${s.repsDone} reps à ${kgA11y(s.weight)}, technique, charge gelée`
+                            : setA11yLabel(s.setNumber, s.repsDone, s.weight, s.feeling, s.markedEasy)
+                        }
                       >
-                        <FeelingMark feeling={s.feeling} />
-                        <Text style={[styles.setChipText, { color: FEELING_INK[s.feeling] }]}>
+                        {s.technique ? <Icon name="target" size={10} color={tech.pastilleText} /> : <FeelingMark feeling={s.feeling} />}
+                        <Text style={[styles.setChipText, { color: s.technique ? tech.pastilleText : FEELING_INK[s.feeling] }]}>
                           S{s.setNumber} · {s.repsDone} × {fmtKg(s.weight)}kg
                         </Text>
                       </View>
@@ -1184,9 +1372,21 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
       {/* Barre fixe en bas d'écran : l'action principale reste visible quelle que soit la
           hauteur de la carte (échauffement, disques…). La case "Dernière série facile" y
-          monte aussi, puisqu'elle porte sur la série qu'on valide. */}
-      <View style={[styles.bottomBar, isLastSetOfExercise && styles.bottomBarWithToggle]}>
-        {isLastSetOfExercise && !!currentExercise && (
+          monte aussi, puisqu'elle porte sur la série qu'on valide ; masquée collier posé
+          (n'a pas de sens sur une série gelée). Le rail du collier y monte aussi dès qu'il a
+          été sorti ou qu'il est posé. */}
+      <View
+        style={[
+          styles.bottomBar,
+          techniqueActive && { backgroundColor: tech.bottomBar },
+          (collarRailVisible || (isLastSetOfExercise && !techniqueActive)) && styles.bottomBarWithToggle,
+        ]}
+      >
+        {collarRailVisible && !!currentExercise && (
+          <CollarRail posed={techniqueActive} onChange={handleToggleTechniqueLock} />
+        )}
+
+        {isLastSetOfExercise && !techniqueActive && !!currentExercise && (
           <TouchableOpacity
             style={styles.easyToggleRow}
             onPress={() => {
@@ -1206,14 +1406,15 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         )}
 
         <TouchableOpacity
-          style={styles.validateBtn}
+          style={[styles.validateBtn, techniqueActive && { backgroundColor: tech.validateBtnBg }]}
           onPress={handleCompleteSet}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel={`Valider la série ${currentSetNum}`}
+          accessibilityLabel={`Valider la série ${currentSetNum}${techniqueActive ? ', technique' : ''}`}
         >
+          {techniqueActive && <Icon name="lock" size={16} color="#FFFFFF" />}
           <Text style={styles.validateBtnText}>Valider la série {currentSetNum}</Text>
-          <Icon name="arrow-right" size={18} color="#FFFFFF" />
+          {!techniqueActive && <Icon name="arrow-right" size={18} color="#FFFFFF" />}
         </TouchableOpacity>
       </View>
 
@@ -1221,6 +1422,13 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       {emptyToastVisible && (
         <View style={styles.toast} pointerEvents="none" accessibilityLiveRegion="polite" accessibilityRole="alert">
           <Text style={styles.toastText}>Valide au moins une série avant de terminer.</Text>
+        </View>
+      )}
+
+      {/* Toast du collier (sortie / retrait) */}
+      {!!collarToast && (
+        <View style={styles.toast} pointerEvents="none" accessibilityLiveRegion="polite" accessibilityRole="alert">
+          <Text style={styles.toastText}>{collarToast}</Text>
         </View>
       )}
 
@@ -1525,6 +1733,8 @@ const styles = StyleSheet.create({
     color: THEME.colors.textOnDark,
     letterSpacing: 0.4,
   },
+  techniqueBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  techniqueBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   setCounterText: {
     fontFamily: THEME.fonts.sansHeavy,
     fontSize: 12,
@@ -1646,6 +1856,13 @@ const styles = StyleSheet.create({
     color: THEME.colors.textOnDark,
     fontSize: 19,
   },
+  // Collier posé : les 4 boutons −/+ deviennent des cases en pointillé, cadenas, sans action.
+  stepperBtnLgFrozen: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: THEME.technique.frozenStepperBorder,
+  },
   stepperCenterCol: {
     flex: 1,
     alignItems: 'center',
@@ -1665,6 +1882,16 @@ const styles = StyleSheet.create({
     height: 56,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  // Anneau qui se remplit à l'appui long sur la charge (déclenchement caché du collier).
+  pressRingOverlay: {
+    position: 'absolute',
+    top: 2,
+    left: 12,
+    right: 12,
+    bottom: 2,
+    borderRadius: THEME.radius.inner,
   },
   stepperBigValue: {
     fontFamily: THEME.fonts.sansHeavy,
@@ -1965,6 +2192,7 @@ const styles = StyleSheet.create({
   catalogIndexTextActive: {
     color: '#FFFFFF',
   },
+  catalogNameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   catalogItemName: {
     fontFamily: THEME.fonts.sans,
     fontSize: 14,
