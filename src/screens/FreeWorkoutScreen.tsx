@@ -478,7 +478,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       if (!finished) return;
       triggerMediumHaptic();
       setCollarRevealed(true);
-      showCollarToast('Collier sorti · glisse-le contre les disques');
+      showCollarToast('Collier sorti · glisse-le ou touche-le pour le poser');
     });
   };
 
