@@ -349,6 +349,9 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   const applyExercise = (ex: ConfiguredExercise) => {
     setCurrentExercise(ex);
     setCollarRevealed(false);
+    // L'anneau de l'appui long reste rempli une fois sorti (voir handleChargePressOut) : sans
+    // ce reset, il restait affiché sur TOUS les exercices suivants après en avoir révélé un seul.
+    pressRingProgress.setValue(0);
     const { weight, reps } = resolveStartingWeightReps(ex);
     setCurrentWeight(weight);
     setCurrentReps(reps);
@@ -413,6 +416,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 const next = updated[0] || null;
                 const nextPrescription = next ? prescribedFor(next) : null;
                 setCurrentExercise(next);
+                setCollarRevealed(false);
+                pressRingProgress.setValue(0);
                 setCurrentWeight(nextPrescription?.weight || 40);
                 setCurrentReps(nextPrescription?.targetReps || 8);
               }
@@ -441,6 +446,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
     setCatalogExercises((prev) => [...prev, created]);
     setCurrentExercise(created);
+    setCollarRevealed(false);
+    pressRingProgress.setValue(0);
     setCurrentWeight(weightNum);
     setCurrentReps(8);
     setIsCreateSheetOpen(false);
