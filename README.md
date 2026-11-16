@@ -68,6 +68,8 @@ Exemple sur 3×8 : 8/8/7 ou 8/7/6 = presque ; 8/6/6 = ratée.
 
 **Charge différente de la prescription** — une mauvaise séance fait stagner, jamais reculer :
 - Plus lourde et tenue (réussie ou presque) : la nouvelle charge est adoptée. Plus lourde et ratée : retour à la prescription, sans compter d'échec.
+- En double progression, une charge plus lourde se juge contre le bas de la plage, comme après une montée normale : 3 × 11 à 10 kg pour une plage 12-15 est « presque », la charge de 10 kg est adoptée avec un objectif de 12 reps.
+- Si toutes les séries sont au-dessus de la charge prévue, c'est une montée volontaire : la base est la plus légère d'entre elles, et seule une série vraiment ratée (sous 85 % du seuil) est ignorée comme tentative.
 - Plus légère, une fois : une mauvaise séance ne creuse pas, la charge prévue est maintenue (statut « Allégée »).
 - Plus légère deux séances de suite : c'est un choix qui se confirme, la charge faite devient la référence et la progression repart d'elle, sans dépasser la prescription d'origine (2e fois 3×8 à 45 kg pour 50 prévus → 47,5 kg). Le moteur s'appuie sur la séance précédente (`previousSets`), déjà chargée par l'écran.
 - Séance irrégulière avec une série sous la prescription : pas de hausse ; la séance compte comme « sans réussite ».

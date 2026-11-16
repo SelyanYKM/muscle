@@ -348,3 +348,56 @@ test('calibration sans charge dominante (70 / 60 / 80) : la plus lourde', () => 
   const d = run(settings(), state({ isCalibrating: true }), sets([70, 8], [60, 8], [80, 8]));
   assert.equal(d.nextWeight, 80);
 });
+
+// --- Double progression : montée de charge décidée en séance ---
+
+const lateral = () => reps({ repsMin: 12, repsMax: 15 });
+const at15 = () => state({ currentWeight: 7.5, currentTargetReps: 15 });
+
+test('montée volontaire en double progression (10, 10, 12,5 kg × 11) : la nouvelle charge est adoptée', () => {
+  const d = run(lateral(), at15(), sets([10, 11], [10, 11], [12.5, 11]));
+  assert.equal(d.status, 'PARTIAL'); // 33 reps sur 36 visées au bas de la plage
+  assert.equal(d.nextWeight, 10);
+  assert.equal(d.nextTargetReps, 12);
+  assert.match(d.reason, /Montée à 10 kg/);
+});
+
+test('3 × 11 à une charge plus lourde : jugé contre le bas de la plage, pas contre 15', () => {
+  const d = run(lateral(), at15(), x(3, 10, 11));
+  assert.equal(d.status, 'PARTIAL');
+  assert.equal(d.nextWeight, 10);
+  assert.equal(d.nextTargetReps, 12);
+});
+
+test('3 × 12 à une charge plus lourde : réussite, l’objectif monte depuis le bas de la plage', () => {
+  const d = run(lateral(), at15(), x(3, 10, 12));
+  assert.equal(d.status, 'SUCCESS');
+  assert.equal(d.nextWeight, 10);
+  assert.equal(d.nextTargetReps, 13);
+});
+
+test('charge plus lourde vraiment ratée (3 × 6) : retour à la charge prévue, compteurs intacts', () => {
+  const d = run(lateral(), at15(), x(3, 10, 6));
+  assert.equal(d.status, 'FAILED');
+  assert.equal(d.nextWeight, 7.5);
+  assert.equal(d.nextTargetReps, 15);
+  assert.equal(d.newState.consecutiveFailures, 0);
+});
+
+test('montée volontaire avec une vraie tentative ratée (12,5 kg × 3) : la tentative est ignorée', () => {
+  const sel = selectWorkingSets(sets([10, 11], [10, 11], [12.5, 3]), 3, 7.5, 12);
+  assert.equal(sel.pattern, 'INCOMPLETE');
+  assert.equal(sel.sets.length, 2);
+});
+
+test('dernière série plus lourde au bas de la plage : comptée, sans montée de charge', () => {
+  const d = run(lateral(), at15(), sets([7.5, 14], [7.5, 14], [10, 12]));
+  assert.equal(d.status, 'PARTIAL');
+  assert.equal(d.nextWeight, 7.5);
+});
+
+test('mode CHARGE inchangé : dernière série plus lourde un peu ratée = tentative ignorée', () => {
+  const d = run(settings(), state(), sets([50, 8], [50, 8], [55, 7]));
+  assert.equal(d.status, 'INCOMPLETE');
+  assert.equal(d.nextWeight, 50);
+});
