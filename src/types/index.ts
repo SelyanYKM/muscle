@@ -26,6 +26,11 @@ export interface Exercise {
   minWeightKg?: number; // défaut = baseWeight
   restSeconds?: number; // défaut selon catégorie (poulie 60 / machine 90 / barre libre 150)
   muscleGroup?: MuscleGroup; // absent sur les exercices personnalisés
+  // défaut true (répartition par côté affichée, ex. machines Hammer Strength iso-latérales
+  // réelles) ; false = charge sélectionnée à la pile, rien à répartir par côté (même affichage
+  // que CABLE) — ex. Leg Extension/Leg Curl, en réalité des machines "pure strength" malgré
+  // leur nom de catalogue "Iso-Lateral".
+  perSideLoad?: boolean;
 }
 
 export interface ConfiguredExercise {
@@ -50,6 +55,7 @@ export interface ConfiguredExercise {
   lastSessionDate: string | null;
   lastDecisionReason: string | null;
   isCalibrating: boolean;
+  perSideLoad: boolean;
 }
 
 export interface Workout {

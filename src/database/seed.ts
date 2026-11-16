@@ -191,6 +191,9 @@ export const SEED_EXERCISES: Exercise[] = [
     defaultTargetReps: 8,
     defaultStartingWeight: 40,
     muscleGroup: 'QUADRICEPS',
+    // Pile à broche en réalité (pure strength), malgré le nom de catalogue : rien à répartir
+    // par côté.
+    perSideLoad: false,
   },
   {
     id: 12,
@@ -203,6 +206,7 @@ export const SEED_EXERCISES: Exercise[] = [
     defaultTargetReps: 8,
     defaultStartingWeight: 35,
     muscleGroup: 'ISCHIOS',
+    perSideLoad: false,
   },
   {
     id: 14,
