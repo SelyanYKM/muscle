@@ -36,6 +36,7 @@ import { fmtKg, parseLocalDate } from '../utils/format';
 import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '../utils/haptics';
 import { useRepeatPress } from '../utils/useRepeatPress';
 import { showDialog } from '../utils/dialog';
+import { formatAppInfoLine, getAppInfo } from '../utils/appInfo';
 
 interface HistoryScreenProps {
   onBack: () => void;
@@ -173,6 +174,9 @@ function useChevronAnim() {
 }
 
 export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
+  // Version + date de la dernière mise à jour OTA appliquée : ne change pas en cours de séance,
+  // lu une seule fois à l'ouverture de l'écran.
+  const [appInfo] = useState(() => getAppInfo());
   const [sessions, setSessions] = useState<GroupedSession[]>([]);
   const [feedbackByKey, setFeedbackByKey] = useState<Record<string, SessionFeedbackRow>>({});
   const [expandedSessions, setExpandedSessions] = useState<{ [sessionKey: string]: boolean }>({});
@@ -842,6 +846,9 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
         </View>
       )}
 
+      {/* Version + mise à jour OTA : toujours visible, même sans aucune séance enregistrée. */}
+      <Text style={styles.appInfoText}>{formatAppInfoLine(appInfo)}</Text>
+
       {/* FEUILLE UNIQUE : MODIFIER LA SÉANCE — programme, tous les exercices et toutes les
           séries d'un coup (remplace les deux feuilles séparées d'avant, chacune avec son
           propre bouton "Modifier"). */}
@@ -1313,6 +1320,13 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     fontSize: 13,
     color: THEME.colors.feelingHardText,
+  },
+  appInfoText: {
+    fontFamily: THEME.fonts.sansMedium,
+    fontSize: 11.5,
+    color: THEME.colors.textMuted,
+    textAlign: 'center',
+    marginTop: 14,
   },
   legendRow: {
     flexDirection: 'row',

@@ -1062,7 +1062,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         >
           <View style={styles.heroTopRow}>
             <View style={styles.typeBadge}>
-              <Text style={styles.typeBadgeText}>
+              <Text style={styles.typeBadgeText} numberOfLines={1}>
                 {currentExercise ? CATEGORY_LABEL[currentExercise.category] : 'HAMMER STRENGTH'}
               </Text>
             </View>
@@ -1725,14 +1725,17 @@ const styles = StyleSheet.create({
   },
   heroTopRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
+    rowGap: 6,
   },
   typeBadge: {
     backgroundColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: THEME.radius.pill,
+    flexShrink: 1,
   },
   typeBadgeText: {
     fontFamily: THEME.fonts.sansHeavy,
