@@ -145,10 +145,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     stopRestTimerService();
     hideRestTimerLiveNotification();
     triggerTimerEndHaptic();
-    // DIAGNOSTIC TEMPORAIRE (coupure du son en cours de lecture) : bip interne désactivé le temps
-    // d'isoler si c'est lui ou autre chose (notification/OS) qui coupe la musique. À restaurer
-    // une fois la cause confirmée.
-    // playRestTimerAlarm();
+    playRestTimerAlarm();
     AccessibilityInfo.announceForAccessibility('Repos terminé');
     onFinishRef.current();
   };

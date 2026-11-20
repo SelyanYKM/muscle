@@ -15,6 +15,16 @@ let buffPlayers: Record<keyof typeof BUFF_SOUNDS, AudioPlayer> | null = null;
 
 let isAudioConfigured = false;
 
+// DIAGNOSTIC TEMPORAIRE (coupure de la musique par le bip de fin de repos) : la config
+// mixWithOthers a l'air correcte à la lecture, donc on expose si setAudioModeAsync a vraiment
+// réussi ou a échoué silencieusement sur l'appareil — affiché dans Historique le temps de
+// confirmer la cause. À retirer une fois la vraie cause trouvée.
+let audioConfigDiagnostic = 'pas encore appelé';
+
+export function getAudioConfigDiagnostic(): string {
+  return audioConfigDiagnostic;
+}
+
 /**
  * Configure la session audio pour :
  * 1. Ne PAS couper ou baisser la musique (Spotify, Apple Music).
@@ -30,8 +40,9 @@ export async function configureAppAudio(): Promise<void> {
       interruptionMode: 'mixWithOthers',
     });
     isAudioConfigured = true;
+    audioConfigDiagnostic = 'OK (mixWithOthers)';
   } catch (error) {
-    // Mode dégradé si non supporté
+    audioConfigDiagnostic = `ERREUR: ${error instanceof Error ? error.message : String(error)}`;
   }
 }
 
