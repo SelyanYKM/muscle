@@ -14,6 +14,12 @@ import { Linking, Platform } from 'react-native';
 const CHANNEL_ID = 'rest-timer-v2';
 const NOTIFICATION_ID = 'rest-timer-alert';
 const VIBRATION_PATTERN = [0, 400, 250, 400, 250, 400];
+// Marge avant que l'alerte programmée (AlarmManager, précis à la seconde près) ne sonne vraiment :
+// sans elle, elle tombe pile en même temps que le minuteur JS en appli (qui ne vérifie l'heure
+// que toutes les 1000ms) — l'alarme gagne systématiquement la course et affiche sa bannière même
+// quand l'appli tourne normalement et va l'annuler l'instant d'après, trop tard. Ce filet de
+// secours ne doit sonner que si l'appli a vraiment perdu la main, jamais en doublon du cas normal.
+const FALLBACK_GRACE_MS = 5000;
 
 let isChannelConfigured = false;
 
@@ -97,7 +103,7 @@ export async function startRestTimerService(endTimeMs: number, body: string): Pr
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: endTimeMs,
+        date: endTimeMs + FALLBACK_GRACE_MS,
         channelId: CHANNEL_ID,
       },
     });
