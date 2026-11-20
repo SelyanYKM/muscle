@@ -69,6 +69,9 @@ function baseAndroidConfig() {
     category: AndroidCategory.PROGRESS,
     color: THEME.colors.accent,
     visibility: AndroidVisibility.PUBLIC,
+    // Cette notification est mise à jour très souvent (pause, reprise, +15s/+30s/+60s) : sans
+    // ça, chaque mise à jour "alerte" à nouveau (vibration, voire son si le canal en avait un).
+    onlyAlertOnce: true,
   };
 }
 
@@ -78,6 +81,9 @@ export async function configureRestTimerLiveChannel(): Promise<void> {
   isChannelConfigured = true;
 
   try {
+    // Pas de `sound` : par défaut (doc de la lib), ce canal ne joue aucun son — volontaire, pour
+    // ne jamais couper la musique en cours (voir aussi restTimerService.ts, qui désactive le
+    // sien explicitement).
     await notifee.createChannel({
       id: CHANNEL_ID,
       name: 'Repos en cours',
