@@ -32,6 +32,7 @@ import {
   showRestTimerRunningNotification,
 } from '../utils/restTimerNotifee';
 import {
+  fireRestEndAlarm,
   requestRestTimerPermission,
   startRestTimerService,
   stopRestTimerService,
@@ -143,9 +144,10 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     if (intervalRef.current) clearInterval(intervalRef.current);
     stopRestTimerService();
     hideRestTimerLiveNotification();
-    // Pas de bip ici : jouer un son (même configuré pour "mixWithOthers") coupe la musique/vidéo
-    // en cours sur cet appareil, confirmé en testant sans lui — la vibration suffit comme alerte.
     triggerTimerEndHaptic();
+    // Son classé "Alarme" (voir restTimerService.ts) plutôt que le bip interne de l'app, qui
+    // coupait la musique/vidéo en cours même configuré pour ne jamais le faire.
+    fireRestEndAlarm(notificationBody);
     AccessibilityInfo.announceForAccessibility('Repos terminé');
     onFinishRef.current();
   };

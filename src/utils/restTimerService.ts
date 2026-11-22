@@ -8,10 +8,14 @@ import { Linking, Platform } from 'react-native';
 // mécanisme que les réveils/minuteurs natifs — et choisit automatiquement une alarme exacte
 // ou approximative selon ce que l'appareil autorise, sans permission supplémentaire à gérer.
 
-// v2 : le son du canal est fixé à la création et ne peut plus être changé ensuite (contrainte
-// Android) — change d'id pour que les installs déjà en place (canal 'rest-timer', son activé)
-// récupèrent un vrai canal silencieux plutôt que l'ancien, inchangeable, qui coupait la musique.
-const CHANNEL_ID = 'rest-timer-v2';
+// v3 (expérimental) : canal recréé avec un son, mais classé "Alarme" (AudioAttributes.USAGE_ALARM)
+// plutôt que "Notification" — le même mécanisme que les réveils du téléphone, qui sonnent par-
+// dessus la musique sans la mettre en pause. Un son classé "Notification" classique (testé avant,
+// même sans focus audio demandé côté app) coupait la musique/vidéo en cours ; pas garanti que la
+// catégorie "Alarme" s'en sorte mieux sur tous les appareils, mais c'est la seule piste qui imite
+// un comportement déjà connu pour ne jamais couper la musique. Nouvel id car le son d'un canal est
+// figé à la création (contrainte Android).
+const CHANNEL_ID = 'rest-timer-alarm';
 const NOTIFICATION_ID = 'rest-timer-alert';
 const VIBRATION_PATTERN = [0, 400, 250, 400, 250, 400];
 // Marge avant que l'alerte programmée (AlarmManager, précis à la seconde près) ne sonne vraiment :
@@ -23,21 +27,20 @@ const FALLBACK_GRACE_MS = 5000;
 
 let isChannelConfigured = false;
 
-// Comportement quand une notification arrive pendant que l'app est au premier plan :
-// on la montre quand même (bannière), sinon expo-notifications la masque par défaut. Jamais de
-// son ici : la vibration suffit comme alerte (voir aussi configureRestTimerChannel).
+// Comportement quand une notification arrive pendant que l'app est au premier plan : on la
+// montre quand même (bannière + son), sinon expo-notifications la masque par défaut.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
     shouldShowList: true,
-    shouldPlaySound: false,
+    shouldPlaySound: true,
     shouldSetBadge: false,
   }),
 });
 
 /**
- * À appeler une fois au démarrage de l'app : prépare le canal Android (son, vibration,
- * affichage même en mode "Ne pas déranger"). Ne demande pas encore la permission.
+ * À appeler une fois au démarrage de l'app : prépare le canal Android (son classé "Alarme",
+ * vibration, affichage même en mode "Ne pas déranger"). Ne demande pas encore la permission.
  */
 export async function configureRestTimerChannel(): Promise<void> {
   if (Platform.OS !== 'android' || isChannelConfigured) return;
@@ -50,13 +53,41 @@ export async function configureRestTimerChannel(): Promise<void> {
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       vibrationPattern: VIBRATION_PATTERN,
       enableVibrate: true,
-      // Pas de son de notification : tout son (même celui de l'app) coupe la musique/vidéo en
-      // cours sur certains appareils — la vibration suffit comme alerte.
-      sound: null,
+      sound: 'default',
+      // Classe le son du canal "Alarme" plutôt que "Notification" : c'est ce qui permet aux
+      // réveils du téléphone de sonner par-dessus la musique sans la couper.
+      audioAttributes: {
+        usage: Notifications.AndroidAudioUsage.ALARM,
+        contentType: Notifications.AndroidAudioContentType.SONIFICATION,
+        flags: { enforceAudibility: false, requestHardwareAudioVideoSynchronization: false },
+      },
       bypassDnd: true,
     });
   } catch {
     // Mode dégradé si non supporté
+  }
+}
+
+/**
+ * Déclenche immédiatement l'alerte de fin de repos (son classé "Alarme" + vibration), pour le cas
+ * normal où l'appli est toujours active au moment où le repos se termine — contrairement à
+ * `startRestTimerService`, qui programme seulement le filet de secours en arrière-plan.
+ */
+export async function fireRestEndAlarm(body: string): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Repos terminé 💪',
+        body,
+        sound: true,
+        vibrate: VIBRATION_PATTERN,
+        priority: 'high',
+      },
+      trigger: { channelId: CHANNEL_ID },
+    });
+  } catch {
+    // Mode dégradé : la vibration haptique (déclenchée séparément) prend le relais
   }
 }
 
@@ -93,9 +124,7 @@ export async function startRestTimerService(endTimeMs: number, body: string): Pr
       content: {
         title: 'Repos terminé 💪',
         body,
-        // Pas de son ici non plus (voir configureRestTimerChannel) : sur Android 8+ c'est de
-        // toute façon le canal qui décide, mais iOS lit ce champ directement.
-        sound: false,
+        sound: true,
         vibrate: VIBRATION_PATTERN,
         priority: 'high',
       },
