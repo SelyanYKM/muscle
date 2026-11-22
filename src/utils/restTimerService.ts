@@ -25,9 +25,7 @@ let isChannelConfigured = false;
 
 // Comportement quand une notification arrive pendant que l'app est au premier plan :
 // on la montre quand même (bannière), sinon expo-notifications la masque par défaut. Jamais de
-// son ici : le vrai bip de fin de repos est le son interne (playRestTimerAlarm, utils/audio.ts),
-// configuré pour ne jamais couper la musique en cours. Le son natif d'une notification Android
-// passe par un tout autre circuit audio et coupe/baisse la musique, même configuré ailleurs.
+// son ici : la vibration suffit comme alerte (voir aussi configureRestTimerChannel).
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
@@ -52,8 +50,8 @@ export async function configureRestTimerChannel(): Promise<void> {
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       vibrationPattern: VIBRATION_PATTERN,
       enableVibrate: true,
-      // Pas de son de notification : il coupe/baisse la musique en cours (circuit audio séparé
-      // de expo-audio, voir playRestTimerAlarm). La vibration + le bip interne suffisent.
+      // Pas de son de notification : tout son (même celui de l'app) coupe la musique/vidéo en
+      // cours sur certains appareils — la vibration suffit comme alerte.
       sound: null,
       bypassDnd: true,
     });

@@ -37,7 +37,6 @@ import { triggerLightHaptic, triggerMediumHaptic, triggerWarningHaptic } from '.
 import { useRepeatPress } from '../utils/useRepeatPress';
 import { showDialog } from '../utils/dialog';
 import { formatAppInfoLine, getAppInfo } from '../utils/appInfo';
-import { getAudioConfigDiagnostic } from '../utils/audio';
 
 interface HistoryScreenProps {
   onBack: () => void;
@@ -849,9 +848,6 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({ onBack }) => {
 
       {/* Version + mise à jour OTA : toujours visible, même sans aucune séance enregistrée. */}
       <Text style={styles.appInfoText}>{formatAppInfoLine(appInfo)}</Text>
-      {/* DIAGNOSTIC TEMPORAIRE (coupure de musique par le bip de fin de repos) : à retirer une
-          fois la cause confirmée. */}
-      <Text style={styles.appInfoText}>Diag audio : {getAudioConfigDiagnostic()}</Text>
 
       {/* FEUILLE UNIQUE : MODIFIER LA SÉANCE — programme, tous les exercices et toutes les
           séries d'un coup (remplace les deux feuilles séparées d'avant, chacune avec son

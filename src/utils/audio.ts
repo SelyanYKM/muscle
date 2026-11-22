@@ -1,10 +1,6 @@
 import { AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { Platform } from 'react-native';
 
-// Son embarqué dans l'app : aucune connexion réseau requise (contrairement à une URL distante),
-// donc l'alarme fonctionne même sans wifi/4G en salle de sport.
-const REST_TIMER_ALARM_SOUND = require('../../assets/sounds/rest_timer_alarm.wav');
-
 const BUFF_SOUNDS = {
   rise: require('../../assets/sounds/buff_rise.wav'),
   impact: require('../../assets/sounds/buff_impact.wav'),
@@ -15,20 +11,8 @@ let buffPlayers: Record<keyof typeof BUFF_SOUNDS, AudioPlayer> | null = null;
 
 let isAudioConfigured = false;
 
-// DIAGNOSTIC TEMPORAIRE (coupure de la musique par le bip de fin de repos) : la config
-// mixWithOthers a l'air correcte à la lecture, donc on expose si setAudioModeAsync a vraiment
-// réussi ou a échoué silencieusement sur l'appareil — affiché dans Historique le temps de
-// confirmer la cause. À retirer une fois la vraie cause trouvée.
-let audioConfigDiagnostic = 'pas encore appelé';
-
-export function getAudioConfigDiagnostic(): string {
-  return audioConfigDiagnostic;
-}
-
 /**
- * Configure la session audio pour :
- * 1. Ne PAS couper ou baisser la musique (Spotify, Apple Music).
- * 2. Jouer le bip d'alerte par-dessus la musique (mixWithOthers).
+ * Configure la session audio pour ne pas couper ou baisser la musique en cours (mixWithOthers).
  */
 export async function configureAppAudio(): Promise<void> {
   if (isAudioConfigured || Platform.OS === 'web') return;
@@ -40,31 +24,8 @@ export async function configureAppAudio(): Promise<void> {
       interruptionMode: 'mixWithOthers',
     });
     isAudioConfigured = true;
-    audioConfigDiagnostic = 'OK (mixWithOthers)';
-  } catch (error) {
-    audioConfigDiagnostic = `ERREUR: ${error instanceof Error ? error.message : String(error)}`;
-  }
-}
-
-/**
- * Joue une tonalité sportive d'alerte de fin de repos.
- */
-export async function playRestTimerAlarm(): Promise<void> {
-  if (Platform.OS === 'web') return;
-
-  try {
-    await configureAppAudio();
-    const player = createAudioPlayer(REST_TIMER_ALARM_SOUND);
-    player.play();
-
-    // Libération automatique après 2 secondes (le son dure ~0.7s)
-    setTimeout(() => {
-      try {
-        player.remove();
-      } catch {}
-    }, 2000);
   } catch {
-    // Fallback silencieux (vibrations haptiques prennent le relais)
+    // Mode dégradé si non supporté
   }
 }
 

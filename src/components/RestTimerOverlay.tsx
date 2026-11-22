@@ -20,7 +20,6 @@ import { MarqueeText } from './MarqueeText';
 import { THEME } from '../theme';
 import { SetResult } from '../types';
 import { durationA11y, kgA11y } from '../utils/a11y';
-import { playRestTimerAlarm } from '../utils/audio';
 import { fmtKg, formatMinSec } from '../utils/format';
 import { triggerLightHaptic, triggerTimerEndHaptic, triggerWarningHaptic } from '../utils/haptics';
 import {
@@ -144,8 +143,9 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     if (intervalRef.current) clearInterval(intervalRef.current);
     stopRestTimerService();
     hideRestTimerLiveNotification();
+    // Pas de bip ici : jouer un son (même configuré pour "mixWithOthers") coupe la musique/vidéo
+    // en cours sur cet appareil, confirmé en testant sans lui — la vibration suffit comme alerte.
     triggerTimerEndHaptic();
-    playRestTimerAlarm();
     AccessibilityInfo.announceForAccessibility('Repos terminé');
     onFinishRef.current();
   };
