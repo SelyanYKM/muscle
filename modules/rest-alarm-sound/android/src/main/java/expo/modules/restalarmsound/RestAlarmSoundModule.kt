@@ -21,12 +21,14 @@ class RestAlarmSoundModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("RestAlarmSound")
 
-    Function("playAlarm") {
-      val pool = soundPool ?: createPool() ?: return@Function
-      if (isLoaded) {
-        pool.play(soundId, 1f, 1f, 1, 0, 1f)
-      } else {
-        playPending = true
+    Function<Unit>("playAlarm") {
+      val pool = soundPool ?: createPool()
+      if (pool != null) {
+        if (isLoaded) {
+          pool.play(soundId, 1f, 1f, 1, 0, 1f)
+        } else {
+          playPending = true
+        }
       }
     }
 
