@@ -16,10 +16,10 @@ import {
 import Svg, { Circle } from 'react-native-svg';
 import { FEELING_DOT } from '../constants/feeling';
 import { Icon, IconName } from './Icon';
+import { MarqueeText } from './MarqueeText';
 import { THEME } from '../theme';
 import { SetResult } from '../types';
 import { durationA11y, kgA11y } from '../utils/a11y';
-import { playRestTimerAlarm } from '../utils/audio';
 import { fmtKg, formatMinSec } from '../utils/format';
 import { triggerLightHaptic, triggerTimerEndHaptic, triggerWarningHaptic } from '../utils/haptics';
 import {
@@ -31,6 +31,7 @@ import {
   showRestTimerPausedNotification,
   showRestTimerRunningNotification,
 } from '../utils/restTimerNotifee';
+import RestAlarmSound from '../../modules/rest-alarm-sound/src/RestAlarmSoundModule';
 import {
   requestRestTimerPermission,
   startRestTimerService,
@@ -144,7 +145,10 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     stopRestTimerService();
     hideRestTimerLiveNotification();
     triggerTimerEndHaptic();
-    playRestTimerAlarm();
+    // Module natif dédié (SoundPool, voir modules/rest-alarm-sound) : seul mécanisme testé qui ne
+    // coupe pas la musique/vidéo en cours (expo-audio et un son de notification "Alarme" coupaient
+    // la musique, ou ne jouaient aucun son — voir restTimerService.ts).
+    RestAlarmSound.playAlarm();
     AccessibilityInfo.announceForAccessibility('Repos terminé');
     onFinishRef.current();
   };
@@ -480,9 +484,7 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
               </View>
               <View style={styles.nextSetTitleRow}>
                 {!!next.nextFrozen && <Icon name="lock" size={13} color="#FFFFFF" />}
-                <Text style={styles.nextSetTitle} numberOfLines={1}>
-                  {next.title}
-                </Text>
+                <MarqueeText text={next.title} style={styles.nextSetTitle} containerStyle={styles.nextSetTitleMarquee} />
               </View>
               {next.set ? (
                 <Text style={styles.nextSetDetails}>
@@ -627,7 +629,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.16)',
   },
   nextSetBody: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingTop: 14,
     paddingBottom: 14,
     alignItems: 'center',
@@ -681,12 +683,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#FFFFFF',
   },
-  nextSetTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' },
+  nextSetTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, width: '100%' },
+  nextSetTitleMarquee: { flex: 1, minWidth: 0 },
   nextSetTitle: {
     fontFamily: THEME.fonts.serif,
     fontSize: 21,
     color: '#FFFFFF',
-    textAlign: 'center',
   },
   nextSetDetails: {
     fontFamily: THEME.fonts.sansSemi,

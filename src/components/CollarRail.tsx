@@ -9,16 +9,13 @@ const RAIL_HEIGHT = 52;
 const RAIL_RADIUS = 16;
 const COLLAR_SIZE = 44;
 const COLLAR_RADIUS = 12;
-const STOP_WIDTH = 10;
-const PLATE_SIZE = 30;
-const PLATE_GAP = 4;
-const PLATES_WIDTH = PLATE_SIZE * 3 + PLATE_GAP * 4; // + un peu d'air avant/après les disques
-const PLATE_COLORS = ['#3B7AC4', '#D45454', '#F1F3F5'];
 
 /**
- * Rail du collier de technique : une barre vue de côté (butée, disques, manchon acier) sur
- * laquelle le collier glisse. Posé contre les disques = technique (charge gelée) ; au bout du
- * manchon = force (comportement normal). Glisser ou toucher le rail bascule l'état.
+ * Rail du collier de technique : un interrupteur à glissière sur lequel le collier se déplace.
+ * À gauche = technique (charge gelée) ; à droite = force (comportement normal). Glisser ou
+ * toucher le rail bascule l'état. Pas d'imagerie de disques ici : la vraie répartition des
+ * disques est déjà affichée ailleurs sur l'écran (PlateBreakdown), inutile de la dupliquer en
+ * miniature et de façon illisible.
  * Déclenché par un appui long sur la charge (voir FreeWorkoutScreen) ; visible seulement tant
  * que le parent le monte (règle de visibilité : posé, ou sorti pendant cet exercice).
  */
@@ -28,7 +25,7 @@ export const CollarRail: React.FC<{
 }> = ({ posed, onChange }) => {
   const [sleeveWidth, setSleeveWidth] = useState(0);
   const travel = Math.max(0, sleeveWidth - COLLAR_SIZE);
-  // 0 = force (collier au bout du manchon, à droite) ; 1 = technique (contre les disques, à gauche).
+  // 0 = force (collier à droite) ; 1 = technique (collier à gauche).
   const drag = useRef(new Animated.Value(posed ? 1 : 0)).current;
   const dragStartRef = useRef(0);
   const posedRef = useRef(posed);
@@ -58,7 +55,7 @@ export const CollarRail: React.FC<{
       onPanResponderMove: (_, g) => {
         const t = travelRef.current;
         if (t <= 0) return;
-        // Glisser vers la gauche (dx négatif) rapproche des disques (= technique, drag → 1).
+        // Glisser vers la gauche (dx négatif) rapproche de la technique (drag → 1).
         const delta = -g.dx / t;
         const next = Math.min(1, Math.max(0, dragStartRef.current + delta));
         drag.setValue(next);
@@ -110,23 +107,6 @@ export const CollarRail: React.FC<{
         onAccessibilityAction={() => settle(!posed)}
         {...panResponder.panHandlers}
       >
-        {/* Butée de la barre. */}
-        <View style={styles.stop} />
-
-        {/* Disques. */}
-        <View style={styles.plates}>
-          {PLATE_COLORS.map((color, i) => (
-            <View
-              key={i}
-              style={[
-                styles.plate,
-                { backgroundColor: color, borderColor: color === '#F1F3F5' ? '#D0D5DD' : color },
-              ]}
-            />
-          ))}
-        </View>
-
-        {/* Manchon acier : le rail où glisse le collier. */}
         <View
           style={styles.sleeveWrap}
           onLayout={(e) => setSleeveWidth(e.nativeEvent.layout.width)}
@@ -188,21 +168,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: THEME.colors.cardInner,
     paddingHorizontal: 8,
-    gap: PLATE_GAP,
     overflow: 'hidden',
-  },
-  stop: {
-    width: STOP_WIDTH,
-    height: RAIL_HEIGHT - 16,
-    borderRadius: 4,
-    backgroundColor: THEME.colors.controlBorder,
-  },
-  plates: { flexDirection: 'row', gap: PLATE_GAP, width: PLATES_WIDTH, alignItems: 'center', justifyContent: 'center' },
-  plate: {
-    width: PLATE_SIZE,
-    height: RAIL_HEIGHT - 10,
-    borderRadius: 6,
-    borderWidth: 1.5,
   },
   sleeveWrap: {
     flex: 1,

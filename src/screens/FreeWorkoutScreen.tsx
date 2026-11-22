@@ -349,6 +349,9 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   const applyExercise = (ex: ConfiguredExercise) => {
     setCurrentExercise(ex);
     setCollarRevealed(false);
+    // L'anneau de l'appui long reste rempli une fois sorti (voir handleChargePressOut) : sans
+    // ce reset, il restait affiché sur TOUS les exercices suivants après en avoir révélé un seul.
+    pressRingProgress.setValue(0);
     const { weight, reps } = resolveStartingWeightReps(ex);
     setCurrentWeight(weight);
     setCurrentReps(reps);
@@ -413,6 +416,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 const next = updated[0] || null;
                 const nextPrescription = next ? prescribedFor(next) : null;
                 setCurrentExercise(next);
+                setCollarRevealed(false);
+                pressRingProgress.setValue(0);
                 setCurrentWeight(nextPrescription?.weight || 40);
                 setCurrentReps(nextPrescription?.targetReps || 8);
               }
@@ -441,6 +446,8 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
 
     setCatalogExercises((prev) => [...prev, created]);
     setCurrentExercise(created);
+    setCollarRevealed(false);
+    pressRingProgress.setValue(0);
     setCurrentWeight(weightNum);
     setCurrentReps(8);
     setIsCreateSheetOpen(false);
@@ -478,7 +485,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       if (!finished) return;
       triggerMediumHaptic();
       setCollarRevealed(true);
-      showCollarToast('Collier sorti · glisse-le contre les disques');
+      showCollarToast('Collier sorti · glisse-le ou touche-le pour le poser');
     });
   };
 
@@ -1055,7 +1062,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         >
           <View style={styles.heroTopRow}>
             <View style={styles.typeBadge}>
-              <Text style={styles.typeBadgeText}>
+              <Text style={styles.typeBadgeText} numberOfLines={1}>
                 {currentExercise ? CATEGORY_LABEL[currentExercise.category] : 'HAMMER STRENGTH'}
               </Text>
             </View>
@@ -1718,14 +1725,17 @@ const styles = StyleSheet.create({
   },
   heroTopRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
+    rowGap: 6,
   },
   typeBadge: {
     backgroundColor: 'rgba(255, 255, 255, 0.09)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: THEME.radius.pill,
+    flexShrink: 1,
   },
   typeBadgeText: {
     fontFamily: THEME.fonts.sansHeavy,

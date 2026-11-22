@@ -8,19 +8,34 @@ import { Linking, Platform } from 'react-native';
 // mécanisme que les réveils/minuteurs natifs — et choisit automatiquement une alarme exacte
 // ou approximative selon ce que l'appareil autorise, sans permission supplémentaire à gérer.
 
-const CHANNEL_ID = 'rest-timer';
+// v2 : le son du canal est fixé à la création et ne peut plus être changé ensuite (contrainte
+// Android) — change d'id pour que les installs déjà en place (canal 'rest-timer', son activé)
+// récupèrent un vrai canal silencieux plutôt que l'ancien, inchangeable, qui coupait la musique.
+// Le vrai bip de fin de repos passe par le module natif rest-alarm-sound (SoundPool, voir
+// modules/rest-alarm-sound) : ne crée pas de MediaSession, ne demande jamais le focus audio, donc
+// ne coupe jamais la musique/vidéo d'une autre appli — contrairement à expo-audio (testé) et à un
+// son de notification classé "Alarme" (testé aussi, aucun son du tout, probablement bloqué par
+// Android pour une appli qui n'est pas déclarée comme appli de réveil).
+const CHANNEL_ID = 'rest-timer-v2';
 const NOTIFICATION_ID = 'rest-timer-alert';
 const VIBRATION_PATTERN = [0, 400, 250, 400, 250, 400];
+// Marge avant que l'alerte programmée (AlarmManager, précis à la seconde près) ne sonne vraiment :
+// sans elle, elle tombe pile en même temps que le minuteur JS en appli (qui ne vérifie l'heure
+// que toutes les 1000ms) — l'alarme gagne systématiquement la course et affiche sa bannière même
+// quand l'appli tourne normalement et va l'annuler l'instant d'après, trop tard. Ce filet de
+// secours ne doit sonner que si l'appli a vraiment perdu la main, jamais en doublon du cas normal.
+const FALLBACK_GRACE_MS = 5000;
 
 let isChannelConfigured = false;
 
 // Comportement quand une notification arrive pendant que l'app est au premier plan :
-// on la montre quand même (banniere + son), sinon expo-notifications la masque par défaut.
+// on la montre quand même (bannière), sinon expo-notifications la masque par défaut. Jamais de
+// son ici : la vibration suffit comme alerte (voir aussi configureRestTimerChannel).
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
     shouldShowList: true,
-    shouldPlaySound: true,
+    shouldPlaySound: false,
     shouldSetBadge: false,
   }),
 });
@@ -40,7 +55,9 @@ export async function configureRestTimerChannel(): Promise<void> {
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       vibrationPattern: VIBRATION_PATTERN,
       enableVibrate: true,
-      sound: 'default',
+      // Pas de son de notification : tout son classé "Notification" coupe la musique/vidéo en
+      // cours sur cet appareil — le bip de fin de repos passe par le module natif à la place.
+      sound: null,
       bypassDnd: true,
     });
   } catch {
@@ -81,13 +98,13 @@ export async function startRestTimerService(endTimeMs: number, body: string): Pr
       content: {
         title: 'Repos terminé 💪',
         body,
-        sound: 'default',
+        sound: false,
         vibrate: VIBRATION_PATTERN,
         priority: 'high',
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: endTimeMs,
+        date: endTimeMs + FALLBACK_GRACE_MS,
         channelId: CHANNEL_ID,
       },
     });
