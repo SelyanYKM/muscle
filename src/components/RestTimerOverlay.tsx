@@ -31,8 +31,8 @@ import {
   showRestTimerPausedNotification,
   showRestTimerRunningNotification,
 } from '../utils/restTimerNotifee';
+import RestAlarmSound from '../../modules/rest-alarm-sound/src/RestAlarmSoundModule';
 import {
-  fireRestEndAlarm,
   requestRestTimerPermission,
   startRestTimerService,
   stopRestTimerService,
@@ -145,9 +145,10 @@ export const RestTimerOverlay: React.FC<RestTimerOverlayProps> = ({
     stopRestTimerService();
     hideRestTimerLiveNotification();
     triggerTimerEndHaptic();
-    // Son classé "Alarme" (voir restTimerService.ts) plutôt que le bip interne de l'app, qui
-    // coupait la musique/vidéo en cours même configuré pour ne jamais le faire.
-    fireRestEndAlarm(notificationBody);
+    // Module natif dédié (SoundPool, voir modules/rest-alarm-sound) : seul mécanisme testé qui ne
+    // coupe pas la musique/vidéo en cours (expo-audio et un son de notification "Alarme" coupaient
+    // la musique, ou ne jouaient aucun son — voir restTimerService.ts).
+    RestAlarmSound.playAlarm();
     AccessibilityInfo.announceForAccessibility('Repos terminé');
     onFinishRef.current();
   };
