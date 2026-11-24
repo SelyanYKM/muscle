@@ -11,6 +11,11 @@ import expo.modules.kotlin.modules.ModuleDefinition
  * pause la musique ou la vidéo d'une autre appli (contrairement à expo-audio même configuré
  * mixWithOthers, confirmé en usage réel). C'est le mécanisme standard des sons d'interface/jeu sur
  * Android, conçu pour ça.
+ *
+ * USAGE_MEDIA (pas USAGE_ALARM) : "Alarme" force le haut-parleur du téléphone même casque/écouteurs
+ * branchés (comportement volontaire d'Android pour les vrais réveils), ce qui donnait un son qui
+ * démarre sur le téléphone puis bascule sur le casque en cours de lecture — confirmé en usage réel.
+ * "Média" respecte directement la sortie audio déjà active (casque/écouteurs), sans ce bascule.
  */
 class RestAlarmSoundModule : Module() {
   private var soundPool: SoundPool? = null
@@ -44,7 +49,7 @@ class RestAlarmSoundModule : Module() {
     val context = appContext.reactContext ?: return null
 
     val attributes = AudioAttributes.Builder()
-      .setUsage(AudioAttributes.USAGE_ALARM)
+      .setUsage(AudioAttributes.USAGE_MEDIA)
       .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
       .build()
 
