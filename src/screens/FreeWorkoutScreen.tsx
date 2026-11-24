@@ -194,6 +194,15 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   // l'exercice affiché derrière.
   const [isPickerForRest, setIsPickerForRest] = useState<boolean>(false);
 
+  // Super set (poulie-poulie uniquement) : A puis B sans repos, repos seulement après B avant de
+  // reboucler sur A. Les deux exercices gardent leur progression/séries indépendantes, c'est
+  // uniquement un enchaînement à l'écran.
+  const [superset, setSuperset] = useState<{ exerciseA: ConfiguredExercise; exerciseB: ConfiguredExercise } | null>(null);
+  // Sélecteur ouvert pour choisir le partenaire : filtré aux exercices poulie uniquement.
+  const [isPickerForSuperset, setIsPickerForSuperset] = useState<boolean>(false);
+  const [supersetToast, setSupersetToast] = useState<string | null>(null);
+  const supersetToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Repos déclenché en tapant la dernière pastille d'échauffement (60s fixes) plutôt qu'en
   // validant une vraie série : masque le lien "corriger la dernière série" côté écran de repos
   // (rien à annuler, aucune série loguée pour un échauffement).
@@ -313,6 +322,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     return () => {
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
       if (collarToastTimeoutRef.current) clearTimeout(collarToastTimeoutRef.current);
+      if (supersetToastTimeoutRef.current) clearTimeout(supersetToastTimeoutRef.current);
     };
   }, []);
 
@@ -355,11 +365,35 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     const { weight, reps } = resolveStartingWeightReps(ex);
     setCurrentWeight(weight);
     setCurrentReps(reps);
+    // Changer pour un exercice hors du super set actif le rompt (sélection directe, "Autre
+    // exercice" depuis le repos…) ; rester sur A ou B le laisse intact.
+    setSuperset((prev) => (prev && ex.id !== prev.exerciseA.id && ex.id !== prev.exerciseB.id ? null : prev));
   };
+
+  const showSupersetToast = (message: string) => {
+    setSupersetToast(message);
+    if (supersetToastTimeoutRef.current) clearTimeout(supersetToastTimeoutRef.current);
+    supersetToastTimeoutRef.current = setTimeout(() => setSupersetToast(null), 2200);
+  };
+
+  // Quel côté du super set actif est affiché en ce moment (null si aucun super set, ou si
+  // l'exercice affiché n'en fait pas partie).
+  const supersetSide: 'A' | 'B' | null =
+    !superset || !currentExercise
+      ? null
+      : currentExercise.id === superset.exerciseA.id
+      ? 'A'
+      : currentExercise.id === superset.exerciseB.id
+      ? 'B'
+      : null;
 
   const handleSelectExercise = (ex: ConfiguredExercise) => {
     triggerLightHaptic();
-    if (isPickerForRest) {
+    if (isPickerForSuperset) {
+      // currentExercise est figé comme côté A ; ex (forcément poulie, voir le filtre du
+      // sélecteur) devient B. On ne l'applique pas tout de suite : A reste affiché en premier.
+      if (currentExercise) setSuperset({ exerciseA: currentExercise, exerciseB: ex });
+    } else if (isPickerForRest) {
       // Depuis le repos : on note le choix, appliqué à la fin du repos.
       setRestPlan((prev) =>
         ex.id === currentExercise?.id
@@ -371,6 +405,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
     }
     setIsPickerSheetOpen(false);
     setIsPickerForRest(false);
+    setIsPickerForSuperset(false);
   };
 
   const setsDoneFor = (exerciseId: number) => completedExercises.find((c) => c.exerciseId === exerciseId)?.sets.length ?? 0;
@@ -586,6 +621,24 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       }
     });
 
+    setLastValidatedSet(newSet);
+    setIsWarmupRest(false);
+
+    // Super set actif : enchaînement A -> B sans repos, puis repos après B avant de reboucler sur
+    // A — remplace entièrement la suite normale (suggestion/série en plus/fin de séance) tant que
+    // le super set n'est pas quitté, peu importe numSets (elle contrôle elle-même la fin).
+    if (superset && supersetSide === 'A') {
+      applyExercise(superset.exerciseB);
+      showSupersetToast(`Enchaîne avec ${superset.exerciseB.name}`);
+      return;
+    }
+    if (superset && supersetSide === 'B') {
+      setRestPlan({ kind: 'next', exercise: superset.exerciseA, chosen: true });
+      setRestDuration(Math.max(currentExercise.restSeconds, superset.exerciseA.restSeconds));
+      setIsResting(true);
+      return;
+    }
+
     // Dernière série prévue (ou série en plus) : le repos propose la suite. Le state des séries
     // n'est pas encore à jour ici, d'où le compte qui inclut la série qu'on vient de valider.
     if (setNumber >= currentExercise.numSets) {
@@ -595,9 +648,7 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
       setRestPlan(null);
     }
 
-    setLastValidatedSet(newSet);
     setRestDuration(currentExercise.restSeconds);
-    setIsWarmupRest(false);
     setIsResting(true);
   };
 
@@ -741,15 +792,31 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
   const closePicker = () => {
     setIsPickerSheetOpen(false);
     setIsPickerForRest(false);
+    setIsPickerForSuperset(false);
   };
 
-  const renderPickerSheet = (visible: boolean) => (
+  const renderPickerSheet = (visible: boolean) => {
+    // En sélection du partenaire de super set : seuls les autres exercices poulie du catalogue.
+    const pickerList = isPickerForSuperset
+      ? catalogExercises.filter((e) => e.category === 'CABLE' && e.id !== currentExercise?.id)
+      : catalogExercises;
+
+    return (
     <BottomSheet visible={visible} onClose={closePicker}>
-      <Text style={styles.sheetTitle} accessibilityRole="header">Choisir un exercice</Text>
-      <Text style={styles.sheetSubtitle}>{workoutName} · {catalogExercises.length} exercices</Text>
+      <Text style={styles.sheetTitle} accessibilityRole="header">
+        {isPickerForSuperset ? 'Choisir le partenaire (poulie)' : 'Choisir un exercice'}
+      </Text>
+      <Text style={styles.sheetSubtitle}>
+        {isPickerForSuperset
+          ? `Super set avec ${currentExercise?.name}`
+          : `${workoutName} · ${catalogExercises.length} exercices`}
+      </Text>
 
       <ScrollView style={styles.catalogScroll} showsVerticalScrollIndicator={false}>
-        {catalogExercises.map((catEx, idx) => {
+        {pickerList.length === 0 && isPickerForSuperset && (
+          <Text style={styles.sheetSubtitle}>Aucun autre exercice à la poulie dans ce split.</Text>
+        )}
+        {pickerList.map((catEx, idx) => {
           const isSelected = currentExercise?.id === catEx.id;
           const doneSets = completedExercises.find((c) => c.exerciseId === catEx.id)?.sets || [];
           return (
@@ -792,47 +859,49 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 </View>
               )}
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.catalogDeleteBtn}
-              onPress={() => handleDeleteCatalogExercise(catEx)}
-              activeOpacity={0.6}
-              accessibilityRole="button"
-              accessibilityLabel={`Supprimer ${catEx.name} du catalogue`}
-            >
-              <Icon name="trash" size={17} color={THEME.colors.textMuted} strokeWidth={2} />
-            </TouchableOpacity>
+            {!isPickerForSuperset && (
+              <TouchableOpacity
+                style={styles.catalogDeleteBtn}
+                onPress={() => handleDeleteCatalogExercise(catEx)}
+                activeOpacity={0.6}
+                accessibilityRole="button"
+                accessibilityLabel={`Supprimer ${catEx.name} du catalogue`}
+              >
+                <Icon name="trash" size={17} color={THEME.colors.textMuted} strokeWidth={2} />
+              </TouchableOpacity>
+            )}
             </View>
           );
         })}
       </ScrollView>
 
-      <TouchableOpacity
-        style={styles.secondaryBtn}
-        onPress={() => {
-          triggerLightHaptic();
-          setIsCreateSheetOpen(true);
-        }}
-        activeOpacity={0.8}
-        accessibilityRole="button"
-        accessibilityLabel="Nouvel exercice"
-      >
-        <Icon name="plus" size={16} color={THEME.colors.textPrimary} strokeWidth={2.4} />
-        <Text style={styles.secondaryBtnText}>Nouvel exercice</Text>
-      </TouchableOpacity>
+      {!isPickerForSuperset && (
+        <TouchableOpacity
+          style={styles.secondaryBtn}
+          onPress={() => {
+            triggerLightHaptic();
+            setIsCreateSheetOpen(true);
+          }}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Nouvel exercice"
+        >
+          <Icon name="plus" size={16} color={THEME.colors.textPrimary} strokeWidth={2.4} />
+          <Text style={styles.secondaryBtnText}>Nouvel exercice</Text>
+        </TouchableOpacity>
+      )}
 
       <TouchableOpacity
         style={styles.outlineBtn}
-        onPress={() => {
-          setIsPickerSheetOpen(false);
-          setIsPickerForRest(false);
-        }}
+        onPress={closePicker}
         activeOpacity={0.8}
         accessibilityRole="button"
       >
         <Text style={styles.outlineBtnText}>Fermer</Text>
       </TouchableOpacity>
     </BottomSheet>
-  );
+    );
+  };
 
   // Carte « et ensuite ? » de l'écran de repos.
   const restNext: RestNext = (() => {
@@ -1045,6 +1114,44 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
                 <Icon name="chevron-down" size={15} color={techniqueActive ? tech.accentStrong : THEME.colors.accentStrong} />
               </TouchableOpacity>
             </View>
+            {currentExercise && superset ? (
+              <View style={styles.supersetRow}>
+                <View style={styles.supersetBadge}>
+                  <Icon name="swap" size={13} color={THEME.colors.accentStrong} />
+                  <Text style={styles.supersetBadgeText} numberOfLines={1}>
+                    Super set · {supersetSide === 'A' ? superset.exerciseB.name : superset.exerciseA.name}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    triggerLightHaptic();
+                    setSuperset(null);
+                  }}
+                  activeOpacity={0.8}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Quitter le super set"
+                >
+                  <Text style={styles.supersetQuitText}>Quitter</Text>
+                </TouchableOpacity>
+              </View>
+            ) : currentExercise && currentExercise.category === 'CABLE' ? (
+              <TouchableOpacity
+                style={styles.supersetStartBtn}
+                onPress={() => {
+                  triggerLightHaptic();
+                  setIsPickerForSuperset(true);
+                  setIsPickerSheetOpen(true);
+                }}
+                activeOpacity={0.8}
+                hitSlop={{ top: 6, bottom: 10, left: 6, right: 6 }}
+                accessibilityRole="button"
+                accessibilityLabel="Coupler en super set avec un autre exercice à la poulie"
+              >
+                <Icon name="swap" size={13} color={THEME.colors.textSecondary} />
+                <Text style={styles.supersetStartText}>Coupler en super set</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         )}
 
@@ -1439,6 +1546,13 @@ export const FreeWorkoutScreen: React.FC<FreeWorkoutScreenProps> = ({
         </View>
       )}
 
+      {/* Toast de l'enchaînement A -> B du super set */}
+      {!!supersetToast && (
+        <View style={styles.toast} pointerEvents="none" accessibilityLiveRegion="polite" accessibilityRole="alert">
+          <Text style={styles.toastText}>{supersetToast}</Text>
+        </View>
+      )}
+
       {/* Modal Minuteur de Repos */}
       {isResting && (
         <RestTimerOverlay
@@ -1713,6 +1827,41 @@ const styles = StyleSheet.create({
     fontFamily: THEME.fonts.sans,
     color: THEME.colors.accentStrong,
     fontSize: 12,
+  },
+  supersetRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  supersetBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flex: 1,
+    minWidth: 0,
+  },
+  supersetBadgeText: {
+    fontFamily: THEME.fonts.sansSemi,
+    fontSize: 12,
+    color: THEME.colors.accentStrong,
+    flexShrink: 1,
+  },
+  supersetQuitText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
+    color: THEME.colors.textMuted,
+    textDecorationLine: 'underline',
+  },
+  supersetStartBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+  },
+  supersetStartText: {
+    fontFamily: THEME.fonts.sans,
+    fontSize: 12,
+    color: THEME.colors.textSecondary,
   },
   heroCard: {
     borderRadius: THEME.radius.hero,
